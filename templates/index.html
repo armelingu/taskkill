@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="taskkill-token" content="{{ api_token }}">
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="shortcut icon" href="/static/favicon.svg">
+    <title>Taskkill - Dashboard Inicial</title>
+    <!-- Fontes do Google para tipografia moderna -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+
+<body>
+    <div class="dashboard-container">
+        <!-- Barra Lateral (Sidebar) -->
+        <aside class="sidebar">
+
+            <!-- Branding Premium / Marca -->
+            <div class="sidebar-brand">
+                <div class="brand-logo">
+                    <!-- Ícone geométrico minimalista via SVG -->
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect x="3" y="3" width="7" height="7" rx="2" fill="currentColor" />
+                        <rect x="14" y="3" width="7" height="7" rx="2" fill="currentColor" opacity="0.7" />
+                        <rect x="3" y="14" width="7" height="7" rx="2" fill="currentColor" opacity="0.7" />
+                        <rect x="14" y="14" width="7" height="7" rx="2" fill="currentColor" opacity="0.3" />
+                    </svg>
+                </div>
+                <span class="brand-name">Taskkill</span>
+            </div>
+
+            <section class="sidebar-section">
+                <div class="section-header">
+                    <h2 class="section-title">Semana</h2>
+                </div>
+                <div class="placeholder-container">
+                    <div class="skeleton-item week-nav" data-day="Segunda" aria-label="Segunda-feira">Segunda</div>
+                    <div class="skeleton-item week-nav" data-day="Terça" aria-label="Terça-feira">Terça</div>
+                    <div class="skeleton-item week-nav" data-day="Quarta" aria-label="Quarta-feira">Quarta</div>
+                    <div class="skeleton-item week-nav" data-day="Quinta" aria-label="Quinta-feira">Quinta</div>
+                    <div class="skeleton-item week-nav" data-day="Sexta" aria-label="Sexta-feira">Sexta</div>
+                </div>
+            </section>
+            <section class="sidebar-section">
+                <div class="section-header">
+                    <h2 class="section-title">Visão Geral</h2>
+                </div>
+                <div class="placeholder-container">
+                    <div class="skeleton-item" id="nav-dashboard" aria-label="Dashboard Principal">
+                        Dashboard
+                    </div>
+                    <div class="skeleton-item" id="nav-graph" aria-label="Visualização em gráfico">
+                        Gráfico
+                    </div>
+                </div>
+            </section>
+
+            <section class="sidebar-section">
+                <div class="section-header">
+                    <h2 class="section-title">Projetos</h2>
+                </div>
+                <div class="placeholder-container">
+                    <div class="skeleton-item project-nav" aria-label="Projeto Protheus">Protheus</div>
+                    <div class="skeleton-item project-nav" aria-label="Projeto Salesforce">Salesforce</div>
+                    <div class="skeleton-item project-nav" aria-label="Projeto Vitrion">Vitreum</div>
+                    <div class="skeleton-item project-nav" aria-label="Projeto Software Engineering">Software
+                        Engineering</div>
+                    <div class="skeleton-item project-nav" aria-label="Projeto Saas">Saas</div>
+                    <div class="skeleton-item project-nav" aria-label="Projeto Pessoal">Pessoal</div>
+                </div>
+            </section>
+
+            <section class="sidebar-section">
+                <div class="section-header">
+                    <h2 class="section-title">Sistema</h2>
+                </div>
+                <div class="placeholder-container">
+                    <button type="button" class="skeleton-item system-action" id="btn-backup" aria-label="Exportar backup do banco">
+                        Exportar backup
+                    </button>
+                    <button type="button" class="skeleton-item system-action" id="btn-restore" aria-label="Restaurar backup do banco">
+                        Restaurar backup
+                    </button>
+                    <input id="restore-file" class="hidden" type="file" accept=".db,application/octet-stream">
+                </div>
+            </section>
+        </aside>
+
+        <!-- Área Principal -->
+        <main class="main-content">
+
+            <!-- NOVO: Visão do Dashboard Central focado em Projetos -->
+            <div id="dashboard-view" class="dashboard-view hidden">
+                <header class="project-header">
+                    <h1 class="project-title">Dashboard</h1>
+                </header>
+
+                <!-- Grid de status específico por projeto -->
+                <div id="project-cards-grid" class="project-cards-grid">
+                    <!-- Populado via JS com todas as categorias -->
+                </div>
+            </div>
+
+            <!-- NOVO: Visão em Gráfico (estilo Obsidian) -->
+            <div id="graph-view" class="graph-view hidden">
+                <header class="project-header graph-header">
+                    <div>
+                        <h1 class="project-title">Gráfico</h1>
+                        <p class="graph-subtitle">Dias ↔ Projetos (tarefas agendadas) + Projetos ↔ Projetos (tags compartilhadas)</p>
+                    </div>
+                    <div class="graph-hint">Arraste para mover • Scroll para zoom • Clique em um nó para navegar</div>
+                </header>
+
+                <div class="graph-canvas-wrap" role="application" aria-label="Grafo de relações">
+                    <canvas id="graph-canvas"></canvas>
+                </div>
+            </div>
+
+            <!-- Visualização do Projeto (que vai mudar dinamicamente) -->
+            <div id="project-view" class="project-view hidden">
+                <header class="project-header">
+                    <h1 id="project-title" class="project-title">Protheus</h1>
+                </header>
+                <!-- Input para nova demanda -->
+                <div class="task-input-container">
+                    <div class="task-checkbox-placeholder">+</div>
+                    <input type="text" id="new-task-input" class="new-task-input" placeholder="Adicionar demanda...">
+                </div>
+
+                <!-- Lista de Demandas -->
+                <ul id="task-list" class="task-list">
+                    <!-- As tarefas serão inseridas aqui via JavaScript -->
+                </ul>
+            </div>
+
+            <!-- Tela Inicial Padrão -->
+            <div id="empty-state" class="empty-state">
+                <p>Selecione um projeto no menu para visualizar.</p>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- Container dos Toasts de Feedback Visual -->
+    <div id="toast-container"></div>
+
+    <script src="/static/js/script.js"></script>
+</body>
+
+</html>

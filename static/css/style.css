@@ -1,0 +1,686 @@
+/* Base Styles & Variáveis Cores/Constantes (Linear/Things 3 Vibe) */
+:root {
+    --bg-main: #f8fafc;       /* Slate hiper claro para conteúdo principal */
+    --bg-sidebar: #f1f5f9;    /* Slate levemente mais denso para dar contraste orgânico sem borda */
+    --text-title: #0f172a;    /* Slate quase preto para alto contraste premium */
+    --text-muted: #64748b;    /* Cinza usado para subtítulos/placeholders */
+    --skeleton-color: #e2e8f0;/* Tons elegantes de cinza slate */
+    --skeleton-hover: #cbd5e1;
+
+    /* Scrollbar (minimalista, slate) */
+    --scroll-track: rgba(15, 23, 42, 0.04);
+    --scroll-thumb: rgba(71, 85, 105, 0.35);
+    --scroll-thumb-hover: rgba(71, 85, 105, 0.55);
+}
+
+/* Reset básico (CSS Reset) */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    /* Tipografia editorial moderna e limpa */
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: var(--text-title);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased; /* Torna a fonte mais refinada em telas modernas */
+}
+
+/* -------------------------------------------
+   SCROLLBAR (Minimalista + consistente)
+   - Firefox: scrollbar-width / scrollbar-color
+   - Chrome/Edge/Safari: ::-webkit-scrollbar*
+   ------------------------------------------- */
+html {
+    scrollbar-gutter: stable both-edges; /* evita layout "pular" quando aparece scrollbar */
+}
+
+/* Firefox */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scroll-thumb) transparent;
+}
+
+/* WebKit (Chrome/Edge/Safari) */
+*::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+    background-color: var(--scroll-thumb);
+    border-radius: 999px;
+    border: 3px solid transparent; /* cria efeito “thumb fino” */
+    background-clip: content-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+    background-color: var(--scroll-thumb-hover);
+}
+
+/* Mantém o look limpo em áreas claras (main/sidebar) */
+.main-content,
+.sidebar {
+    overscroll-behavior: contain;
+}
+
+/* Layout Estrutural Principal */
+.dashboard-container {
+    display: flex;
+    width: 100%;
+    min-height: 100vh;
+}
+
+/* --------------- 
+   Barra Lateral (Sidebar)
+   --------------- */
+.sidebar {
+    width: 250px;
+    background-color: var(--bg-sidebar);
+    padding: 32px 20px;
+    display: flex;
+    flex-direction: column;
+    /* Substituindo borda dura dura por sombra invisível/suave + diferença de cor root */
+    box-shadow: 1px 0 10px rgba(0, 0, 0, 0.02); 
+    border-right: 1px solid rgba(0,0,0, 0.03); 
+    z-index: 10;
+}
+
+/* Header / Logo da Lateral (Branding) */
+.sidebar-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 12px;
+    margin-bottom: 40px; /* Base pro resto do menu */
+    cursor: default;
+    user-select: none;
+}
+
+.brand-logo {
+    width: 24px;
+    height: 24px;
+    color: var(--text-title);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.brand-name {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: var(--text-title);
+    letter-spacing: -0.04em; /* Letra mais junts (moderno) */
+}
+
+/* Espaçamento entre as duas grandes seções (Semana, Projetos) */
+.sidebar-section {
+    margin-bottom: 40px;
+}
+
+.sidebar-section:last-child {
+    margin-bottom: 0;
+}
+
+/* Tipografia de Seções */
+.section-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 0 12px;
+    margin-bottom: 12px;
+}
+
+.section-title {
+    font-size: 0.75rem; 
+    font-weight: 700;
+    letter-spacing: 0.05em; /* Estilo de LABEL (mais distante, todo em maiusculas) */
+    text-transform: uppercase;
+    color: #94a3b8; /* Cor bem esmaecida pra ser passivo */
+}
+
+.date-range {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #cbd5e1;
+}
+
+/* Container de Retângulos/Skeletons */
+.placeholder-container {
+    display: flex;
+    flex-direction: column;
+    gap: 6px; /* Mais colados parecendo itens de menu fluido */
+}
+
+/* Identidade Visual: Skeletons do Sidebar (Purista Integral) */
+.skeleton-item {
+    min-height: 32px;
+    width: 100%;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-muted); 
+    background-color: transparent; 
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease; /* Transições suaves de cor apenas, sem mover caixas */
+}
+
+/* Ações de "Sistema" (botões) com o mesmo visual do menu */
+.skeleton-item.system-action {
+    border: none;
+    text-align: left;
+    font-family: inherit;
+}
+
+/* Efeito Hover Sólido */
+.skeleton-item:hover {
+    background-color: #e2e8f0; /* Preenche a linha inteira suavemente */
+    color: var(--text-title);
+}
+
+/* Efeito de Clique Físico */
+.skeleton-item:active {
+    transform: scale(0.98); /* Mantém no mesmo lugar, só recua levemente */
+}
+
+/* Estado Ativo (Focado/Selecionado) - Efeito Completo */
+.skeleton-item.active {
+    background-color: #e2e8f0; /* Fundo contínuo marcando presença em toda a opção */
+    color: var(--text-title); 
+    font-weight: 600; /* Levemente destacado, sem gritar */
+}
+
+
+/* --------------- 
+   Área de Conteúdo (Main Dashboard Element)
+   --------------- */
+.main-content {
+    flex: 1; 
+    background-color: var(--bg-main);
+    padding: 60px 80px; 
+    display: flex;
+    flex-direction: column;
+}
+
+/* Quando o Grafo está ativo, usamos mais área útil da tela */
+body.graph-mode .main-content {
+    padding: 28px 48px 20px;
+}
+
+/* Estado oculto genérico */
+.hidden {
+    display: none !important;
+}
+
+/* Estado de Projeto Vazio */
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #94a3b8; /* Slate mais claro pra nao pesar */
+    font-size: 1.15rem;
+    font-weight: 500;
+    gap: 16px;
+}
+
+/* Ícone de prancheta minimalista criado em CSS para o Empty State */
+.empty-state::before {
+    content: '';
+    display: block;
+    width: 48px;
+    height: 48px;
+    border: 2px dashed #cbd5e1;
+    border-radius: 8px;
+    opacity: 0.5;
+}
+
+/* --------------- 
+   Visão do Dashboard (Visão Geral)
+   --------------- */
+.dashboard-view {
+    animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+}
+
+/* --------------- 
+   Visão em Gráfico (Obsidian-like)
+   --------------- */
+.graph-view {
+    animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    flex: 1;
+    min-height: 0; /* permite o canvas consumir o espaço restante */
+}
+
+.graph-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+    margin-bottom: 6px; /* reduz “vazio” antes do canvas */
+}
+
+.graph-subtitle {
+    margin-top: 10px;
+    color: var(--text-muted);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+
+.graph-hint {
+    color: #94a3b8;
+    font-size: 0.85rem;
+    font-weight: 600;
+    white-space: nowrap;
+    user-select: none;
+}
+
+.graph-canvas-wrap {
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+    /* Sem “card”: o grafo ocupa o espaço disponível */
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    border-radius: 0;
+    overflow: hidden; /* mantém pan/zoom limpo dentro da área */
+    position: relative;
+}
+
+#graph-canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+    background: transparent; /* usa o background padrão do sistema */
+}
+
+/* Grid Focado nos Projetos */
+.project-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 24px;
+    margin-top: 16px;
+}
+
+/* Cartão Individual de Projeto Premium */
+.project-card {
+    background-color: #ffffff;
+    border-radius: 12px;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+    border: 1px solid rgba(0,0,0,0.02);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    cursor: pointer; /* Indicar interatividade futura */
+}
+
+.project-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
+}
+
+.project-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.project-card-title {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--text-title);
+    letter-spacing: -0.01em;
+}
+
+/* Indicador de Status Geral (ex: Aberto / Concluído visual) */
+.project-status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+}
+.project-status-dot.active { background-color: #3b82f6; }
+.project-status-dot.done { background-color: #10b981; }
+.project-status-dot.empty { background-color: #cbd5e1; }
+
+.project-card-metrics {
+    display: flex;
+    gap: 16px;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.card-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.card-stat-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+}
+
+.card-stat-value {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--text-title);
+    line-height: 1;
+}
+
+.card-stat-value.green { color: #10b981; }
+.card-stat-value.blue { color: #3b82f6; }
+
+/* --------------- 
+   Visualização do Projeto (Demandas)
+   --------------- */
+.project-view {
+    animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1); /* Animação mais cara e fluída */
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.project-header {
+    margin-bottom: 40px;
+}
+
+.project-title {
+    font-size: 2.5rem;   /* Pouquinho maior na vibe editoral */
+    font-weight: 800;
+    color: var(--text-title);
+    letter-spacing: -0.03em; /* Kerning premium */
+}
+
+/* Lista de Tarefas (Demandas) */
+.task-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    /* Removemos o gap bruto e passamos a responsabilidade pro padding das rows */
+}
+
+/* Row Focus nas Tarefas (Linear Style) */
+.task-item {
+    display: flex;
+    align-items: center;
+    gap: 16px; 
+    padding: 10px 12px;
+    border-radius: 8px;
+    margin: 0 -12px; /* Pull margin pra o texto alinhar visualmente com o input */
+    transition: background-color 0.15s ease;
+}
+
+.task-item:hover {
+    background-color: #ffffff;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.02); /* Fundo branco pra indicar que dá pra interagir com essa linha toda */
+}
+
+/* Drag and Drop Premium States */
+.task-item[draggable="true"] {
+    cursor: grab;
+}
+
+.task-item.dragging {
+    opacity: 0.4;
+    cursor: grabbing;
+    background-color: #f1f5f9;
+}
+
+.skeleton-item.drag-over {
+    background-color: #f8fafc;
+    color: var(--text-title); /* Chumbo mais escuro no texto pra contrastar */
+    box-shadow: inset 0 0 0 2px #475569, 0 8px 16px rgba(15, 23, 42, 0.15); /* Sombra em formato argola cinza + Glow escuro chumbo */
+    transform: scale(1.03) translateY(-1px); /* Pulo pra frente e leve erguida 3D (Brabo) */
+    z-index: 10;
+}
+
+/* Bolinha Visual (Efeito Things 3) */
+.task-checkbox {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background-color: transparent;
+    border: 1.5px solid #cbd5e1; /* Vazado por padrão */
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.task-checkbox:hover {
+    border-color: #64748b; /* Reage pedindo pra ser clicado */
+    transform: scale(1.1); 
+}
+
+/* Texto do Chamado / Tarefa */
+.task-text {
+    font-size: 1.05rem;
+    font-weight: 600; /* Levemente menos espesso que o bold antigo pra leitura */
+    color: var(--text-title);
+    flex: 1; /* Para empurrar as ações para a direita */
+    transition: color 0.3s ease, text-decoration 0.3s ease;
+}
+
+/* Indicador de Data na Tarefa */
+.task-date {
+    font-size: 0.75rem;
+    color: #94a3b8; /* Cor bem esmaecida */
+    font-weight: 600;
+    margin-right: 8px; /* Afasta dos botões */
+    letter-spacing: 0.05em;
+    user-select: none;
+}
+
+/* Micro-Categorias & Etiquetas (#tags) */
+.task-tag {
+    background-color: #f1f5f9;
+    color: #475569;
+    font-size: 0.70rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 12px; /* Em formato de pílula (pill) moderna */
+    margin: 0 4px;
+    border: 1px solid #e2e8f0;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+/* Checkbox das Micro-tarefas [ ] dento do texto */
+.subtask-box {
+    margin: 0 6px;
+    accent-color: #3b82f6; /* cor premium do sistema */
+    transform: translateY(1.5px);
+    cursor: pointer;
+}
+
+/* Novo Input de Tarefa (Mega-Minimalista!) */
+.task-input-container {
+    margin-bottom: 32px;
+    display: flex;
+    align-items: center;
+    gap: 16px; 
+    opacity: 0.5; /* Estado fantasma até você integir com ele */
+    transition: opacity 0.2s ease;
+}
+
+.task-input-container:hover,
+.task-input-container:focus-within {
+    opacity: 1; /* Ilumina ao focar ou hover */
+}
+
+/* O "falso checkbox" que carrega um "+" para guiar que é para nova demanda */
+.task-checkbox-placeholder {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 2px dashed #cbd5e1; /* Bordinha tracejada indicando área add */
+    color: #cbd5e1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: default;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.task-input-container:focus-within .task-checkbox-placeholder {
+    border-style: solid;
+    border-color: #64748b;
+    color: #64748b;
+}
+
+.new-task-input {
+    flex: 1;
+    padding: 0;
+    font-size: 1.05rem; /* Copiando 1:1 tamanho das tarefas em lista */
+    font-weight: 700;   /* Fonte forte para dar presença minimalista */
+    font-family: inherit;
+    border: none;
+    background-color: transparent; /* Nada de fundo */
+    color: var(--text-title);
+    outline: none; /* Remove outline, o container avisa o FOCO */
+}
+
+.new-task-input::placeholder {
+    color: #94a3b8;
+    font-weight: 600;
+}
+
+/* Estado de Completo (Transição Mágica) */
+.task-item.completed {
+    background-color: transparent !important; /* Perde o fundo de hover caso estivesse */
+}
+
+.task-item.completed .task-checkbox {
+    background-color: #10b981; /* Verde elegante (Clássico) */
+    border-color: #10b981;
+    position: relative;
+    transform: scale(1);
+}
+
+.task-item.completed .task-checkbox::after {
+    content: '✓';
+    color: white;
+    font-size: 11px;
+    font-weight: 800;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    animation: checkPop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes checkPop {
+    0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
+    100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+}
+
+.task-item.completed .task-text {
+    text-decoration: line-through;
+    color: #94a3b8;
+    opacity: 0.6; /* Fica desmaiado para tirar o peso visual */
+}
+
+/* Ações (Editar, Apagar) */
+.task-actions {
+    display: flex;
+    gap: 8px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.task-item:hover .task-actions {
+    opacity: 1;
+}
+
+.action-btn {
+    background: none;
+    border: none;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    color: #64748b;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.action-btn.edit-btn:hover {
+    color: #3b82f6; /* Azul premium */
+    background-color: #eff6ff;
+}
+
+.action-btn.delete-btn:hover {
+    color: #ef4444; /* Vermelho alerta */
+    background-color: #fef2f2;
+}
+
+/* Input usado durante a edição inline da demanda */
+.edit-task-input {
+    flex: 1;
+    font-family: inherit;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--text-title);
+    padding: 2px 6px;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    outline: none;
+}
+.edit-task-input:focus {
+    border-color: #3b82f6;
+}
+
+/* -------------------------------------------
+   TOAST NOTIFICATIONS (Alertas popup silenciosos)
+   ------------------------------------------- */
+#toast-container {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    z-index: 9999;
+}
+
+.toast {
+    background-color: #1e293b; /* Preto/Azul Escuro Premium */
+    color: #ffffff;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 0.90rem;
+    font-weight: 500;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    opacity: 0;
+    transform: translateY(20px);
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.toast.show {
+    opacity: 1;
+    transform: translateY(0);
+}
