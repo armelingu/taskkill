@@ -1,2 +1,4 @@
 Flask
 waitress
+gunicorn
+httpx

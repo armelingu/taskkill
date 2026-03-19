@@ -1,0 +1,36 @@
+services:
+  app:
+    build: .
+    environment:
+      TASKKILL_DB_PATH: /data/taskkill.db
+      TASKKILL_API_TOKEN: ${TASKKILL_API_TOKEN}
+      TASKKILL_MAX_CONTENT_LENGTH: "10485760"
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:3b}
+    volumes:
+      - taskkill_data:/data
+    ports:
+      - "5091:8000"
+    depends_on:
+      - ollama
+
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama:/root/.ollama
+    restart: unless-stopped
+
+  ollama_pull:
+    image: ollama/ollama:latest
+    depends_on:
+      - ollama
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:3b}
+    entrypoint: ["sh", "-lc", "sleep 2; ollama pull \"$OLLAMA_MODEL\" || true"]
+    restart: "no"
+
+volumes:
+  taskkill_data:
+  ollama:
+

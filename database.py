@@ -17,7 +17,13 @@ def get_db_path() -> str:
     if override:
         return override
 
-    base = os.environ.get('LOCALAPPDATA') or os.path.join(os.path.expanduser('~'), 'AppData', 'Local')
+    # Windows: %LOCALAPPDATA%
+    # Linux/macOS: XDG_DATA_HOME ou ~/.local/share
+    if os.name == 'nt':
+        base = os.environ.get('LOCALAPPDATA') or os.path.join(os.path.expanduser('~'), 'AppData', 'Local')
+    else:
+        base = os.environ.get('XDG_DATA_HOME') or os.path.join(os.path.expanduser('~'), '.local', 'share')
+
     target_dir = os.path.join(base, 'Taskkill')
     _ensure_dir(target_dir)
     new_path = os.path.join(target_dir, 'taskkill.db')

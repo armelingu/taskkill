@@ -75,6 +75,22 @@ Foi investido altíssimo rigor na "Sensação de Uso" de cada botão:
 
 ---
 
+## 🐳 Rodar via Docker (Local / VPS)
+
+1. Crie um arquivo `.env` baseado no exemplo:
+   - `copy .env.example .env`
+   - Edite `TASKKILL_API_TOKEN` (use um token longo e aleatório)
+2. Suba os serviços:
+   - `docker compose up -d --build`
+3. Acesse:
+   - `http://localhost:5091/`
+
+Notas:
+- O banco fica persistido em volume (`taskkill_data`) como `/data/taskkill.db`.
+- O Ollama roda somente interno no compose. O serviço `ollama_pull` tenta puxar o modelo automaticamente.
+
+---
+
 ## 📦 Empacotar como Executável (.exe) no Windows
 
 1. Instale dependências:
