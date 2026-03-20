@@ -84,7 +84,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 y: (Math.random() - 0.5) * 340,
                 vx: 0,
                 vy: 0,
-                r: type === 'day' ? 12 : 14
+                r: type === 'day' ? 12 : (type === 'tag' ? 11 : 14)
             };
             nodeById.set(id, n);
             nodes.push(n);
@@ -114,23 +114,54 @@ document.addEventListener('DOMContentLoaded', () => {
             edges.push({ a: a.id, b: b.id, weight: Math.min(8, c), kind: 'schedule' });
         }
 
-        // Projeto <-> Projeto (tags compartilhadas)
+        // Tags (para relações Projeto <-> Tag e Projeto <-> Projeto)
         const tagRe = /(^|\s)#([\w\u00C0-\u00FF]+)/g;
-        const tagsByProject = new Map();
+        const tagsByProject = new Map(); // proj -> Set(tag)
+        const tagCountsByProject = new Map(); // proj -> Map(tag -> count)
+        const tagCountsGlobal = new Map(); // tag -> count
         for (const p of projects) {
             const set = new Set();
+            const counts = new Map();
             const list = (tasksData[p] || []).filter(t => !t.deleted);
             for (const t of list) {
                 const text = String(t.text || '');
                 let m;
                 while ((m = tagRe.exec(text)) !== null) {
                     const tag = String(m[2] || '').toLowerCase();
-                    if (tag) set.add(tag);
+                    if (!tag) continue;
+                    set.add(tag);
+                    counts.set(tag, (counts.get(tag) || 0) + 1);
+                    tagCountsGlobal.set(tag, (tagCountsGlobal.get(tag) || 0) + 1);
                 }
             }
             tagsByProject.set(p, set);
+            tagCountsByProject.set(p, counts);
         }
 
+        // Mantém o grafo minimalista: limita o número de tags na visão global
+        const topTags = Array.from(tagCountsGlobal.entries())
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 14)
+            .map(([t]) => t);
+        const topTagSet = new Set(topTags);
+
+        topTags.forEach(t => addNode('tag', t, `#${t}`));
+
+        for (const p of projects) {
+            const counts = tagCountsByProject.get(p);
+            if (!counts) continue;
+            for (const [t, c] of counts.entries()) {
+                if (!topTagSet.has(t)) continue;
+                edges.push({
+                    a: `project:${p}`,
+                    b: `tag:${t}`,
+                    weight: Math.min(8, c),
+                    kind: 'taglink'
+                });
+            }
+        }
+
+        // Projeto <-> Projeto (tags compartilhadas)
         for (let i = 0; i < projects.length; i++) {
             for (let j = i + 1; j < projects.length; j++) {
                 const p1 = projects[i];
@@ -208,8 +239,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!e.na || !e.nb) continue;
             const a = worldToScreen(e.na.x, e.na.y);
             const b = worldToScreen(e.nb.x, e.nb.y);
-            const base = e.kind === 'schedule' ? '100,116,139' : '59,130,246'; // slate-500 / blue-500
-            const alpha = e.kind === 'schedule' ? 0.22 : 0.18;
+            const base =
+                e.kind === 'schedule' ? '100,116,139' : // slate-500
+                e.kind === 'taglink' ? '59,130,246' :   // blue-500
+                '59,130,246';                           // tags compartilhadas
+            const alpha =
+                e.kind === 'schedule' ? 0.22 :
+                e.kind === 'taglink' ? 0.14 :
+                0.16;
             ctx.strokeStyle = `rgba(${base}, ${alpha + Math.min(0.12, e.weight * 0.015)})`;
             ctx.lineWidth = 1 + Math.min(2.0, e.weight * 0.22);
             ctx.beginPath();
@@ -222,8 +259,14 @@ document.addEventListener('DOMContentLoaded', () => {
         for (const n of graph.model.nodes) {
             const p = worldToScreen(n.x, n.y);
             const isHover = graph.hoverId === n.id;
-            const fill = n.type === 'day' ? 'rgba(226,232,240,0.95)' : 'rgba(255,255,255,0.98)';
-            const stroke = n.type === 'day' ? 'rgba(100,116,139,0.55)' : 'rgba(59,130,246,0.65)';
+            const fill =
+                n.type === 'day' ? 'rgba(226,232,240,0.95)' :
+                n.type === 'tag' ? 'rgba(239,246,255,0.98)' :
+                'rgba(255,255,255,0.98)';
+            const stroke =
+                n.type === 'day' ? 'rgba(100,116,139,0.55)' :
+                n.type === 'tag' ? 'rgba(59,130,246,0.50)' :
+                'rgba(59,130,246,0.65)';
 
             ctx.beginPath();
             ctx.arc(p.x, p.y, n.r, 0, Math.PI * 2);
@@ -405,6 +448,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         const items = Array.from(document.querySelectorAll('.project-nav'));
                         const target = items.find(it => normText(it.textContent) === node.key);
                         if (target) target.click();
+                    } else if (node.type === 'tag') {
+                        openTagView(node.key);
                     }
                 }
             }
@@ -438,6 +483,35 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     attachGraphEvents();
+
+    function openTagView(tagKey) {
+        const tag = String(tagKey || '').toLowerCase();
+        if (!tag) return;
+
+        // Sem item no sidebar para tag: remove o estado ativo para evitar “desalinhamento”
+        skeletonItems.forEach(sib => sib.classList.remove('active'));
+
+        document.body.classList.remove('graph-mode');
+        currentTag = tag;
+        currentCategory = null;
+        currentWeekDay = null;
+
+        if (emptyState) emptyState.classList.add('hidden');
+        if (dashboardView) dashboardView.classList.add('hidden');
+        if (graphView) graphView.classList.add('hidden');
+        graphStop();
+
+        if (projectView) {
+            projectView.classList.remove('hidden');
+            projectView.style.animation = 'none';
+            projectView.offsetHeight;
+            projectView.style.animation = null;
+        }
+
+        if (projectTitle) projectTitle.textContent = `#${tag}`;
+        document.querySelector('.task-input-container').style.display = 'none';
+        renderTasks();
+    }
 
     // Ações de sistema (backup/restore)
     const btnBackup = document.getElementById('btn-backup');
@@ -539,6 +613,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let tasksData = {};
     let currentCategory = null;
     let currentWeekDay = null; // Se estiver vendo os dias da semana
+    let currentTag = null; // Se estiver vendo tarefas por #tag (vindo do grafo)
 
     // Conecta com o Backend logo ao abrir
     async function fetchInitialData() {
@@ -547,7 +622,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if(res.ok) {
                 tasksData = await res.json();
                 // Se o usuário já estiver em alguma visão, re-renderiza com os dados carregados
-                if (currentCategory || currentWeekDay) {
+                if (currentCategory || currentWeekDay || currentTag) {
                     renderTasks();
                 } else if (dashboardView && !dashboardView.classList.contains('hidden')) {
                     renderDashboard();
@@ -592,6 +667,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.body.classList.remove('graph-mode');
                 currentCategory = null; 
                 currentWeekDay = null;
+                currentTag = null;
                 if (emptyState) emptyState.classList.add('hidden');
                 if (projectView) projectView.classList.add('hidden');
                 if (graphView) graphView.classList.add('hidden');
@@ -614,6 +690,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.body.classList.add('graph-mode');
                 currentCategory = null;
                 currentWeekDay = null;
+                currentTag = null;
                 if (emptyState) emptyState.classList.add('hidden');
                 if (projectView) projectView.classList.add('hidden');
                 if (dashboardView) dashboardView.classList.add('hidden');
@@ -632,6 +709,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.body.classList.remove('graph-mode');
                 currentCategory = null;
                 currentWeekDay = item.getAttribute('data-day');
+                currentTag = null;
                 
                 if (emptyState) emptyState.classList.add('hidden');
                 if (dashboardView) dashboardView.classList.add('hidden');
@@ -658,6 +736,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.body.classList.remove('graph-mode');
             currentCategory = item.textContent.trim();
             currentWeekDay = null;
+            currentTag = null;
             
             // Inicializa a lista dessa categoria se ainda não existir
             if (!tasksData[currentCategory]) {
@@ -912,6 +991,7 @@ document.addEventListener('DOMContentLoaded', () => {
         taskList.innerHTML = ''; // Limpa a lista
         let tasks = [];
         let isWeekView = false;
+        let isTagView = false;
         
         if (currentWeekDay) {
             isWeekView = true;
@@ -921,6 +1001,29 @@ document.addEventListener('DOMContentLoaded', () => {
                         t.originalProject = proj; // Grava o nome pra exibição
                         tasks.push(t);
                     }
+                });
+            });
+        } else if (currentTag) {
+            isTagView = true;
+            const wanted = String(currentTag || '').toLowerCase();
+            const tagRe = /(^|\s)#([\w\u00C0-\u00FF]+)/g;
+
+            const hasWanted = (text) => {
+                const s = String(text || '');
+                let m;
+                while ((m = tagRe.exec(s)) !== null) {
+                    const t = String(m[2] || '').toLowerCase();
+                    if (t === wanted) return true;
+                }
+                return false;
+            };
+
+            Object.keys(tasksData).forEach(proj => {
+                tasksData[proj].forEach(t => {
+                    if (t.deleted) return;
+                    if (!hasWanted(t.text)) return;
+                    t.originalProject = proj;
+                    tasks.push(t);
                 });
             });
         } else if (currentCategory) {
@@ -952,7 +1055,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // APLICAÇÃO DE SEGURANÇA MÁXIMA (escapeHTML) NO RENDER:
             const dateBadge = task.created_date ? `<span class="task-date">${escapeHTML(task.created_date)}</span>` : '';
             const dueBadge = task.due_date && !isWeekView ? `<span class="task-date" style="color: #8b5cf6; font-weight: 700;">${escapeHTML(task.due_date)}</span>` : '';
-            const projectBadge = isWeekView ? `<span style="font-size: 0.65rem; color: #fff; background: #64748b; padding: 2px 6px; border-radius: 4px; margin-right: 8px; text-transform: uppercase;">${escapeHTML(task.originalProject)}</span>` : '';
+            const isCrossView = isWeekView || isTagView;
+            const projectBadge = isCrossView ? `<span style="font-size: 0.65rem; color: #fff; background: #64748b; padding: 2px 6px; border-radius: 4px; margin-right: 8px; text-transform: uppercase;">${escapeHTML(task.originalProject)}</span>` : '';
             
             // Processa as tags (#) no texto para renderizar badges visuais
             let escapedText = escapeHTML(task.text);
