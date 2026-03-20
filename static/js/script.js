@@ -29,17 +29,17 @@ document.addEventListener('DOMContentLoaded', () => {
         );
     }
 
-    // Token por sessão (anti "drive-by localhost"). O backend exige esse header em /api.
-    function getApiToken() {
-        const meta = document.querySelector('meta[name="taskkill-token"]');
+    // CSRF token por sessão (obrigatório no backend em /api para POST/PUT/DELETE)
+    function getCsrfToken() {
+        const meta = document.querySelector('meta[name="csrf-token"]');
         return meta ? (meta.getAttribute('content') || '') : '';
     }
 
     async function apiFetch(path, opts = {}) {
         const headers = Object.assign({}, opts.headers || {}, {
-            'X-Taskkill-Token': getApiToken(),
+            'X-CSRF-Token': getCsrfToken(),
         });
-        return fetch(path, Object.assign({}, opts, { headers, credentials: 'omit' }));
+        return fetch(path, Object.assign({}, opts, { headers, credentials: 'same-origin' }));
     }
 
     // ----------------------------------------------------

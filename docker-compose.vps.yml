@@ -2,6 +2,7 @@ services:
   app:
     environment:
       TASKKILL_BEHIND_PROXY: "1"
+      TASKKILL_COOKIE_SECURE: "1"
     ports: []
     restart: unless-stopped
 

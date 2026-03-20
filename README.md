@@ -79,7 +79,7 @@ Foi investido altíssimo rigor na "Sensação de Uso" de cada botão:
 
 1. Crie um arquivo `.env` baseado no exemplo:
    - `copy .env.example .env`
-   - Edite `TASKKILL_API_TOKEN` (use um token longo e aleatório)
+   - Edite `TASKKILL_SECRET_KEY` e `TASKKILL_ADMIN_PASSWORD`
 2. Suba os serviços:
    - `docker compose up -d --build`
 3. Acesse:
@@ -117,7 +117,8 @@ cp .env.example .env
 ```
 
 Edite o `.env` e configure:
-- `TASKKILL_API_TOKEN` (token longo aleatório)
+- `TASKKILL_SECRET_KEY` (segredo longo aleatório)
+- `TASKKILL_ADMIN_PASSWORD` (senha inicial do admin)
 - `DOMAIN` (ex.: `taskkill.seudominio.com`)
 - `BASIC_AUTH_USER` (seu usuário)
 - `BASIC_AUTH_HASH` (hash bcrypt da senha)

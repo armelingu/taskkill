@@ -1,6 +1,9 @@
 import sqlite3
 import os
 import shutil
+from datetime import datetime
+
+from werkzeug.security import generate_password_hash
 
 def _ensure_dir(path: str) -> None:
     os.makedirs(path, exist_ok=True)
@@ -100,5 +103,35 @@ def init_db():
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_tasks_deleted ON tasks(deleted)')
         except sqlite3.OperationalError:
             pass
+
+        # Usuários (web)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                is_admin BOOLEAN NOT NULL DEFAULT 0,
+                created_at TEXT
+            )
+        ''')
+
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)')
+
+        # Bootstrap do admin no primeiro boot (obrigatório para ambiente web)
+        cursor.execute('SELECT COUNT(*) AS cnt FROM users')
+        cnt = int(cursor.fetchone()['cnt'])
+        if cnt == 0:
+            admin_user = (os.environ.get('TASKKILL_ADMIN_USER') or 'admin').strip()
+            admin_pass = os.environ.get('TASKKILL_ADMIN_PASSWORD')
+            if not admin_pass or len(admin_pass.strip()) < 10:
+                raise RuntimeError(
+                    "Nenhum usuário encontrado. Defina TASKKILL_ADMIN_PASSWORD (>= 10 chars) para criar o admin inicial."
+                )
+
+            pw_hash = generate_password_hash(admin_pass.strip())
+            cursor.execute(
+                "INSERT INTO users (username, password_hash, is_admin, created_at) VALUES (?, ?, 1, ?)",
+                (admin_user, pw_hash, datetime.utcnow().isoformat())
+            )
 
         conn.commit()

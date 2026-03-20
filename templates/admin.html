@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Taskkill — Admin</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <link rel="shortcut icon" href="/static/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="auth-body">
+  <main class="auth-wrap">
+    <div class="auth-card">
+      <div class="auth-brand" style="margin-bottom: 18px;">
+        <div class="auth-logo" aria-hidden="true"></div>
+        <div>
+          <div class="auth-title">Admin</div>
+          <div class="auth-subtitle">Conta: <strong>{{ user.username }}</strong></div>
+        </div>
+      </div>
+
+      {% if message %}
+        <div class="auth-alert auth-alert-ok">{{ message }}</div>
+      {% endif %}
+      {% if error %}
+        <div class="auth-alert auth-alert-error">{{ error }}</div>
+      {% endif %}
+
+      <form method="POST" action="/admin" class="auth-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+        <label class="auth-label" for="current_password">Senha atual</label>
+        <input class="auth-input" id="current_password" name="current_password" type="password" autocomplete="current-password" required>
+
+        <label class="auth-label" for="new_password">Nova senha (mín. 10 caracteres)</label>
+        <input class="auth-input" id="new_password" name="new_password" type="password" autocomplete="new-password" required>
+
+        <label class="auth-label" for="confirm_password">Confirmar nova senha</label>
+        <input class="auth-input" id="confirm_password" name="confirm_password" type="password" autocomplete="new-password" required>
+
+        <button class="auth-btn" type="submit">Atualizar senha</button>
+      </form>
+
+      <div style="display:flex; gap:10px; margin-top: 18px;">
+        <a class="auth-link" href="/">Voltar</a>
+        <form method="POST" action="/logout" style="margin-left:auto;">
+          <button class="auth-link" type="submit" style="background:none;border:none;padding:0;cursor:pointer;">Sair</button>
+        </form>
+      </div>
+    </div>
+  </main>
+</body>
+</html>
+

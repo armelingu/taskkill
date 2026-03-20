@@ -16,13 +16,17 @@ app = Flask(
     static_url_path="/static",
 )
 
-# Token por sessão para bloquear "drive-by localhost" (sites tentando chamar sua API local).
-# Só a UI servida por este app consegue ler o token (via meta tag) e enviá-lo no header.
-app.config['TASKKILL_API_TOKEN'] = os.environ.get('TASKKILL_API_TOKEN') or secrets.token_urlsafe(32)
+app.config['SECRET_KEY'] = os.environ.get('TASKKILL_SECRET_KEY') or secrets.token_urlsafe(32)
 
 # Limite global de payload para evitar abuso/acidente (DoS local via request gigante).
 # Precisa ser suficiente para upload de backup/restore do SQLite.
 app.config['MAX_CONTENT_LENGTH'] = int(os.environ.get('TASKKILL_MAX_CONTENT_LENGTH', str(10 * 1024 * 1024)))
+
+# Cookies de sessão (web)
+cookie_secure = os.environ.get('TASKKILL_COOKIE_SECURE', '').strip() == '1'
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SESSION_COOKIE_SECURE'] = cookie_secure
 
 # Configurações Iniciais de Banco (Tabela, SQLite)
 init_db()

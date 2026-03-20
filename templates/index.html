@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="taskkill-token" content="{{ api_token }}">
+    <meta name="csrf-token" content="{{ csrf_token }}">
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
     <link rel="shortcut icon" href="/static/favicon.svg">
     <title>Taskkill - Dashboard Inicial</title>
@@ -80,6 +80,7 @@
                     <h2 class="section-title">Sistema</h2>
                 </div>
                 <div class="placeholder-container">
+                    <a class="skeleton-item system-action" href="/admin" aria-label="Painel admin">Admin</a>
                     <button type="button" class="skeleton-item system-action" id="btn-backup" aria-label="Exportar backup do banco">
                         Exportar backup
                     </button>
@@ -87,6 +88,9 @@
                         Restaurar backup
                     </button>
                     <input id="restore-file" class="hidden" type="file" accept=".db,application/octet-stream">
+                    <form method="POST" action="/logout">
+                        <button type="submit" class="skeleton-item system-action" aria-label="Sair">Sair</button>
+                    </form>
                 </div>
             </section>
         </aside>

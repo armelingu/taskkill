@@ -5,9 +5,12 @@ import sqlite3
 import tempfile
 from datetime import date, datetime
 
-from flask import Blueprint, render_template, request, jsonify, current_app, send_file
+from functools import wraps
+
+from flask import Blueprint, render_template, request, jsonify, send_file, session, redirect, url_for, abort
 
 from database import get_db_connection, get_db_path, init_db
+from werkzeug.security import check_password_hash, generate_password_hash
 
 # Blueprints permitem "encapsular" as rotas e injetá-las no arquivo principal.
 main_bp = Blueprint('main', __name__)
@@ -26,24 +29,136 @@ def _coerce_01(value, field_name: str):
     raise ValueError(f"{field_name} must be boolean/0/1")
 
 
-# ===================================================================
-# SEGURANÇA LOCAL: token por sessão para bloquear "drive-by localhost"
-# ===================================================================
+def _ensure_csrf_token() -> str:
+    token = session.get('csrf_token')
+    if not token:
+        token = os.urandom(24).hex()
+        session['csrf_token'] = token
+    return token
+
+
+def _current_user():
+    uid = session.get('user_id')
+    if not uid:
+        return None
+    with get_db_connection() as conn:
+        row = conn.execute('SELECT id, username, is_admin FROM users WHERE id = ?', (int(uid),)).fetchone()
+        return dict(row) if row else None
+
+
+def login_required(fn):
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        if not session.get('user_id'):
+            return redirect(url_for('main.login'))
+        return fn(*args, **kwargs)
+    return wrapper
+
+
+def admin_required(fn):
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        user = _current_user()
+        if not user or not bool(user.get('is_admin')):
+            abort(403)
+        return fn(*args, **kwargs)
+    return wrapper
+
+
 @api_bp.before_request
-def require_api_token():
-    expected = current_app.config.get('TASKKILL_API_TOKEN')
-    got = request.headers.get('X-Taskkill-Token')
-    if not expected or got != expected:
+def require_auth_and_csrf():
+    # Bloqueia API sem sessão
+    if not session.get('user_id'):
         return jsonify({"error": "Unauthorized"}), 401
+
+    # CSRF para métodos mutáveis
+    if request.method in ('POST', 'PUT', 'DELETE'):
+        expected = session.get('csrf_token')
+        got = request.headers.get('X-CSRF-Token')
+        if not expected or got != expected:
+            return jsonify({"error": "CSRF token inválido"}), 403
 
 
 # ===================================================================
 # ROTAS DO FRONTEND (Páginas Visuais Web)
 # ===================================================================
 @main_bp.route('/')
+@login_required
 def index():
     # O Flask mapeia essa função para bater no 'templates/index.html' por configuração.
-    return render_template('index.html', api_token=current_app.config.get('TASKKILL_API_TOKEN', ''))
+    return render_template('index.html', csrf_token=_ensure_csrf_token())
+
+
+@main_bp.route('/login', methods=['GET', 'POST'])
+def login():
+    # Se já está logado, vai direto pro app
+    if session.get('user_id'):
+        return redirect(url_for('main.index'))
+
+    csrf = _ensure_csrf_token()
+
+    if request.method == 'POST':
+        form_csrf = request.form.get('csrf_token')
+        if not form_csrf or form_csrf != csrf:
+            return render_template('login.html', error='Sessão expirada. Recarregue e tente novamente.', csrf_token=csrf), 400
+
+        username = (request.form.get('username') or '').strip()
+        password = (request.form.get('password') or '')
+        if not username or not password:
+            return render_template('login.html', error='Usuário e senha são obrigatórios.', csrf_token=csrf), 400
+
+        with get_db_connection() as conn:
+            row = conn.execute('SELECT id, username, password_hash, is_admin FROM users WHERE username = ?', (username,)).fetchone()
+            if not row or not check_password_hash(row['password_hash'], password):
+                return render_template('login.html', error='Credenciais inválidas.', csrf_token=csrf), 401
+
+        session['user_id'] = int(row['id'])
+        session['is_admin'] = int(row['is_admin'])
+        _ensure_csrf_token()
+        return redirect(url_for('main.index'))
+
+    return render_template('login.html', csrf_token=csrf)
+
+
+@main_bp.route('/logout', methods=['POST'])
+def logout():
+    session.clear()
+    return redirect(url_for('main.login'))
+
+
+@main_bp.route('/admin', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def admin():
+    user = _current_user()
+    csrf = _ensure_csrf_token()
+    message = None
+    error = None
+
+    if request.method == 'POST':
+        form_csrf = request.form.get('csrf_token')
+        if not form_csrf or form_csrf != csrf:
+            error = 'Sessão expirada. Recarregue e tente novamente.'
+        else:
+            current_pw = request.form.get('current_password') or ''
+            new_pw = request.form.get('new_password') or ''
+            confirm_pw = request.form.get('confirm_password') or ''
+
+            if len(new_pw.strip()) < 10:
+                error = 'A nova senha precisa ter pelo menos 10 caracteres.'
+            elif new_pw != confirm_pw:
+                error = 'A confirmação da senha não confere.'
+            else:
+                with get_db_connection() as conn:
+                    row = conn.execute('SELECT password_hash FROM users WHERE id = ?', (int(user['id']),)).fetchone()
+                    if not row or not check_password_hash(row['password_hash'], current_pw):
+                        error = 'Senha atual inválida.'
+                    else:
+                        conn.execute('UPDATE users SET password_hash = ? WHERE id = ?', (generate_password_hash(new_pw), int(user['id'])))
+                        conn.commit()
+                        message = 'Senha atualizada com sucesso.'
+
+    return render_template('admin.html', user=user, csrf_token=csrf, message=message, error=error)
 
 
 # ===================================================================

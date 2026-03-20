@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Taskkill — Login</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <link rel="shortcut icon" href="/static/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="auth-body">
+  <main class="auth-wrap">
+    <div class="auth-card">
+      <div class="auth-brand">
+        <div class="auth-logo" aria-hidden="true"></div>
+        <div>
+          <div class="auth-title">Taskkill</div>
+          <div class="auth-subtitle">Entre para acessar seu painel.</div>
+        </div>
+      </div>
+
+      {% if error %}
+        <div class="auth-alert auth-alert-error">{{ error }}</div>
+      {% endif %}
+
+      <form method="POST" action="/login" class="auth-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+        <label class="auth-label" for="username">Usuário</label>
+        <input class="auth-input" id="username" name="username" autocomplete="username" required>
+
+        <label class="auth-label" for="password">Senha</label>
+        <input class="auth-input" id="password" name="password" type="password" autocomplete="current-password" required>
+
+        <button class="auth-btn" type="submit">Entrar</button>
+      </form>
+    </div>
+  </main>
+</body>
+</html>
+
