@@ -1,0 +1,7 @@
+services:
+  app:
+    ports:
+      - "5091:8000"
+    environment:
+      TASKKILL_COOKIE_SECURE: "0"
+

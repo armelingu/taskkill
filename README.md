@@ -81,7 +81,7 @@ Foi investido altíssimo rigor na "Sensação de Uso" de cada botão:
    - `copy .env.example .env`
    - Edite `TASKKILL_SECRET_KEY` e `TASKKILL_ADMIN_PASSWORD`
 2. Suba os serviços:
-   - `docker compose up -d --build`
+   - `docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build`
 3. Acesse:
    - `http://localhost:5091/`
 
@@ -132,8 +132,7 @@ docker run --rm caddy:2 caddy hash-password --plaintext "SUA_SENHA"
 Suba os serviços (compose base + overlay da VPS):
 
 ```bash
-docker compose up -d --build
-docker compose -f docker-compose.yml -f docker-compose.vps.yml up -d
+docker compose -f docker-compose.yml -f docker-compose.vps.yml up -d --build
 ```
 
 ### 4) Firewall

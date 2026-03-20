@@ -89,6 +89,7 @@
                     </button>
                     <input id="restore-file" class="hidden" type="file" accept=".db,application/octet-stream">
                     <form method="POST" action="/logout">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                         <button type="submit" class="skeleton-item system-action" aria-label="Sair">Sair</button>
                     </form>
                 </div>

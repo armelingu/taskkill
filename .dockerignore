@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+.env
+taskkill.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+dist/
+build/
+.git/
+.cursor/
+

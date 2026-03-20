@@ -122,6 +122,10 @@ def login():
 
 @main_bp.route('/logout', methods=['POST'])
 def logout():
+    csrf = session.get('csrf_token')
+    form_csrf = request.form.get('csrf_token')
+    if not csrf or not form_csrf or form_csrf != csrf:
+        abort(403)
     session.clear()
     return redirect(url_for('main.login'))
 
