@@ -1,0 +1,12 @@
+{$DOMAIN} {
+	encode zstd gzip
+
+	# Autenticação simples (single-user)
+	basicauth {
+		{$BASIC_AUTH_USER} {$BASIC_AUTH_HASH}
+	}
+
+	# Reverse proxy para o app
+	reverse_proxy app:8000
+}
+

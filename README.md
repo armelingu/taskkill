@@ -91,6 +91,62 @@ Notas:
 
 ---
 
+## 🚀 Subir em uma VPS (Hostinger) com Docker + HTTPS + Senha
+
+### 1) DNS
+- Crie um registro **A** no seu domínio apontando para o IP da VPS.
+
+### 2) VPS (Ubuntu) — instalar Docker
+
+```bash
+sudo apt update
+sudo apt install -y ca-certificates curl git
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker $USER
+newgrp docker
+docker --version
+docker compose version
+```
+
+### 3) Deploy do Taskkill
+
+```bash
+git clone <seu-repo> taskkill
+cd taskkill/app
+cp .env.example .env
+```
+
+Edite o `.env` e configure:
+- `TASKKILL_API_TOKEN` (token longo aleatório)
+- `DOMAIN` (ex.: `taskkill.seudominio.com`)
+- `BASIC_AUTH_USER` (seu usuário)
+- `BASIC_AUTH_HASH` (hash bcrypt da senha)
+
+Para gerar `BASIC_AUTH_HASH`:
+
+```bash
+docker run --rm caddy:2 caddy hash-password --plaintext "SUA_SENHA"
+```
+
+Suba os serviços (compose base + overlay da VPS):
+
+```bash
+docker compose up -d --build
+docker compose -f docker-compose.yml -f docker-compose.vps.yml up -d
+```
+
+### 4) Firewall
+- Garanta que as portas **80** e **443** estejam liberadas na VPS.
+
+### 5) Acessar
+- Abra `https://taskkill.seudominio.com` e autentique (Basic Auth).
+
+Observações:
+- O certificado TLS é emitido automaticamente pelo Caddy (Let's Encrypt) quando o DNS estiver correto.
+- O `ollama` **não** é exposto para a internet (somente rede interna do Docker).
+
+---
+
 ## 📦 Empacotar como Executável (.exe) no Windows
 
 1. Instale dependências:

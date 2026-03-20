@@ -3,6 +3,7 @@ import secrets
 import sys
 
 from flask import Flask, request
+from werkzeug.middleware.proxy_fix import ProxyFix
 from database import init_db
 from routes import main_bp, api_bp
 
@@ -29,6 +30,10 @@ init_db()
 # Registrando módulos separados que criamos (Nossas "Mini Aplicações")
 app.register_blueprint(main_bp)
 app.register_blueprint(api_bp)
+
+# Quando rodar atrás de proxy (Caddy/Nginx), isso corrige request.is_secure e host/proto.
+if os.environ.get('TASKKILL_BEHIND_PROXY', '').strip() == '1':
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
 # ===================================================================
 # MIDDLEWARE DE SEGURANÇA MÁXIMA (Defense in Depth)
