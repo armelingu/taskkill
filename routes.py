@@ -79,6 +79,16 @@ def require_auth_and_csrf():
             return jsonify({"error": "CSRF token inválido"}), 403
 
 
+def api_admin_required(fn):
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        user = _current_user()
+        if not user or not bool(user.get('is_admin')):
+            return jsonify({"error": "Forbidden"}), 403
+        return fn(*args, **kwargs)
+    return wrapper
+
+
 # ===================================================================
 # ROTAS DO FRONTEND (Páginas Visuais Web)
 # ===================================================================
@@ -409,6 +419,7 @@ def delete_task(task_id):
 # Backup / Restore (produto local)
 # ===================================================================
 @api_bp.route('/backup', methods=['GET'])
+@api_admin_required
 def backup_db():
     src_path = get_db_path()
     if not os.path.exists(src_path):
@@ -442,6 +453,7 @@ def backup_db():
 
 
 @api_bp.route('/restore', methods=['POST'])
+@api_admin_required
 def restore_db():
     uploaded = request.files.get('file')
     if not uploaded:

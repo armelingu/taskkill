@@ -64,7 +64,17 @@ def add_security_headers(response):
     response.headers['Cross-Origin-Resource-Policy'] = 'same-origin'
     # Content Security Policy (CSP): Uma lista branca bloqueando execução de código não autorizado
     # Permite Google Fonts, e restringe JS apenas aos seus arquivos locais.
-    csp = "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; connect-src 'self'; object-src 'none';"
+    csp = (
+        "default-src 'self'; "
+        "base-uri 'none'; "
+        "form-action 'self'; "
+        "frame-ancestors 'none'; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com; "
+        "script-src 'self'; "
+        "connect-src 'self'; "
+        "object-src 'none';"
+    )
     response.headers['Content-Security-Policy'] = csp
     # Esconde a tecnologia do servidor por motivos de segurança
     response.headers['Server'] = 'Taskkill-Core'
