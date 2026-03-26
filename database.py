@@ -124,8 +124,10 @@ def init_db():
             admin_user = (os.environ.get('TASKKILL_ADMIN_USER') or 'admin').strip()
             admin_pass = os.environ.get('TASKKILL_ADMIN_PASSWORD')
             if not admin_pass or len(admin_pass.strip()) < 10:
+                length = 0 if not admin_pass else len(admin_pass.strip())
                 raise RuntimeError(
-                    "Nenhum usuário encontrado. Defina TASKKILL_ADMIN_PASSWORD (>= 10 chars) para criar o admin inicial."
+                    f"Nenhum usuário encontrado. Defina TASKKILL_ADMIN_PASSWORD (>= 10 chars) para criar o admin inicial. "
+                    f"Comprimento atual: {length}."
                 )
 
             pw_hash = generate_password_hash(admin_pass.strip())

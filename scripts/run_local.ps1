@@ -18,6 +18,10 @@ Write-Host "- Se for o primeiro uso, edite .env e defina TASKKILL_ADMIN_PASSWORD
 Write-Host "- Para uso local, recomendo TASKKILL_COOKIE_SECURE=0"
 Write-Host ""
 
+$env:TASKKILL_COOKIE_SECURE = "0"
+$env:TASKKILL_HOST = "127.0.0.1"
+$env:TASKKILL_PORT = "5091"
+
 if ($Waitress) {
   & ".venv\Scripts\python.exe" "serve.py"
 } else {
