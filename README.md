@@ -32,17 +32,21 @@ Foi investido altíssimo rigor na "Sensação de Uso" de cada botão:
 ```text
 📦taskkill
  ┣ 📂app
+ ┃ ┣ 📂scripts
+ ┃ ┃ ┣ 📜run_local.bat
+ ┃ ┃ ┗ 📜run_local.ps1
  ┃ ┣ 📂static
  ┃ ┃ ┣ 📂css
  ┃ ┃ ┃ ┗ 📜style.css (Design System Otimizado "Slate Mod")
  ┃ ┃ ┗ 📂js
  ┃ ┃ ┃ ┗ 📜script.js (Motor Angular do projeto com Async Fetch UI)
  ┃ ┣ 📂templates
- ┃ ┃ ┗ 📜index.html (Casca HTML e navegações Master)
+ ┃ ┃ ┣ 📜index.html (App)
+ ┃ ┃ ┣ 📜login.html (Login)
+ ┃ ┃ ┗ 📜admin.html (Admin)
  ┃ ┣ 📜app.py (Lançador do Servidor Flask Minimalista + Middleware Seguranças)
  ┃ ┣ 📜database.py (Otimizador e Migrador autônomo do banco SQLite)
  ┃ ┣ 📜routes.py (Bifurcação de Rotas usando Modelagem de Controllers)
- ┃ ┗ 📜taskkill.db 
  ┗ 📜README.md
 ```
 
@@ -56,30 +60,23 @@ Foi investido altíssimo rigor na "Sensação de Uso" de cada botão:
    `pip install -r requirements.txt`
 4. Na pasta do app, basta acender a turbina principal:
    `python app.py`
-5. Abra o link gerado no terminal (porta **5091**). Ele auto-criará o Banco de Dados (`taskkill.db`) caso não exista assim que carregar a memória RAM.
+5. Abra o link gerado no terminal (porta **5091**) e acesse `/login`.
 
 ---
 
-## 🔒 Modo Produto Local (Recomendado)
-
-- **Rodar com servidor estável (Waitress)**:
-  - `python serve.py`
-  - Ele abre o navegador automaticamente e usa **porta dinâmica** (ou fixe com `TASKKILL_PORT=5091`).
-
-- **Banco de dados em modo produto**:
-  - O SQLite passa a ficar em `%LOCALAPPDATA%\\Taskkill\\taskkill.db`
-  - Override (dev/test): `TASKKILL_DB_PATH=C:\\caminho\\para\\taskkill.db`
-
-- **Proteção anti “drive-by localhost”**:
-  - Todas as rotas `/api/*` exigem o header `X-Taskkill-Token` (injetado no HTML via `<meta>` e enviado pelo JS automaticamente).
+## 🔒 Segurança (resumo)
+- **Sessão + login** (cookies HttpOnly)
+- **CSRF** em `POST/PUT/DELETE` na API (`X-CSRF-Token`)
+- **Headers** (CSP, anti-clickjacking, etc.)
 
 ---
 
 ## 🐳 Rodar via Docker (Local / VPS)
 
-1. Crie um arquivo `.env` baseado no exemplo:
-   - `copy .env.example .env`
-   - Edite `TASKKILL_SECRET_KEY` e `TASKKILL_ADMIN_PASSWORD`
+1. Crie um arquivo `.env` na pasta `app` e defina pelo menos:
+   - `TASKKILL_SECRET_KEY`
+   - `TASKKILL_ADMIN_PASSWORD`
+   - `TASKKILL_COOKIE_SECURE=0` (local é HTTP)
 2. Suba os serviços:
    - `docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build`
 3. Acesse:
@@ -113,12 +110,12 @@ docker compose version
 ```bash
 git clone <seu-repo> taskkill
 cd taskkill/app
-cp .env.example .env
 ```
 
 Edite o `.env` e configure:
 - `TASKKILL_SECRET_KEY` (segredo longo aleatório)
 - `TASKKILL_ADMIN_PASSWORD` (senha inicial do admin)
+- `TASKKILL_COOKIE_SECURE=1` (VPS com HTTPS)
 - `DOMAIN` (ex.: `taskkill.seudominio.com`)
 - `BASIC_AUTH_USER` (seu usuário)
 - `BASIC_AUTH_HASH` (hash bcrypt da senha)
@@ -178,20 +175,6 @@ python serve.py
   - `http://127.0.0.1:<porta>/login`
 
 ---
-
-## 📦 Empacotar como Executável (.exe) no Windows
-
-1. Instale dependências:
-   - `pip install -r requirements.txt`
-   - `pip install pyinstaller`
-2. Build (recomendado via script):
-   - `powershell -ExecutionPolicy Bypass -File .\\build_exe.ps1`
-3. Saída:
-   - O executável fica em `dist\\Taskkill\\Taskkill.exe` (ou `dist\\Taskkill.exe` se `--onefile`)
-
-Dicas:
-- Para build sem console: `powershell -ExecutionPolicy Bypass -File .\\build_exe.ps1 -NoConsole`
-- Se quiser fixar porta no exe: defina `TASKKILL_PORT=5091` no ambiente antes de rodar.
 
 ---
 *"Feito com excelência para quem vive com excelência."*
