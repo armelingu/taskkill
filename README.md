@@ -86,6 +86,19 @@ Notas:
 - O banco fica persistido em volume (`taskkill_data`) como `/data/taskkill.db`.
 - O Ollama roda somente interno no compose. O serviço `ollama_pull` tenta puxar o modelo automaticamente.
 
+### Integração: chamados → Taskkill (Protheus)
+Para criar tarefas automaticamente a partir do seu sistema de chamados (MySQL), adicione no `.env`:
+
+- `CHAMADOS_SYNC_ENABLED=1`
+- `CHAMADOS_MYSQL_HOST=SEU_HOST_MYSQL`
+- `CHAMADOS_MYSQL_PORT=3306`
+- `CHAMADOS_MYSQL_DB=SEU_BANCO`
+- `CHAMADOS_MYSQL_USER=root`
+- `CHAMADOS_MYSQL_PASSWORD=<sua_senha>`
+- `CHAMADOS_AGENT_ID=SEU_AGENT_ID`
+
+E suba normalmente com Docker local. O serviço `chamados_sync` roda em background e importa tickets novos sem duplicar.
+
 ---
 
 ## 🚀 Subir em uma VPS (Hostinger) com Docker + HTTPS + Senha
