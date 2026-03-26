@@ -157,6 +157,12 @@ Crie/edite o arquivo `.env` na pasta `app` e garanta pelo menos:
 
 Obs: o sistema cria o usuário admin no primeiro boot (se não existir nenhum usuário).
 
+Se você **esquecer a senha** do admin, basta ajustar `TASKKILL_ADMIN_PASSWORD` no `.env` e rodar:
+
+```powershell
+python scripts\reset_admin_password.py
+```
+
 ### 2) Rodar com 1 clique (Windows)
 - Execute:
   - `scripts\\run_local.bat`
