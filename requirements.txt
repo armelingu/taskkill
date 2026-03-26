@@ -2,3 +2,4 @@ Flask
 waitress
 gunicorn
 httpx
+pymysql

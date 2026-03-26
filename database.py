@@ -136,4 +136,15 @@ def init_db():
                 (admin_user, pw_hash, datetime.utcnow().isoformat())
             )
 
+        # Integrações (sistema de chamados -> tasks)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS chamados_sync (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ticket_numero_fila TEXT NOT NULL UNIQUE,
+                task_id INTEGER,
+                created_at TEXT
+            )
+        ''')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_chamados_sync_task_id ON chamados_sync(task_id)')
+
         conn.commit()

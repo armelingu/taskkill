@@ -5,3 +5,27 @@ services:
     environment:
       TASKKILL_COOKIE_SECURE: "0"
 
+  chamados_sync:
+    build: .
+    environment:
+      TASKKILL_DB_PATH: /data/taskkill.db
+      TASKKILL_SECRET_KEY: ${TASKKILL_SECRET_KEY}
+      TASKKILL_ADMIN_USER: ${TASKKILL_ADMIN_USER:-admin}
+      TASKKILL_ADMIN_PASSWORD: ${TASKKILL_ADMIN_PASSWORD}
+      TASKKILL_COOKIE_SECURE: "0"
+      CHAMADOS_SYNC_ENABLED: ${CHAMADOS_SYNC_ENABLED:-0}
+      CHAMADOS_MYSQL_HOST: ${CHAMADOS_MYSQL_HOST}
+      CHAMADOS_MYSQL_PORT: ${CHAMADOS_MYSQL_PORT:-3306}
+      CHAMADOS_MYSQL_DB: ${CHAMADOS_MYSQL_DB}
+      CHAMADOS_MYSQL_USER: ${CHAMADOS_MYSQL_USER}
+      CHAMADOS_MYSQL_PASSWORD: ${CHAMADOS_MYSQL_PASSWORD}
+      CHAMADOS_AGENT_ID: ${CHAMADOS_AGENT_ID:-228}
+      CHAMADOS_POLL_SECONDS: ${CHAMADOS_POLL_SECONDS:-45}
+      CHAMADOS_FETCH_LIMIT: ${CHAMADOS_FETCH_LIMIT:-200}
+    volumes:
+      - taskkill_data:/data
+    depends_on:
+      - app
+    command: ["python", "scripts/sync_chamados.py"]
+    restart: unless-stopped
+
