@@ -122,7 +122,11 @@ def create_task_for_ticket(
     nome_solicitante = (nome_solicitante or "").strip()
     prioridade_txt = "" if prioridade is None else str(prioridade).strip()
 
-    base = f"[Chamado #{numero_fila}] {titulo}".strip()
+    ti = f"TI-{numero_fila}".strip()
+    base_parts = [ti]
+    if titulo:
+        base_parts.append(titulo)
+    base = " — ".join([p for p in base_parts if p]).strip()
     parts = [base]
     if prioridade_txt:
         parts.append(f"Prioridade: {prioridade_txt}")
