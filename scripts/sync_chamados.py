@@ -77,21 +77,22 @@ def connect_mysql():
 
 
 def fetch_tickets(conn, agente_id: str, limit: int):
-    # Mantém alinhado com o select que você passou.
+    # Query alinhada com o select atualizado (com nomes via JOIN).
     sql = """
-        SELECT
-            numero_fila,
-            solicitante_id,
-            titulo,
-            descricao,
-            tipo_ticket_id,
-            categoria_id,
-            subcategoria_id,
-            prioridade,
-            agente_id
-        FROM chamados
-        WHERE agente_id = %s
-        ORDER BY numero_fila DESC
+        SELECT 
+            c.numero_fila,
+            c.solicitante_id,
+            c.titulo,
+            c.prioridade,
+            u_agente.nome AS nome_agente,
+            u_solicitante.nome AS nome_solicitante
+        FROM chamados c
+        JOIN usuarios u_agente 
+            ON c.agente_id = u_agente.id
+        JOIN usuarios u_solicitante 
+            ON c.solicitante_id = u_solicitante.id
+        WHERE c.agente_id = %s
+        ORDER BY c.numero_fila DESC
         LIMIT %s
     """
     with conn.cursor() as cur:
@@ -107,18 +108,27 @@ def already_synced(conn_sqlite, numero_fila: str) -> bool:
     return bool(row)
 
 
-def create_task_for_ticket(conn_sqlite, numero_fila: str, titulo: str, descricao: str):
+def create_task_for_ticket(
+    conn_sqlite,
+    numero_fila: str,
+    titulo: str,
+    prioridade: str | int | None,
+    nome_solicitante: str | None,
+):
     project = "Protheus"
     today_str = date.today().strftime("%d/%m/%Y")
 
     titulo = (titulo or "").strip()
-    descricao = (descricao or "").strip()
+    nome_solicitante = (nome_solicitante or "").strip()
+    prioridade_txt = "" if prioridade is None else str(prioridade).strip()
 
     base = f"[Chamado #{numero_fila}] {titulo}".strip()
-    if descricao:
-        text = f"{base} — {descricao}"
-    else:
-        text = base
+    parts = [base]
+    if prioridade_txt:
+        parts.append(f"Prioridade: {prioridade_txt}")
+    if nome_solicitante:
+        parts.append(f"Solicitante: {nome_solicitante}")
+    text = " — ".join([p for p in parts if p])
 
     # Respeita o limite do sistema
     text = text[:1000]
@@ -192,7 +202,8 @@ def run_once():
                 sqlite_conn,
                 numero_fila=numero,
                 titulo=t.get("titulo") or "",
-                descricao=t.get("descricao") or "",
+                prioridade=t.get("prioridade"),
+                nome_solicitante=t.get("nome_solicitante"),
             )
             mark_task_id(sqlite_conn, numero, task_id)
             created += 1
