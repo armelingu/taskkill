@@ -75,7 +75,7 @@ def fetch_tickets(conn, agente_id: str, limit: int):
 
 def already_synced(conn_sqlite, numero_fila: str) -> bool:
     row = conn_sqlite.execute(
-        "SELECT 1 FROM chamados_sync WHERE ticket_numero_fila = ?",
+        "SELECT 1 FROM chamados_sync WHERE ticket_numero_fila = ? AND task_id IS NOT NULL",
         (str(numero_fila),),
     ).fetchone()
     return bool(row)
@@ -108,18 +108,29 @@ def create_task_for_ticket(conn_sqlite, numero_fila: str, titulo: str, descricao
 
     cur.execute(
         "INSERT INTO tasks (project, text, completed, created_date, due_date, position, deleted) VALUES (?, ?, 0, ?, ?, ?, 0)",
-        (project, text, today_str, "", new_pos),
+        (project, text, today_str, None, new_pos),
     )
-    conn_sqlite.commit()
     return int(cur.lastrowid)
 
 
-def mark_synced(conn_sqlite, numero_fila: str, task_id: int | None):
-    conn_sqlite.execute(
-        "INSERT INTO chamados_sync (ticket_numero_fila, task_id, created_at) VALUES (?, ?, ?)",
-        (str(numero_fila), task_id, datetime.utcnow().isoformat()),
+def try_claim_ticket(conn_sqlite, numero_fila: str) -> bool:
+    """
+    Reserva o ticket no SQLite para evitar duplicação, mesmo com múltiplos processos.
+    Retorna True se este processo "ganhou" o direito de criar a task.
+    """
+    cur = conn_sqlite.cursor()
+    cur.execute(
+        "INSERT OR IGNORE INTO chamados_sync (ticket_numero_fila, task_id, created_at) VALUES (?, NULL, ?)",
+        (str(numero_fila), datetime.utcnow().isoformat()),
     )
-    conn_sqlite.commit()
+    return int(cur.rowcount or 0) == 1
+
+
+def mark_task_id(conn_sqlite, numero_fila: str, task_id: int):
+    conn_sqlite.execute(
+        "UPDATE chamados_sync SET task_id = ? WHERE ticket_numero_fila = ?",
+        (int(task_id), str(numero_fila)),
+    )
 
 
 def run_once():
@@ -142,11 +153,12 @@ def run_once():
     database.init_db()
 
     with database.get_db_connection() as sqlite_conn:
+        sqlite_conn.execute("BEGIN")
         for t in tickets:
             numero = str(t.get("numero_fila", "")).strip()
             if not numero:
                 continue
-            if already_synced(sqlite_conn, numero):
+            if already_synced(sqlite_conn, numero) or not try_claim_ticket(sqlite_conn, numero):
                 skipped += 1
                 continue
 
@@ -156,8 +168,10 @@ def run_once():
                 titulo=t.get("titulo") or "",
                 descricao=t.get("descricao") or "",
             )
-            mark_synced(sqlite_conn, numero, task_id)
+            mark_task_id(sqlite_conn, numero, task_id)
             created += 1
+
+        sqlite_conn.commit()
 
     return created, skipped
 
