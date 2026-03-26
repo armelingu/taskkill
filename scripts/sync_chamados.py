@@ -84,6 +84,7 @@ def fetch_tickets(conn, agente_id: str, limit: int):
             c.solicitante_id,
             c.titulo,
             c.prioridade,
+            c.status,
             u_agente.nome AS nome_agente,
             u_solicitante.nome AS nome_solicitante
         FROM chamados c
@@ -113,6 +114,7 @@ def create_task_for_ticket(
     numero_fila: str,
     titulo: str,
     prioridade: str | int | None,
+    status: str | None,
     nome_solicitante: str | None,
 ):
     project = "Protheus"
@@ -121,6 +123,7 @@ def create_task_for_ticket(
     titulo = (titulo or "").strip()
     nome_solicitante = (nome_solicitante or "").strip()
     prioridade_txt = "" if prioridade is None else str(prioridade).strip()
+    status_txt = (status or "").strip()
 
     ti = f"TI-{numero_fila}".strip()
     base_parts = [ti]
@@ -130,6 +133,8 @@ def create_task_for_ticket(
     parts = [base]
     if prioridade_txt:
         parts.append(f"Prioridade: {prioridade_txt}")
+    if status_txt:
+        parts.append(f"Status: {status_txt}")
     if nome_solicitante:
         parts.append(f"Solicitante: {nome_solicitante}")
     text = " — ".join([p for p in parts if p])
@@ -207,6 +212,7 @@ def run_once():
                 numero_fila=numero,
                 titulo=t.get("titulo") or "",
                 prioridade=t.get("prioridade"),
+                status=t.get("status"),
                 nome_solicitante=t.get("nome_solicitante"),
             )
             mark_task_id(sqlite_conn, numero, task_id)
