@@ -147,6 +147,38 @@ Observações:
 
 ---
 
+## ✅ Uso local (sem VPS, sem Docker)
+
+O app agora é **web** e exige **login**.
+
+### 1) Configure o `.env` (1ª vez)
+Crie/edite o arquivo `.env` na pasta `app` e garanta pelo menos:
+
+- `TASKKILL_SECRET_KEY`: um segredo longo e aleatório
+- `TASKKILL_ADMIN_PASSWORD`: uma senha longa (mín. 10 caracteres)
+- `TASKKILL_COOKIE_SECURE=0` (local é HTTP)
+
+Obs: o sistema cria o usuário admin no primeiro boot (se não existir nenhum usuário).
+
+### 2) Rodar com 1 clique (Windows)
+- Execute:
+  - `scripts\\run_local.bat`
+  - ou `scripts\\run_local.ps1`
+
+### 3) Rodar manualmente (Windows / PowerShell)
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python serve.py
+```
+
+### 4) Acessar
+- Abra a URL que o terminal imprimir e entre em:
+  - `http://127.0.0.1:<porta>/login`
+
+---
+
 ## 📦 Empacotar como Executável (.exe) no Windows
 
 1. Instale dependências:

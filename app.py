@@ -7,6 +7,37 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from database import init_db
 from routes import main_bp, api_bp
 
+def _load_dotenv_if_present() -> None:
+    """
+    Carrega variáveis de um arquivo .env local (se existir).
+    - Não sobrescreve variáveis já definidas no ambiente (Docker/VPS).
+    - Mantém o uso local simples (não precisa setar env toda vez).
+    """
+    env_path = os.path.join(os.path.dirname(__file__), '.env')
+    if not os.path.exists(env_path):
+        return
+
+    try:
+        with open(env_path, 'r', encoding='utf-8') as f:
+            for raw in f:
+                line = raw.strip()
+                if not line or line.startswith('#'):
+                    continue
+                if '=' not in line:
+                    continue
+                key, value = line.split('=', 1)
+                key = key.strip()
+                value = value.strip().strip('"').strip("'")
+                if not key:
+                    continue
+                os.environ.setdefault(key, value)
+    except OSError:
+        # Se não conseguir ler por permissão/lock, segue sem travar o app.
+        return
+
+
+_load_dotenv_if_present()
+
 # Ponto de Partida Principal Minimalista
 BASE_DIR = getattr(sys, "_MEIPASS", os.path.dirname(__file__))
 app = Flask(
@@ -23,7 +54,14 @@ app.config['SECRET_KEY'] = os.environ.get('TASKKILL_SECRET_KEY') or secrets.toke
 app.config['MAX_CONTENT_LENGTH'] = int(os.environ.get('TASKKILL_MAX_CONTENT_LENGTH', str(10 * 1024 * 1024)))
 
 # Cookies de sessão (web)
-cookie_secure = os.environ.get('TASKKILL_COOKIE_SECURE', '').strip() == '1'
+cookie_secure_env = os.environ.get('TASKKILL_COOKIE_SECURE')
+if cookie_secure_env is None:
+    # Default seguro e pragmático:
+    # - VPS atrás de proxy/HTTPS: true
+    # - uso local (HTTP): false
+    cookie_secure = os.environ.get('TASKKILL_BEHIND_PROXY', '').strip() == '1'
+else:
+    cookie_secure = cookie_secure_env.strip() == '1'
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_SECURE'] = cookie_secure
