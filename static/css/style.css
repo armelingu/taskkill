@@ -23,6 +23,8 @@
 html {
     height: 100%;
     overflow: hidden;
+    margin: 0;
+    padding: 0;
 }
 
 body {
@@ -31,6 +33,8 @@ body {
     color: var(--text-title);
     height: 100%;
     overflow: hidden;
+    margin: 0;
+    padding: 0;
     -webkit-font-smoothing: antialiased; /* Torna a fonte mais refinada em telas modernas */
 }
 
@@ -179,7 +183,7 @@ body {
    - Chrome/Edge/Safari: ::-webkit-scrollbar*
    ------------------------------------------- */
 html {
-    scrollbar-gutter: stable both-edges; /* evita layout "pular" quando aparece scrollbar */
+    /* scrollbar-gutter removido: causava espaço nas bordas com overflow:hidden */
 }
 
 /* Firefox */
