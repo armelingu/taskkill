@@ -109,6 +109,28 @@ def already_synced(conn_sqlite, numero_fila: str) -> bool:
     return bool(row)
 
 
+def get_task_id_for_ticket(conn_sqlite, numero_fila: str) -> int | None:
+    row = conn_sqlite.execute(
+        "SELECT task_id FROM chamados_sync WHERE ticket_numero_fila = ?",
+        (str(numero_fila),),
+    ).fetchone()
+    if not row:
+        return None
+    v = row["task_id"]
+    return None if v is None else int(v)
+
+
+def _norm_status(status: str | None) -> str:
+    if status is None:
+        return ""
+    return str(status).strip().upper()
+
+
+def is_closed_status(status: str | None) -> bool:
+    s = _norm_status(status)
+    return s in {"FECHADO", "RESOLVIDO", "CANCELADO"}
+
+
 def create_task_for_ticket(
     conn_sqlite,
     numero_fila: str,
@@ -125,8 +147,10 @@ def create_task_for_ticket(
     prioridade_txt = "" if prioridade is None else str(prioridade).strip()
     status_txt = (status or "").strip()
 
-    ti = f"TI-{numero_fila}".strip()
-    base_parts = [ti]
+    # `numero_fila` já vem com o prefixo do sistema de chamados (ex.: TI-0673/2026).
+    # Não adicionamos prefixo fixo para evitar duplicar.
+    ticket_key = str(numero_fila).strip()
+    base_parts = [ticket_key]
     if titulo:
         base_parts.append(titulo)
     base = " — ".join([p for p in base_parts if p]).strip()
@@ -142,6 +166,8 @@ def create_task_for_ticket(
     # Respeita o limite do sistema
     text = text[:1000]
 
+    completed = 1 if is_closed_status(status_txt) else 0
+
     cur = conn_sqlite.cursor()
     cur.execute(
         "SELECT COALESCE(MAX(position), -1) AS max_pos FROM tasks WHERE project = ? AND deleted = 0",
@@ -152,8 +178,8 @@ def create_task_for_ticket(
     new_pos = int(max_pos) + 1
 
     cur.execute(
-        "INSERT INTO tasks (project, text, completed, created_date, due_date, position, deleted) VALUES (?, ?, 0, ?, ?, ?, 0)",
-        (project, text, today_str, None, new_pos),
+        "INSERT INTO tasks (project, text, completed, created_date, due_date, position, deleted) VALUES (?, ?, ?, ?, ?, ?, 0)",
+        (project, text, completed, today_str, None, new_pos),
     )
     return int(cur.lastrowid)
 
@@ -167,6 +193,19 @@ def try_claim_ticket(conn_sqlite, numero_fila: str) -> bool:
     cur.execute(
         "INSERT OR IGNORE INTO chamados_sync (ticket_numero_fila, task_id, created_at) VALUES (?, NULL, ?)",
         (str(numero_fila), datetime.utcnow().isoformat()),
+    )
+    return int(cur.rowcount or 0) == 1
+
+
+def try_claim_existing_null(conn_sqlite, numero_fila: str) -> bool:
+    """
+    Recupera casos raros onde existe registro em chamados_sync mas task_id ficou NULL
+    (ex.: queda no meio do processo). Mantém idempotência via lock/transação do SQLite.
+    """
+    cur = conn_sqlite.cursor()
+    cur.execute(
+        "UPDATE chamados_sync SET created_at = created_at WHERE ticket_numero_fila = ? AND task_id IS NULL",
+        (str(numero_fila),),
     )
     return int(cur.rowcount or 0) == 1
 
@@ -193,6 +232,7 @@ def run_once():
 
     created = 0
     skipped = 0
+    completed_auto = 0
 
     # garante schema (fora de qualquer transação/conn já aberta)
     database.init_db()
@@ -203,7 +243,23 @@ def run_once():
             numero = str(t.get("numero_fila", "")).strip()
             if not numero:
                 continue
-            if already_synced(sqlite_conn, numero) or not try_claim_ticket(sqlite_conn, numero):
+            status = t.get("status")
+
+            # Se já existe task, só garante auto-complete para status fechados.
+            if already_synced(sqlite_conn, numero):
+                task_id = get_task_id_for_ticket(sqlite_conn, numero)
+                if task_id and is_closed_status(status):
+                    cur = sqlite_conn.cursor()
+                    cur.execute(
+                        "UPDATE tasks SET completed = 1 WHERE id = ? AND completed = 0",
+                        (int(task_id),),
+                    )
+                    completed_auto += int(cur.rowcount or 0)
+                skipped += 1
+                continue
+
+            # Claim para criação (novo ou recuperação de claim antigo com task_id NULL)
+            if not try_claim_ticket(sqlite_conn, numero) and not try_claim_existing_null(sqlite_conn, numero):
                 skipped += 1
                 continue
 
@@ -220,7 +276,7 @@ def run_once():
 
         sqlite_conn.commit()
 
-    return created, skipped
+    return created, skipped, completed_auto
 
 
 def main():
@@ -234,9 +290,9 @@ def main():
 
     while True:
         try:
-            created, skipped = run_once()
-            if created:
-                print(f"[sync] criadas: {created} | já existentes: {skipped}")
+            created, skipped, completed_auto = run_once()
+            if created or completed_auto:
+                print(f"[sync] criadas: {created} | já existentes: {skipped} | auto-concluídas: {completed_auto}")
         except Exception as e:
             print("[sync] erro:", str(e))
             traceback.print_exc()
