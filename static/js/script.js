@@ -1104,14 +1104,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const editBtn = li.querySelector('.edit-btn');
             const textSpan = li.querySelector('.task-text');
 
-            // Marcar / Desmarcar
+            // Marcar / Desmarcar (atualização cirúrgica — sem re-renderizar toda a lista)
             checkbox.addEventListener('click', () => {
                 const novoStatus = !task.completed;
-                // Atualização Otimista UI (muda na hora sem esperar o servidor)
                 task.completed = novoStatus;
-                renderTasks(); 
-                
-                // Manda pro banco no fundo
+
+                // Atualiza só o li clicado, sem tocar nos demais
+                li.classList.toggle('completed', novoStatus);
+                checkbox.classList.toggle('checked', novoStatus);
+
                 apiFetch(`/api/tasks/${task.id}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
