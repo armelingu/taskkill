@@ -29,6 +29,21 @@ document.addEventListener('DOMContentLoaded', () => {
         );
     }
 
+    // Seção "Sistema" colapsável
+    const sistemaToggle = document.getElementById('sistema-toggle');
+    const sistemaItems  = document.getElementById('sistema-items');
+    if (sistemaToggle && sistemaItems) {
+        const toggleSistema = () => {
+            const expanded = sistemaToggle.getAttribute('aria-expanded') === 'true';
+            sistemaToggle.setAttribute('aria-expanded', String(!expanded));
+            sistemaItems.classList.toggle('hidden', expanded);
+        };
+        sistemaToggle.addEventListener('click', toggleSistema);
+        sistemaToggle.addEventListener('keydown', e => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSistema(); }
+        });
+    }
+
     // CSRF token por sessão (obrigatório no backend em /api para POST/PUT/DELETE)
     function getCsrfToken() {
         const meta = document.querySelector('meta[name="csrf-token"]');

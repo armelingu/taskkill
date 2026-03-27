@@ -290,6 +290,33 @@ html {
     margin-bottom: 6px;
 }
 
+/* Seção colapsável (Sistema) */
+.section-header--toggle {
+    cursor: pointer;
+    border-radius: 6px;
+    padding: 4px 12px;
+    margin-left: -0px;
+    transition: background-color 0.15s ease;
+    user-select: none;
+}
+
+.section-header--toggle:hover {
+    background-color: #e2e8f0;
+}
+
+.section-toggle-icon {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #94a3b8;
+    transition: transform 0.2s ease;
+    display: inline-block;
+    line-height: 1;
+}
+
+.section-header--toggle[aria-expanded="true"] .section-toggle-icon {
+    transform: rotate(90deg);
+}
+
 .section-title {
     font-size: 0.75rem; 
     font-weight: 700;
