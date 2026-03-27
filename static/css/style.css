@@ -251,7 +251,7 @@ html {
     align-items: center;
     gap: 12px;
     padding: 0 12px;
-    margin-bottom: 24px;
+    margin-bottom: 32px;
     cursor: default;
     user-select: none;
 }
@@ -274,7 +274,7 @@ html {
 
 /* Espaçamento entre as duas grandes seções (Semana, Projetos) */
 .sidebar-section {
-    margin-bottom: 20px;
+    margin-bottom: 28px;
 }
 
 .sidebar-section:last-child {
@@ -287,7 +287,7 @@ html {
     align-items: baseline;
     justify-content: space-between;
     padding: 0 12px;
-    margin-bottom: 6px;
+    margin-bottom: 8px;
 }
 
 /* Seção colapsável (Sistema) */
