@@ -3,7 +3,8 @@ import os
 import shutil
 import sqlite3
 import tempfile
-from datetime import date, datetime
+import threading
+from datetime import date, datetime, timedelta
 
 from functools import wraps
 
@@ -11,6 +12,50 @@ from flask import Blueprint, render_template, request, jsonify, send_file, sessi
 
 from database import get_db_connection, get_db_path, init_db
 from werkzeug.security import check_password_hash, generate_password_hash
+
+# ---------------------------------------------------------------------------
+# Rate-limit de login (in-memory, por IP)
+# ---------------------------------------------------------------------------
+_LOGIN_MAX_ATTEMPTS  = int(os.environ.get('LOGIN_MAX_ATTEMPTS', '5'))
+_LOGIN_LOCKOUT_SECS  = int(os.environ.get('LOGIN_LOCKOUT_SECONDS', '900'))  # 15 min
+_login_attempts: dict = {}   # { ip: {'count': int, 'locked_until': datetime | None} }
+_login_lock = threading.Lock()
+
+
+def _get_client_ip() -> str:
+    return request.headers.get('X-Forwarded-For', request.remote_addr or '').split(',')[0].strip()
+
+
+def _is_ip_locked(ip: str) -> tuple[bool, int]:
+    """Retorna (bloqueado, segundos_restantes)."""
+    with _login_lock:
+        entry = _login_attempts.get(ip)
+        if not entry:
+            return False, 0
+        locked_until = entry.get('locked_until')
+        if locked_until and datetime.utcnow() < locked_until:
+            remaining = int((locked_until - datetime.utcnow()).total_seconds())
+            return True, remaining
+        return False, 0
+
+
+def _record_failed_login(ip: str) -> int:
+    """Registra tentativa falha. Retorna contagem atual."""
+    with _login_lock:
+        entry = _login_attempts.setdefault(ip, {'count': 0, 'locked_until': None})
+        # Reseta o lock expirado antes de incrementar
+        if entry.get('locked_until') and datetime.utcnow() >= entry['locked_until']:
+            entry['count'] = 0
+            entry['locked_until'] = None
+        entry['count'] += 1
+        if entry['count'] >= _LOGIN_MAX_ATTEMPTS:
+            entry['locked_until'] = datetime.utcnow() + timedelta(seconds=_LOGIN_LOCKOUT_SECS)
+        return int(entry['count'])
+
+
+def _reset_login_attempts(ip: str) -> None:
+    with _login_lock:
+        _login_attempts.pop(ip, None)
 
 # Blueprints permitem "encapsular" as rotas e injetá-las no arquivo principal.
 main_bp = Blueprint('main', __name__)
@@ -106,8 +151,16 @@ def login():
         return redirect(url_for('main.index'))
 
     csrf = _ensure_csrf_token()
+    ip   = _get_client_ip()
 
     if request.method == 'POST':
+        # Rate-limit: verifica bloqueio antes de qualquer processamento
+        locked, remaining = _is_ip_locked(ip)
+        if locked:
+            mins = (remaining // 60) + 1
+            error = f'Muitas tentativas. Tente novamente em {mins} minuto(s).'
+            return render_template('login.html', error=error, csrf_token=csrf), 429
+
         form_csrf = request.form.get('csrf_token')
         if not form_csrf or form_csrf != csrf:
             return render_template('login.html', error='Sessão expirada. Recarregue e tente novamente.', csrf_token=csrf), 400
@@ -120,11 +173,21 @@ def login():
         with get_db_connection() as conn:
             row = conn.execute('SELECT id, username, password_hash, is_admin FROM users WHERE username = ?', (username,)).fetchone()
             if not row or not check_password_hash(row['password_hash'], password):
-                return render_template('login.html', error='Credenciais inválidas.', csrf_token=csrf), 401
+                count = _record_failed_login(ip)
+                remaining_attempts = max(0, _LOGIN_MAX_ATTEMPTS - count)
+                if remaining_attempts == 0:
+                    error = f'Muitas tentativas. Conta bloqueada por {_LOGIN_LOCKOUT_SECS // 60} minuto(s).'
+                else:
+                    error = f'Credenciais inválidas. Tentativas restantes: {remaining_attempts}.'
+                return render_template('login.html', error=error, csrf_token=csrf), 401
 
-        session['user_id'] = int(row['id'])
+        # Login bem-sucedido: reseta contador e regenera sessão (previne session fixation)
+        _reset_login_attempts(ip)
+        session.clear()                       # descarta sessão anterior (novo ID gerado pelo Flask)
+        session.permanent = True              # ativa expiração por PERMANENT_SESSION_LIFETIME
+        session['user_id']  = int(row['id'])
         session['is_admin'] = int(row['is_admin'])
-        _ensure_csrf_token()
+        _ensure_csrf_token()                  # gera novo CSRF token na sessão limpa
         return redirect(url_for('main.index'))
 
     return render_template('login.html', csrf_token=csrf)

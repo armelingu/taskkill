@@ -1,8 +1,9 @@
 import os
 import secrets
 import sys
+from datetime import timedelta
 
-from flask import Flask, request
+from flask import Flask, request, session
 from werkzeug.middleware.proxy_fix import ProxyFix
 from database import init_db
 from routes import main_bp, api_bp
@@ -65,6 +66,13 @@ else:
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_SECURE'] = cookie_secure
+# Cookie com nome discreto (não revela a tecnologia)
+app.config['SESSION_COOKIE_NAME'] = 'tk_s'
+# Sessão permanente com expiração por inatividade (8h por padrão, configurável)
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(
+    seconds=int(os.environ.get('TASKKILL_SESSION_LIFETIME_SECONDS', str(8 * 3600)))
+)
+app.config['SESSION_REFRESH_EACH_REQUEST'] = True
 
 # Configurações Iniciais de Banco (Tabela, SQLite)
 init_db()
