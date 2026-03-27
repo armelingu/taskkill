@@ -181,12 +181,29 @@ python scripts\reset_admin_password.py
   - `scripts\\run_local.bat`
   - ou `scripts\\run_local.ps1`
 
+Se você quiser subir **o app + o sync de chamados** junto (mais automático):
+- `scripts\\run_local_all.bat`
+- ou `scripts\\run_local_all.ps1`
+
 ### 3) Rodar manualmente (Windows / PowerShell)
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 python serve.py
+```
+
+### 3.1) (Opcional) Deixar o sync sempre rodando (Agendador do Windows)
+Isso faz o sync iniciar automaticamente no seu **logon** do Windows.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\install_sync_task.ps1 -Hidden
+```
+
+Para remover:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\uninstall_sync_task.ps1
 ```
 
 ### 4) Acessar
