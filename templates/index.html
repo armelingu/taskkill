@@ -76,10 +76,11 @@
             </section>
 
             <section class="sidebar-section">
-                <div class="section-header">
+                <div class="section-header section-header--toggle" id="sistema-toggle" aria-expanded="false" aria-controls="sistema-items" role="button" tabindex="0">
                     <h2 class="section-title">Sistema</h2>
+                    <span class="section-toggle-icon" aria-hidden="true">›</span>
                 </div>
-                <div class="placeholder-container">
+                <div class="placeholder-container hidden" id="sistema-items">
                     <a class="skeleton-item system-action" href="/admin" aria-label="Painel admin">Admin</a>
                     <button type="button" class="skeleton-item system-action" id="btn-backup" aria-label="Exportar backup do banco">
                         Exportar backup
