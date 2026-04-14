@@ -168,7 +168,19 @@ def create_task_for_ticket(
     data_abertura=None,
 ):
     project = "Protheus"
-    today_str = date.today().strftime("%d/%m/%Y")
+    # Usa data_abertura como data da task para vincular corretamente no grafo.
+    # Fallback para hoje apenas se data_abertura for nulo/inválido.
+    if data_abertura is not None:
+        try:
+            if isinstance(data_abertura, str):
+                abertura_date = date.fromisoformat(data_abertura[:10])
+            else:
+                abertura_date = date(data_abertura.year, data_abertura.month, data_abertura.day)
+            created_str = abertura_date.strftime("%d/%m/%Y")
+        except (ValueError, AttributeError):
+            created_str = date.today().strftime("%d/%m/%Y")
+    else:
+        created_str = date.today().strftime("%d/%m/%Y")
     due_date = _due_date_from_abertura(data_abertura)  # dia da semana em que foi aberto
 
     titulo = (titulo or "").strip()
@@ -208,7 +220,7 @@ def create_task_for_ticket(
 
     cur.execute(
         "INSERT INTO tasks (project, text, completed, created_date, due_date, position, deleted) VALUES (?, ?, ?, ?, ?, ?, 0)",
-        (project, text, completed, today_str, due_date, new_pos),
+        (project, text, completed, created_str, due_date, new_pos),
     )
     return int(cur.lastrowid)
 
