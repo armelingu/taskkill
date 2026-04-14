@@ -786,7 +786,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Se for um Projeto Genérico
             document.body.classList.remove('graph-mode');
-            currentCategory = item.textContent.trim();
+            currentCategory = normText(item.textContent);
             currentWeekDay = null;
             currentTag = null;
             
@@ -867,7 +867,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } 
             // Se soltou no menu de PROJETO -> Muda de Projeto (Move to Project)
             else if (item.classList.contains('project-nav')) {
-                const newProject = item.textContent.trim();
+                const newProject = normText(item.textContent);
                 if (sourceProject === newProject) return; // Mesmo lugar
 
                 // Tira de um array local e bota no outro
@@ -961,7 +961,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const projectItems = document.querySelectorAll('.project-nav');
         
         projectItems.forEach(item => {
-            const projectName = item.textContent.trim();
+            const projectName = normText(item.textContent);
             const tasks = (tasksData[projectName] || []).filter(t => !t.deleted); 
             
             const total = tasks.length;
