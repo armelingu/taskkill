@@ -271,6 +271,14 @@ def run_once():
         except Exception:
             pass
 
+    # Ordena por prioridade antes de inserir, para que as tasks fiquem
+    # posicionadas na ordem: Crítica → Alta → Média → Baixa → sem prioridade.
+    _PRIO_ORDER = {"critica": 0, "crítica": 0, "alta": 1, "media": 2, "média": 2, "baixa": 3}
+    tickets = sorted(
+        tickets,
+        key=lambda t: _PRIO_ORDER.get(str(t.get("prioridade") or "").strip().lower(), 99),
+    )
+
     created = 0
     skipped = 0
     completed_auto = 0
