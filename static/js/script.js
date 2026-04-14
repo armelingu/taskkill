@@ -70,7 +70,9 @@ document.addEventListener('DOMContentLoaded', () => {
         moved: false,
         pan: { x: 0, y: 0 },
         scale: 1,
-        last: { x: 0, y: 0 }
+        last: { x: 0, y: 0 },
+        dimProgress: 0,   // 0 = sem dim; 1 = dim total — animado suavemente
+        dimRaf: 0,        // RAF exclusivo para animação de fade
     };
 
     function normText(s) {
@@ -241,6 +243,9 @@ document.addEventListener('DOMContentLoaded', () => {
         return best;
     }
 
+    // Lerp linear entre dois valores
+    function _lerp(a, b, t) { return a + (b - a) * t; }
+
     function graphDraw() {
         if (!graphCanvas || !graph.model) return;
         const ctx = graphCanvas.getContext('2d');
@@ -249,53 +254,122 @@ document.addEventListener('DOMContentLoaded', () => {
         const h = rect.height;
         ctx.clearRect(0, 0, w, h);
 
-        // Edges
+        const hov = graph.hoverId;
+        const dp  = graph.dimProgress; // 0..1, animado suavemente
+
+        // Pré-computa conjuntos conectados (só se houver hover)
+        let connectedNodeIds = null;
+        let connectedEdgeSet = null;
+        if (hov && dp > 0.01) {
+            connectedNodeIds = new Set([hov]);
+            connectedEdgeSet = new Set();
+            for (const e of graph.model.edges) {
+                if (!e.na || !e.nb) continue;
+                if (e.na.id === hov || e.nb.id === hov) {
+                    connectedNodeIds.add(e.na.id);
+                    connectedNodeIds.add(e.nb.id);
+                    connectedEdgeSet.add(e);
+                }
+            }
+        }
+
+        // ---- Arestas ------------------------------------------------
         for (const e of graph.model.edges) {
             if (!e.na || !e.nb) continue;
             const a = worldToScreen(e.na.x, e.na.y);
             const b = worldToScreen(e.nb.x, e.nb.y);
             const base =
-                e.kind === 'schedule' ? '100,116,139' : // slate-500
-                e.kind === 'taglink' ? '59,130,246' :   // blue-500
-                '59,130,246';                           // tags compartilhadas
-            const alpha =
+                e.kind === 'schedule' ? '100,116,139' :
+                e.kind === 'taglink'  ? '59,130,246'  :
+                '59,130,246';
+
+            // alpha "normal" da aresta
+            const alphaNormal = (
                 e.kind === 'schedule' ? 0.22 :
-                e.kind === 'taglink' ? 0.14 :
-                0.16;
-            ctx.strokeStyle = `rgba(${base}, ${alpha + Math.min(0.12, e.weight * 0.015)})`;
-            ctx.lineWidth = 1 + Math.min(2.0, e.weight * 0.22);
+                e.kind === 'taglink'  ? 0.14 : 0.16
+            ) + Math.min(0.12, e.weight * 0.015);
+
+            let edgeAlpha = alphaNormal;
+            if (connectedEdgeSet) {
+                if (connectedEdgeSet.has(e)) {
+                    // Aresta conectada: destaque suave
+                    edgeAlpha = _lerp(alphaNormal, 0.60, dp);
+                } else {
+                    // Aresta não conectada: fade elegante até 8%
+                    edgeAlpha = _lerp(alphaNormal, 0.08, dp);
+                }
+            }
+
+            ctx.strokeStyle = `rgba(${base},${edgeAlpha})`;
+            ctx.lineWidth = (connectedEdgeSet && connectedEdgeSet.has(e))
+                ? _lerp(1 + Math.min(2.0, e.weight * 0.22), 2.0, dp)
+                : 1 + Math.min(2.0, e.weight * 0.22);
             ctx.beginPath();
             ctx.moveTo(a.x, a.y);
             ctx.lineTo(b.x, b.y);
             ctx.stroke();
         }
 
-        // Nodes + labels
+        // ---- Nós + labels -------------------------------------------
         for (const n of graph.model.nodes) {
             const p = worldToScreen(n.x, n.y);
-            const isHover = graph.hoverId === n.id;
-            const fill =
-                n.type === 'day' ? 'rgba(226,232,240,0.95)' :
-                n.type === 'tag' ? 'rgba(239,246,255,0.98)' :
-                'rgba(255,255,255,0.98)';
-            const stroke =
-                n.type === 'day' ? 'rgba(100,116,139,0.55)' :
-                n.type === 'tag' ? 'rgba(59,130,246,0.50)' :
-                'rgba(59,130,246,0.65)';
+            const isHover  = hov === n.id;
+            const isLinked = connectedNodeIds && connectedNodeIds.has(n.id);
+            const isDimmed = connectedNodeIds && !isLinked;
+
+            // Opacidade do nó: fade suave até 18% para os não-conectados
+            const nodeOp = isDimmed ? _lerp(1, 0.18, dp) : 1;
+
+            const fillBase  =
+                n.type === 'day' ? [226,232,240] :
+                n.type === 'tag' ? [239,246,255] : [255,255,255];
+            const strokeBase =
+                n.type === 'day' ? [100,116,139] :
+                n.type === 'tag' ? [ 59,130,246] :
+                                   [ 59,130,246];
+
+            const fillA   = isDimmed ? _lerp(0.95, 0.25, dp) : 0.97;
+            const strokeA = isDimmed
+                ? _lerp(isHover ? 0.65 : (n.type === 'day' ? 0.55 : 0.60), 0.12, dp)
+                : (isHover ? 0.80 : (n.type === 'day' ? 0.55 : 0.60));
+
+            // Raio: o nó hover cresce suavemente
+            const r = isHover ? _lerp(n.r, n.r * 1.22, dp) : n.r;
 
             ctx.beginPath();
-            ctx.arc(p.x, p.y, n.r, 0, Math.PI * 2);
-            ctx.fillStyle = fill;
+            ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+            ctx.fillStyle   = `rgba(${fillBase.join(',')},${fillA})`;
             ctx.fill();
-            ctx.lineWidth = isHover ? 2.6 : 1.5;
-            ctx.strokeStyle = isHover ? 'rgba(15,23,42,0.65)' : stroke;
+            ctx.lineWidth   = isHover ? _lerp(1.5, 2.6, dp) : 1.5;
+            ctx.strokeStyle = `rgba(${strokeBase.join(',')},${strokeA})`;
             ctx.stroke();
 
-            ctx.font = `600 ${n.type === 'day' ? 12 : 12.5}px Inter, system-ui, -apple-system, Segoe UI, sans-serif`;
-            ctx.fillStyle = isHover ? 'rgba(15,23,42,0.92)' : 'rgba(15,23,42,0.78)';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(n.label, p.x + n.r + 10, p.y);
+            // Label: dimmed some suavemente, hover fica em destaque
+            const labelOp = isDimmed
+                ? _lerp(0.78, 0.0, Math.min(1, dp * 1.4))  // some antes de chegar em dp=1
+                : (isHover ? 1.0 : 0.78);
+
+            if (labelOp > 0.02) {
+                ctx.font = `600 ${n.type === 'day' ? 12 : 12.5}px Inter, system-ui, -apple-system, Segoe UI, sans-serif`;
+                ctx.fillStyle   = `rgba(15,23,42,${labelOp})`;
+                ctx.textBaseline = 'middle';
+                ctx.fillText(n.label, p.x + r + 10, p.y);
+            }
         }
+    }
+
+    // Anima graph.dimProgress suavemente (lerp a cada frame)
+    function _graphDimAnimate() {
+        const target = graph.hoverId ? 1 : 0;
+        const diff   = target - graph.dimProgress;
+        if (Math.abs(diff) < 0.008) {
+            graph.dimProgress = target;
+            if (!graph.running) graphDraw();
+            return;
+        }
+        graph.dimProgress += diff * 0.15; // velocidade do fade (~120ms)
+        if (!graph.running) graphDraw();
+        graph.dimRaf = requestAnimationFrame(_graphDimAnimate);
     }
 
     function graphStep() {
@@ -433,13 +507,26 @@ document.addEventListener('DOMContentLoaded', () => {
             const mx = e.clientX - rect.left;
             const my = e.clientY - rect.top;
             const hit = graphHit(mx, my);
+            const prevHover = graph.hoverId;
             graph.hoverId = hit ? hit.id : null;
             graphCanvas.style.cursor = hit ? 'pointer' : (graph.isPanning ? 'grabbing' : 'grab');
             if (hit) showTooltip(hit, mx, my); else hideTooltip();
+            // Dispara animação de fade apenas quando o hover muda
+            if (prevHover !== graph.hoverId) {
+                cancelAnimationFrame(graph.dimRaf);
+                graph.dimRaf = requestAnimationFrame(_graphDimAnimate);
+            }
             if (!graph.running) graphDraw();
         });
 
-        graphCanvas.addEventListener('mouseleave', () => hideTooltip());
+        graphCanvas.addEventListener('mouseleave', () => {
+            hideTooltip();
+            if (graph.hoverId) {
+                graph.hoverId = null;
+                cancelAnimationFrame(graph.dimRaf);
+                graph.dimRaf = requestAnimationFrame(_graphDimAnimate);
+            }
+        });
 
         graphCanvas.addEventListener('mousedown', (e) => {
             const rect = graphCanvas.getBoundingClientRect();
