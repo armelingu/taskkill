@@ -76,8 +76,34 @@ def connect_mysql():
     )
 
 
+_WEEKDAY_TO_DUE: dict[int, str] = {
+    0: "Segunda",
+    1: "Terça",
+    2: "Quarta",
+    3: "Quinta",
+    4: "Sexta",
+    # Sábado (5) e Domingo (6) sem mapeamento — campo fica None
+}
+
+
+def _due_date_from_abertura(data_abertura) -> str | None:
+    """Converte data_abertura (date, datetime ou str ISO) no dia da semana do sistema."""
+    if data_abertura is None:
+        return None
+    if isinstance(data_abertura, str):
+        try:
+            data_abertura = date.fromisoformat(data_abertura[:10])
+        except ValueError:
+            return None
+    if isinstance(data_abertura, datetime):
+        data_abertura = data_abertura.date()
+    if not isinstance(data_abertura, date):
+        return None
+    return _WEEKDAY_TO_DUE.get(data_abertura.weekday())
+
+
 def fetch_tickets(conn, agente_id: str, limit: int):
-    # Query alinhada com o select atualizado (com nomes via JOIN).
+    # Query alinhada com o select atualizado (com nomes via JOIN e data de abertura).
     sql = """
         SELECT 
             c.numero_fila,
@@ -85,6 +111,7 @@ def fetch_tickets(conn, agente_id: str, limit: int):
             c.titulo,
             c.prioridade,
             c.status,
+            c.data_abertura,
             u_agente.nome AS nome_agente,
             u_solicitante.nome AS nome_solicitante
         FROM chamados c
@@ -138,9 +165,11 @@ def create_task_for_ticket(
     prioridade: str | int | None,
     status: str | None,
     nome_solicitante: str | None,
+    data_abertura=None,
 ):
     project = "Protheus"
     today_str = date.today().strftime("%d/%m/%Y")
+    due_date = _due_date_from_abertura(data_abertura)  # dia da semana em que foi aberto
 
     titulo = (titulo or "").strip()
     nome_solicitante = (nome_solicitante or "").strip()
@@ -179,7 +208,7 @@ def create_task_for_ticket(
 
     cur.execute(
         "INSERT INTO tasks (project, text, completed, created_date, due_date, position, deleted) VALUES (?, ?, ?, ?, ?, ?, 0)",
-        (project, text, completed, today_str, None, new_pos),
+        (project, text, completed, today_str, due_date, new_pos),
     )
     return int(cur.lastrowid)
 
@@ -270,6 +299,7 @@ def run_once():
                 prioridade=t.get("prioridade"),
                 status=t.get("status"),
                 nome_solicitante=t.get("nome_solicitante"),
+                data_abertura=t.get("data_abertura"),
             )
             mark_task_id(sqlite_conn, numero, task_id)
             created += 1
