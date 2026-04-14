@@ -2,7 +2,7 @@ import os
 import sys
 import time
 import traceback
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
 import pymysql
 
@@ -128,7 +128,7 @@ def _norm_status(status: str | None) -> str:
 
 def is_closed_status(status: str | None) -> bool:
     s = _norm_status(status)
-    return s in {"FECHADO", "RESOLVIDO", "CANCELADO"}
+    return s in {"FECHADO", "RESOLVIDO", "CANCELADO", "FINALIZADO"}
 
 
 def create_task_for_ticket(
@@ -192,7 +192,7 @@ def try_claim_ticket(conn_sqlite, numero_fila: str) -> bool:
     cur = conn_sqlite.cursor()
     cur.execute(
         "INSERT OR IGNORE INTO chamados_sync (ticket_numero_fila, task_id, created_at) VALUES (?, NULL, ?)",
-        (str(numero_fila), datetime.utcnow().isoformat()),
+        (str(numero_fila), datetime.now(timezone.utc).isoformat()),
     )
     return int(cur.rowcount or 0) == 1
 
