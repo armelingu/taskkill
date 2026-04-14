@@ -60,9 +60,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // ----------------------------------------------------
     // GRAFO (Obsidian-like): Dias <-> Projetos + Projetos <-> Projetos
     // ----------------------------------------------------
-    // ----------------------------------------------------
-    // GRAFO — motor de física, renderização e UX
-    // ----------------------------------------------------
     const graph = {
         raf: 0,
         running: false,
@@ -73,34 +70,37 @@ document.addEventListener('DOMContentLoaded', () => {
         moved: false,
         pan: { x: 0, y: 0 },
         scale: 1,
-        last: { x: 0, y: 0 },
-        alpha: 1.0,       // parâmetro de resfriamento (D3-force style)
-        ctx: null,        // contexto canvas cacheado
-        dirty: false,     // flag de redraw
-        pinchDist: null,  // distância inicial para pinch-to-zoom
+        last: { x: 0, y: 0 }
     };
 
     function normText(s) {
         return String(s || '').replace(/\s+/g, ' ').trim();
     }
 
-    // ---- Construção do modelo -----------------------------------------
-
     function buildGraphModel() {
         const dayEls = Array.from(document.querySelectorAll('.week-nav'));
         const days = dayEls.map(el => el.getAttribute('data-day')).filter(Boolean);
+
         const projectEls = Array.from(document.querySelectorAll('.project-nav'));
         const projects = projectEls.map(el => normText(el.textContent)).filter(Boolean);
 
         const nodes = [];
         const nodeById = new Map();
-        const BASE_R = { day: 11, project: 13, tag: 9 };
 
         function addNode(type, key, label) {
             const id = `${type}:${key}`;
             if (nodeById.has(id)) return nodeById.get(id);
-            const n = { id, type, key, label, x: 0, y: 0, vx: 0, vy: 0,
-                        r: BASE_R[type] || 12, degree: 0, taskCount: 0 };
+            const n = {
+                id,
+                type,
+                key,
+                label,
+                x: (Math.random() - 0.5) * 520,
+                y: (Math.random() - 0.5) * 340,
+                vx: 0,
+                vy: 0,
+                r: type === 'day' ? 12 : (type === 'tag' ? 11 : 14)
+            };
             nodeById.set(id, n);
             nodes.push(n);
             return n;
@@ -111,115 +111,108 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const edges = [];
 
-        // Dia <-> Projeto (via due_date)
-        const dayCounts = new Map();
+        // Dia <-> Projeto (tarefas com due_date)
+        const counts = new Map(); // day||project -> count
         for (const p of projects) {
             const list = (tasksData[p] || []).filter(t => !t.deleted);
-            const pNode = nodeById.get(`project:${p}`);
-            if (pNode) pNode.taskCount = list.length;
             for (const t of list) {
                 const d = normText(t.due_date || '');
                 if (!d) continue;
                 const k = `${d}||${p}`;
-                dayCounts.set(k, (dayCounts.get(k) || 0) + 1);
+                counts.set(k, (counts.get(k) || 0) + 1);
             }
         }
-        for (const [k, c] of dayCounts.entries()) {
+        for (const [k, c] of counts.entries()) {
             const [day, proj] = k.split('||');
-            const na = addNode('day', day, day);
-            const nb = addNode('project', proj, proj);
-            edges.push({ a: na.id, b: nb.id, weight: Math.min(8, c), kind: 'schedule', na, nb });
+            const a = addNode('day', day, day);
+            const b = addNode('project', proj, proj);
+            edges.push({ a: a.id, b: b.id, weight: Math.min(8, c), kind: 'schedule' });
         }
 
-        // Tags
+        // Tags (para relações Projeto <-> Tag e Projeto <-> Projeto)
         const tagRe = /(^|\s)#([\w\u00C0-\u00FF]+)/g;
-        const tagsByProject = new Map();
-        const tagCountsByProject = new Map();
-        const tagCountsGlobal = new Map();
+        const tagsByProject = new Map(); // proj -> Set(tag)
+        const tagCountsByProject = new Map(); // proj -> Map(tag -> count)
+        const tagCountsGlobal = new Map(); // tag -> count
         for (const p of projects) {
             const set = new Set();
-            const tCounts = new Map();
+            const counts = new Map();
             const list = (tasksData[p] || []).filter(t => !t.deleted);
             for (const t of list) {
+                const text = String(t.text || '');
                 let m;
-                while ((m = tagRe.exec(String(t.text || ''))) !== null) {
+                while ((m = tagRe.exec(text)) !== null) {
                     const tag = String(m[2] || '').toLowerCase();
                     if (!tag) continue;
                     set.add(tag);
-                    tCounts.set(tag, (tCounts.get(tag) || 0) + 1);
+                    counts.set(tag, (counts.get(tag) || 0) + 1);
                     tagCountsGlobal.set(tag, (tagCountsGlobal.get(tag) || 0) + 1);
                 }
             }
             tagsByProject.set(p, set);
-            tagCountsByProject.set(p, tCounts);
+            tagCountsByProject.set(p, counts);
         }
 
+        // Mantém o grafo minimalista: limita o número de tags na visão global
         const topTags = Array.from(tagCountsGlobal.entries())
-            .sort((a, b) => b[1] - a[1]).slice(0, 14).map(([t]) => t);
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 14)
+            .map(([t]) => t);
         const topTagSet = new Set(topTags);
+
         topTags.forEach(t => addNode('tag', t, `#${t}`));
 
         for (const p of projects) {
-            const tCounts = tagCountsByProject.get(p);
-            if (!tCounts) continue;
-            for (const [t, c] of tCounts.entries()) {
+            const counts = tagCountsByProject.get(p);
+            if (!counts) continue;
+            for (const [t, c] of counts.entries()) {
                 if (!topTagSet.has(t)) continue;
-                const na = nodeById.get(`project:${p}`);
-                const nb = nodeById.get(`tag:${t}`);
-                edges.push({ a: `project:${p}`, b: `tag:${t}`,
-                             weight: Math.min(8, c), kind: 'taglink', na, nb });
+                edges.push({
+                    a: `project:${p}`,
+                    b: `tag:${t}`,
+                    weight: Math.min(8, c),
+                    kind: 'taglink'
+                });
             }
         }
 
         // Projeto <-> Projeto (tags compartilhadas)
         for (let i = 0; i < projects.length; i++) {
             for (let j = i + 1; j < projects.length; j++) {
-                const p1 = projects[i], p2 = projects[j];
-                const s1 = tagsByProject.get(p1), s2 = tagsByProject.get(p2);
-                if (!s1 || !s2 || !s1.size || !s2.size) continue;
+                const p1 = projects[i];
+                const p2 = projects[j];
+                const s1 = tagsByProject.get(p1);
+                const s2 = tagsByProject.get(p2);
+                if (!s1 || !s2 || s1.size === 0 || s2.size === 0) continue;
                 let inter = 0;
                 for (const t of s1) if (s2.has(t)) inter++;
                 if (inter <= 0) continue;
-                const na = nodeById.get(`project:${p1}`);
-                const nb = nodeById.get(`project:${p2}`);
-                edges.push({ a: `project:${p1}`, b: `project:${p2}`,
-                             weight: Math.min(8, inter), kind: 'tags', na, nb });
+                edges.push({
+                    a: `project:${p1}`,
+                    b: `project:${p2}`,
+                    weight: Math.min(8, inter),
+                    kind: 'tags'
+                });
             }
         }
 
-        // Grau → tamanho do nó
+        // Link nodes in edges
         for (const e of edges) {
-            if (e.na) e.na.degree++;
-            if (e.nb) e.nb.degree++;
+            e.na = nodeById.get(e.a);
+            e.nb = nodeById.get(e.b);
         }
-        for (const n of nodes) {
-            n.r = (BASE_R[n.type] || 12) + Math.min(10, n.degree * 1.8);
-        }
-
-        // Layout inicial circular por tipo → convergência muito mais rápida
-        const _ring = (arr, radius) => arr.forEach((n, i) => {
-            const angle = (2 * Math.PI * i / Math.max(1, arr.length)) - Math.PI / 2;
-            n.x = Math.cos(angle) * radius;
-            n.y = Math.sin(angle) * radius;
-        });
-        _ring(nodes.filter(n => n.type === 'day'),     230);
-        _ring(nodes.filter(n => n.type === 'project'), 130);
-        _ring(nodes.filter(n => n.type === 'tag'),      55);
 
         return { nodes, edges };
     }
 
-    // ---- Canvas helpers ----------------------------------------------
-
     function graphResize() {
         if (!graphCanvas) return;
-        const dpr = Math.max(1, window.devicePixelRatio || 1);
+        const dpr = Math.max(1, (window.devicePixelRatio || 1));
         const rect = graphCanvas.getBoundingClientRect();
-        graphCanvas.width  = Math.max(1, Math.floor(rect.width  * dpr));
+        graphCanvas.width = Math.max(1, Math.floor(rect.width * dpr));
         graphCanvas.height = Math.max(1, Math.floor(rect.height * dpr));
-        graph.ctx = graphCanvas.getContext('2d');
-        graph.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        graph.dirty = true;
+        const ctx = graphCanvas.getContext('2d');
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     }
 
     function worldToScreen(x, y) {
@@ -233,227 +226,147 @@ document.addEventListener('DOMContentLoaded', () => {
     function graphHit(mx, my) {
         if (!graph.model) return null;
         const p = screenToWorld(mx, my);
-        let best = null, bestD = Infinity;
+        let best = null;
+        let bestD = Infinity;
         for (const n of graph.model.nodes) {
-            const dx = p.x - n.x, dy = p.y - n.y;
+            const dx = p.x - n.x;
+            const dy = p.y - n.y;
             const d = Math.sqrt(dx * dx + dy * dy);
-            const rr = (n.r + 8) / graph.scale;
-            if (d < rr && d < bestD) { best = n; bestD = d; }
+            const rr = (n.r + 6) / graph.scale;
+            if (d < rr && d < bestD) {
+                best = n;
+                bestD = d;
+            }
         }
         return best;
     }
 
-    // ---- Fit-to-view -------------------------------------------------
-
-    function graphFitView() {
-        if (!graphCanvas || !graph.model || !graph.model.nodes.length) return;
-        const rect = graphCanvas.getBoundingClientRect();
-        const W = rect.width, H = rect.height, PAD = 72;
-        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-        for (const n of graph.model.nodes) {
-            minX = Math.min(minX, n.x - n.r); maxX = Math.max(maxX, n.x + n.r);
-            minY = Math.min(minY, n.y - n.r); maxY = Math.max(maxY, n.y + n.r);
-        }
-        const bw = maxX - minX, bh = maxY - minY;
-        if (bw < 1 || bh < 1) return;
-        const s = Math.max(0.2, Math.min(4.0,
-            Math.min((W - PAD * 2) / bw, (H - PAD * 2) / bh)));
-        const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
-        graph.scale = s;
-        graph.pan.x = W / 2 - cx * s;
-        graph.pan.y = H / 2 - cy * s;
-        graph.dirty = true;
-        if (!graph.running) graphDraw();
-    }
-
-    // ---- Renderização ------------------------------------------------
-
     function graphDraw() {
         if (!graphCanvas || !graph.model) return;
-        const ctx = graph.ctx || (graph.ctx = graphCanvas.getContext('2d'));
+        const ctx = graphCanvas.getContext('2d');
         const rect = graphCanvas.getBoundingClientRect();
-        const W = rect.width, H = rect.height;
+        const w = rect.width;
+        const h = rect.height;
+        ctx.clearRect(0, 0, w, h);
 
-        ctx.clearRect(0, 0, W, H);
-
-        // Fundo sutil
-        ctx.fillStyle = 'rgba(248,250,252,0.55)';
-        ctx.fillRect(0, 0, W, H);
-
-        graph.dirty = false;
-
-        // Arestas — curvas bezier quadráticas
+        // Edges
         for (const e of graph.model.edges) {
             if (!e.na || !e.nb) continue;
             const a = worldToScreen(e.na.x, e.na.y);
             const b = worldToScreen(e.nb.x, e.nb.y);
-            const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
-            const dx = b.x - a.x, dy = b.y - a.y;
-            const len = Math.sqrt(dx * dx + dy * dy) + 0.001;
-            // curva mais pronunciada para arestas projeto<->projeto
-            const curv = e.kind === 'tags' ? 0.20 : 0.07;
-            const cpx = mx + (-dy / len) * len * curv;
-            const cpy = my + ( dx / len) * len * curv;
-
-            const baseRGB =
-                e.kind === 'schedule' ? '100,116,139' :
-                e.kind === 'taglink'  ? '99,102,241'  :
-                                        '59,130,246';
-            const baseA =
-                e.kind === 'schedule' ? 0.30 :
-                e.kind === 'taglink'  ? 0.24 : 0.20;
-            const alpha = Math.min(0.72, baseA + e.weight * 0.022);
-            const lw    = Math.max(0.8, Math.min(4.0, (1.2 + e.weight * 0.28)));
-
-            ctx.save();
-            ctx.strokeStyle = `rgba(${baseRGB},${alpha})`;
-            ctx.lineWidth = lw;
+            const base =
+                e.kind === 'schedule' ? '100,116,139' : // slate-500
+                e.kind === 'taglink' ? '59,130,246' :   // blue-500
+                '59,130,246';                           // tags compartilhadas
+            const alpha =
+                e.kind === 'schedule' ? 0.22 :
+                e.kind === 'taglink' ? 0.14 :
+                0.16;
+            ctx.strokeStyle = `rgba(${base}, ${alpha + Math.min(0.12, e.weight * 0.015)})`;
+            ctx.lineWidth = 1 + Math.min(2.0, e.weight * 0.22);
             ctx.beginPath();
             ctx.moveTo(a.x, a.y);
-            ctx.quadraticCurveTo(cpx, cpy, b.x, b.y);
+            ctx.lineTo(b.x, b.y);
             ctx.stroke();
-            ctx.restore();
         }
 
-        // Nós + labels com pill
+        // Nodes + labels
         for (const n of graph.model.nodes) {
             const p = worldToScreen(n.x, n.y);
             const isHover = graph.hoverId === n.id;
-            const r = Math.max(2, n.r * graph.scale);
-
-            ctx.save();
-
-            // Glow apenas no nó sob cursor
-            if (isHover) {
-                ctx.shadowBlur = 20;
-                ctx.shadowColor =
-                    n.type === 'day' ? 'rgba(100,116,139,0.50)' :
-                    n.type === 'tag' ? 'rgba(99,102,241,0.55)'  :
-                                       'rgba(59,130,246,0.55)';
-            }
-
             const fill =
-                n.type === 'day' ? 'rgba(226,232,240,0.97)' :
-                n.type === 'tag' ? 'rgba(237,233,254,0.97)'  :
-                                   'rgba(255,255,255,0.99)';
+                n.type === 'day' ? 'rgba(226,232,240,0.95)' :
+                n.type === 'tag' ? 'rgba(239,246,255,0.98)' :
+                'rgba(255,255,255,0.98)';
             const stroke =
-                n.type === 'day' ? 'rgba(100,116,139,0.65)' :
-                n.type === 'tag' ? 'rgba(99,102,241,0.70)'   :
-                                   'rgba(59,130,246,0.72)';
+                n.type === 'day' ? 'rgba(100,116,139,0.55)' :
+                n.type === 'tag' ? 'rgba(59,130,246,0.50)' :
+                'rgba(59,130,246,0.65)';
 
             ctx.beginPath();
-            ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+            ctx.arc(p.x, p.y, n.r, 0, Math.PI * 2);
             ctx.fillStyle = fill;
             ctx.fill();
-            ctx.lineWidth = isHover ? 2.8 : 1.6;
-            ctx.strokeStyle = isHover ? 'rgba(15,23,42,0.72)' : stroke;
+            ctx.lineWidth = isHover ? 2.6 : 1.5;
+            ctx.strokeStyle = isHover ? 'rgba(15,23,42,0.65)' : stroke;
             ctx.stroke();
-            ctx.restore();
 
-            // Label com pill (só visível com zoom razoável)
-            if (graph.scale > 0.32) {
-                const fontSize = Math.max(9, Math.min(13, 12 * Math.min(1, graph.scale)));
-                ctx.font = `600 ${fontSize}px Inter, system-ui, -apple-system, sans-serif`;
-                ctx.textBaseline = 'middle';
-                const lx = p.x + r + 7;
-                const ly = p.y;
-                const tw = ctx.measureText(n.label).width;
-                const pH = fontSize + 6, pW = tw + 12;
-
-                // Pill background
-                ctx.save();
-                ctx.fillStyle = isHover ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.80)';
-                const bx = lx - 4, by = ly - pH / 2, rad = 4;
-                ctx.beginPath();
-                ctx.moveTo(bx + rad, by);
-                ctx.lineTo(bx + pW - rad, by);
-                ctx.quadraticCurveTo(bx + pW, by, bx + pW, by + rad);
-                ctx.lineTo(bx + pW, by + pH - rad);
-                ctx.quadraticCurveTo(bx + pW, by + pH, bx + pW - rad, by + pH);
-                ctx.lineTo(bx + rad, by + pH);
-                ctx.quadraticCurveTo(bx, by + pH, bx, by + pH - rad);
-                ctx.lineTo(bx, by + rad);
-                ctx.quadraticCurveTo(bx, by, bx + rad, by);
-                ctx.closePath();
-                ctx.fill();
-                ctx.restore();
-
-                ctx.fillStyle = isHover ? 'rgba(15,23,42,0.95)' : 'rgba(15,23,42,0.82)';
-                ctx.fillText(n.label, lx, ly);
-            }
+            ctx.font = `600 ${n.type === 'day' ? 12 : 12.5}px Inter, system-ui, -apple-system, Segoe UI, sans-serif`;
+            ctx.fillStyle = isHover ? 'rgba(15,23,42,0.92)' : 'rgba(15,23,42,0.78)';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(n.label, p.x + n.r + 10, p.y);
         }
     }
 
-    // ---- Simulação de física -----------------------------------------
-
     function graphStep() {
         if (!graph.model) return;
-        const { nodes, edges } = graph.model;
-        const alpha = graph.alpha;
+        const nodes = graph.model.nodes;
+        const edges = graph.model.edges;
 
-        const REPULSION = 30000;
-        const CENTER    = 0.003;
-        const DAMPING   = 0.86;
-        const SPRING_LEN = { schedule: 160, taglink: 120, tags: 145 };
-        const SPRING_K  = 0.024;
+        const repulsion = 22000;
+        const spring = 0.02;
+        const center = 0.0025;
+        const damping = 0.88;
 
-        // Repulsão pairwise + colisão entre nós
+        // Repulsão (N pequeno: ok)
         for (let i = 0; i < nodes.length; i++) {
             for (let j = i + 1; j < nodes.length; j++) {
-                const a = nodes[i], b = nodes[j];
-                const dx = a.x - b.x, dy = a.y - b.y;
+                const a = nodes[i];
+                const b = nodes[j];
+                const dx = a.x - b.x;
+                const dy = a.y - b.y;
                 const dist2 = dx * dx + dy * dy + 0.01;
-                const dist  = Math.sqrt(dist2);
-                const f  = (REPULSION * alpha) / dist2;
-                const nx = dx / dist, ny = dy / dist;
-                a.vx += nx * f; a.vy += ny * f;
-                b.vx -= nx * f; b.vy -= ny * f;
-
-                // Força de colisão: evita sobreposição de nós
-                const minD = a.r + b.r + 5;
-                if (dist < minD && dist > 0.001) {
-                    const push = (minD - dist) * 0.28;
-                    a.vx += nx * push; a.vy += ny * push;
-                    b.vx -= nx * push; b.vy -= ny * push;
-                }
+                const f = repulsion / dist2;
+                const inv = 1 / Math.sqrt(dist2);
+                const fx = dx * inv * f;
+                const fy = dy * inv * f;
+                a.vx += fx;
+                a.vy += fy;
+                b.vx -= fx;
+                b.vy -= fy;
             }
         }
 
-        // Molas nas arestas com comprimento-alvo por tipo
+        // Molas nas arestas
         for (const e of edges) {
             if (!e.na || !e.nb) continue;
-            const a = e.na, b = e.nb;
-            const dx = b.x - a.x, dy = b.y - a.y;
+            const a = e.na;
+            const b = e.nb;
+            const dx = b.x - a.x;
+            const dy = b.y - a.y;
             const dist = Math.sqrt(dx * dx + dy * dy) + 0.001;
-            const target = (SPRING_LEN[e.kind] || 150) / Math.sqrt(Math.max(1, e.weight));
-            const diff = dist - target;
-            const k = SPRING_K * (0.7 + e.weight * 0.04) * alpha;
+            const target = 170 / Math.sqrt(Math.max(1, e.weight));
+            const diff = (dist - target);
+            const k = spring * (0.6 + e.weight * 0.05);
             const fx = (dx / dist) * diff * k;
             const fy = (dy / dist) * diff * k;
-            a.vx += fx; a.vy += fy;
-            b.vx -= fx; b.vy -= fy;
+            a.vx += fx;
+            a.vy += fy;
+            b.vx -= fx;
+            b.vy -= fy;
         }
 
-        // Integração + gravidade ao centro
+        let energy = 0;
         for (const n of nodes) {
-            if (graph.dragId === n.id) { n.vx = 0; n.vy = 0; continue; }
-            n.vx += (-n.x) * CENTER * alpha;
-            n.vy += (-n.y) * CENTER * alpha;
-            n.vx *= DAMPING;
-            n.vy *= DAMPING;
-            n.x  += n.vx;
-            n.y  += n.vy;
+            if (graph.dragId === n.id) {
+                n.vx *= 0.2;
+                n.vy *= 0.2;
+                continue;
+            }
+            n.vx += (-n.x) * center;
+            n.vy += (-n.y) * center;
+            n.vx *= damping;
+            n.vy *= damping;
+            n.x += n.vx * 0.016;
+            n.y += n.vy * 0.016;
+            energy += Math.abs(n.vx) + Math.abs(n.vy);
         }
 
-        // Resfriamento alpha
-        graph.alpha *= (1 - 0.0228);
-        graph.dirty = true;
         graphDraw();
 
         if (!graph.running) return;
-        if (graph.alpha < 0.001) {
+        if (energy < 0.25) {
             graph.running = false;
-            setTimeout(graphFitView, 60); // auto-fit ao estabilizar
             return;
         }
         graph.raf = requestAnimationFrame(graphStep);
@@ -462,9 +375,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function graphStart() {
         if (!graphCanvas || !graphView || graphView.classList.contains('hidden')) return;
         graphResize();
-        graph.alpha = 1.0;
         const rect = graphCanvas.getBoundingClientRect();
-        graph.pan.x = rect.width  * 0.5;
+        graph.pan.x = rect.width * 0.5;
         graph.pan.y = rect.height * 0.52;
         graph.scale = 1;
         graph.model = buildGraphModel();
@@ -479,105 +391,68 @@ document.addEventListener('DOMContentLoaded', () => {
         graph.raf = 0;
     }
 
-    // ---- Eventos -----------------------------------------------------
-
     function attachGraphEvents() {
         if (!graphCanvas) return;
-        const tooltip = document.getElementById('graph-tooltip');
 
-        function showTooltip(node, mx, my) {
-            if (!tooltip || !node) return;
-            const typeLabel =
-                node.type === 'day' ? 'Dia' :
-                node.type === 'project' ? 'Projeto' : 'Tag';
-            let detail = '';
-            if (node.type === 'project') {
-                const tc = node.taskCount || 0;
-                detail = `<br><span class="gt-meta">${tc} task${tc !== 1 ? 's' : ''}</span>`;
-            } else if (node.type === 'day') {
-                let cnt = 0;
-                for (const tasks of Object.values(tasksData))
-                    cnt += tasks.filter(t => !t.deleted && normText(t.due_date || '') === node.key).length;
-                detail = `<br><span class="gt-meta">${cnt} task${cnt !== 1 ? 's' : ''} agendada${cnt !== 1 ? 's' : ''}</span>`;
-            } else {
-                detail = `<br><span class="gt-meta">${node.degree} conexõe${node.degree !== 1 ? 's' : ''}</span>`;
-            }
-            tooltip.innerHTML = `<span class="gt-type">${typeLabel}</span> <strong>${escapeHTML(node.label)}</strong>${detail}`;
-            tooltip.style.display = 'block';
-            const tw = tooltip.offsetWidth, th = tooltip.offsetHeight;
-            const cRect = graphCanvas.getBoundingClientRect();
-            let tx = mx + 16, ty = my - 8;
-            if (tx + tw > cRect.width  - 8) tx = mx - tw - 12;
-            if (ty + th > cRect.height - 8) ty = my - th - 4;
-            tooltip.style.left = tx + 'px';
-            tooltip.style.top  = ty + 'px';
-        }
-
-        function hideTooltip() {
-            if (tooltip) tooltip.style.display = 'none';
-        }
-
-        // Mouse move — hover + tooltip
         graphCanvas.addEventListener('mousemove', (e) => {
             const rect = graphCanvas.getBoundingClientRect();
-            const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+            const mx = e.clientX - rect.left;
+            const my = e.clientY - rect.top;
             const hit = graphHit(mx, my);
-            const prev = graph.hoverId;
             graph.hoverId = hit ? hit.id : null;
             graphCanvas.style.cursor = hit ? 'pointer' : (graph.isPanning ? 'grabbing' : 'grab');
-            if (hit) showTooltip(hit, mx, my); else hideTooltip();
-            if (prev !== graph.hoverId) { graph.dirty = true; if (!graph.running) graphDraw(); }
+            if (!graph.running) graphDraw();
         });
 
-        graphCanvas.addEventListener('mouseleave', () => {
-            hideTooltip();
-            if (graph.hoverId) { graph.hoverId = null; graph.dirty = true; if (!graph.running) graphDraw(); }
-        });
-
-        // Mouse down — início de drag ou pan
         graphCanvas.addEventListener('mousedown', (e) => {
             const rect = graphCanvas.getBoundingClientRect();
-            const mx = e.clientX - rect.left, my = e.clientY - rect.top;
-            graph.last.x = mx; graph.last.y = my;
+            const mx = e.clientX - rect.left;
+            const my = e.clientY - rect.top;
+            graph.last.x = mx;
+            graph.last.y = my;
             graph.moved = false;
+
             const hit = graphHit(mx, my);
             if (hit) {
                 graph.dragId = hit.id;
-                // Reacende levemente a simulação ao arrastar um nó
-                if (!graph.running && graph.alpha < 0.12) {
-                    graph.alpha = 0.35;
-                    graph.running = true;
-                    graph.raf = requestAnimationFrame(graphStep);
-                }
             } else {
                 graph.isPanning = true;
             }
             graphCanvas.style.cursor = 'grabbing';
-            hideTooltip();
         });
 
         window.addEventListener('mousemove', (e) => {
-            if (!graphCanvas || (!graph.dragId && !graph.isPanning)) return;
+            if (!graphCanvas) return;
+            if (!graph.dragId && !graph.isPanning) return;
             const rect = graphCanvas.getBoundingClientRect();
-            const mx = e.clientX - rect.left, my = e.clientY - rect.top;
-            const dx = mx - graph.last.x, dy = my - graph.last.y;
-            graph.last.x = mx; graph.last.y = my;
+            const mx = e.clientX - rect.left;
+            const my = e.clientY - rect.top;
+            const dx = mx - graph.last.x;
+            const dy = my - graph.last.y;
+            graph.last.x = mx;
+            graph.last.y = my;
             if (Math.abs(dx) + Math.abs(dy) > 1) graph.moved = true;
+
             if (graph.isPanning) {
-                graph.pan.x += dx; graph.pan.y += dy;
+                graph.pan.x += dx;
+                graph.pan.y += dy;
             } else if (graph.dragId && graph.model) {
                 const node = graph.model.nodes.find(n => n.id === graph.dragId);
                 if (node) {
                     const w = screenToWorld(mx, my);
-                    node.x = w.x; node.y = w.y; node.vx = 0; node.vy = 0;
+                    node.x = w.x;
+                    node.y = w.y;
+                    node.vx = 0;
+                    node.vy = 0;
                 }
             }
-            graph.dirty = true;
             if (!graph.running) graphDraw();
         });
 
         window.addEventListener('mouseup', () => {
-            if (!graphCanvas || (!graph.dragId && !graph.isPanning)) return;
+            if (!graphCanvas) return;
+            if (!graph.dragId && !graph.isPanning) return;
+
             if (graph.dragId && !graph.moved && graph.model) {
                 const node = graph.model.nodes.find(n => n.id === graph.dragId);
                 if (node) {
@@ -593,127 +468,33 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
             }
+
             graph.dragId = null;
             graph.isPanning = false;
             graphCanvas.style.cursor = 'grab';
         });
 
-        // Scroll — zoom com âncora no cursor
         graphCanvas.addEventListener('wheel', (e) => {
             e.preventDefault();
             const rect = graphCanvas.getBoundingClientRect();
-            const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+            const mx = e.clientX - rect.left;
+            const my = e.clientY - rect.top;
             const before = screenToWorld(mx, my);
-            const factor = e.deltaY < 0 ? 1.10 : 0.909;
-            graph.scale = Math.max(0.20, Math.min(4.0, graph.scale * factor));
+            const delta = -Math.sign(e.deltaY);
+            const factor = delta > 0 ? 1.08 : 0.92;
+            graph.scale = Math.max(0.55, Math.min(1.9, graph.scale * factor));
             const after = worldToScreen(before.x, before.y);
-            graph.pan.x += mx - after.x;
-            graph.pan.y += my - after.y;
-            graph.dirty = true;
+            graph.pan.x += (mx - after.x);
+            graph.pan.y += (my - after.y);
             if (!graph.running) graphDraw();
         }, { passive: false });
 
-        // Duplo clique no canvas vazio → fit view
-        graphCanvas.addEventListener('dblclick', (e) => {
-            const rect = graphCanvas.getBoundingClientRect();
-            const mx = e.clientX - rect.left, my = e.clientY - rect.top;
-            if (!graphHit(mx, my)) graphFitView();
-        });
-
-        // Touch — pan, drag e pinch-to-zoom
-        graphCanvas.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            hideTooltip();
-            if (e.touches.length === 1) {
-                const t = e.touches[0];
-                const rect = graphCanvas.getBoundingClientRect();
-                const mx = t.clientX - rect.left, my = t.clientY - rect.top;
-                graph.last.x = mx; graph.last.y = my; graph.moved = false;
-                const hit = graphHit(mx, my);
-                if (hit) graph.dragId = hit.id; else graph.isPanning = true;
-            } else if (e.touches.length === 2) {
-                graph.dragId = null; graph.isPanning = false;
-                const t0 = e.touches[0], t1 = e.touches[1];
-                const dx = t0.clientX - t1.clientX, dy = t0.clientY - t1.clientY;
-                graph.pinchDist = Math.sqrt(dx * dx + dy * dy);
-            }
-        }, { passive: false });
-
-        graphCanvas.addEventListener('touchmove', (e) => {
-            e.preventDefault();
-            if (e.touches.length === 1) {
-                const t = e.touches[0];
-                const rect = graphCanvas.getBoundingClientRect();
-                const mx = t.clientX - rect.left, my = t.clientY - rect.top;
-                const dx = mx - graph.last.x, dy = my - graph.last.y;
-                graph.last.x = mx; graph.last.y = my;
-                if (Math.abs(dx) + Math.abs(dy) > 1) graph.moved = true;
-                if (graph.isPanning) {
-                    graph.pan.x += dx; graph.pan.y += dy;
-                } else if (graph.dragId && graph.model) {
-                    const node = graph.model.nodes.find(n => n.id === graph.dragId);
-                    if (node) { const w = screenToWorld(mx, my); node.x = w.x; node.y = w.y; node.vx = 0; node.vy = 0; }
-                }
-                graph.dirty = true;
-                if (!graph.running) graphDraw();
-            } else if (e.touches.length === 2 && graph.pinchDist != null) {
-                const t0 = e.touches[0], t1 = e.touches[1];
-                const dx = t0.clientX - t1.clientX, dy = t0.clientY - t1.clientY;
-                const newDist = Math.sqrt(dx * dx + dy * dy);
-                const rect = graphCanvas.getBoundingClientRect();
-                const cx = (t0.clientX + t1.clientX) / 2 - rect.left;
-                const cy = (t0.clientY + t1.clientY) / 2 - rect.top;
-                const before = screenToWorld(cx, cy);
-                const factor = newDist / graph.pinchDist;
-                graph.scale = Math.max(0.20, Math.min(4.0, graph.scale * factor));
-                const after = worldToScreen(before.x, before.y);
-                graph.pan.x += cx - after.x; graph.pan.y += cy - after.y;
-                graph.pinchDist = newDist;
-                graph.dirty = true;
-                if (!graph.running) graphDraw();
-            }
-        }, { passive: false });
-
-        graphCanvas.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            if (e.touches.length === 0) {
-                if (graph.dragId && !graph.moved && graph.model) {
-                    const node = graph.model.nodes.find(n => n.id === graph.dragId);
-                    if (node) {
-                        if (node.type === 'day') {
-                            const el = document.querySelector(`.week-nav[data-day="${CSS.escape(node.key)}"]`);
-                            if (el) el.click();
-                        } else if (node.type === 'project') {
-                            const items = Array.from(document.querySelectorAll('.project-nav'));
-                            const target = items.find(it => normText(it.textContent) === node.key);
-                            if (target) target.click();
-                        } else if (node.type === 'tag') {
-                            openTagView(node.key);
-                        }
-                    }
-                }
-                graph.dragId = null; graph.isPanning = false; graph.pinchDist = null;
-            } else if (e.touches.length === 1) {
-                graph.pinchDist = null;
-                const t = e.touches[0];
-                const rect = graphCanvas.getBoundingClientRect();
-                graph.last.x = t.clientX - rect.left;
-                graph.last.y = t.clientY - rect.top;
-            }
-        }, { passive: false });
-
-        // Resize → redimensiona canvas e redesenha
         window.addEventListener('resize', () => {
             if (graphView && !graphView.classList.contains('hidden')) {
                 graphResize();
-                graph.dirty = true;
                 if (!graph.running) graphDraw();
             }
         });
-
-        // Botão "Centralizar"
-        const btnFit = document.getElementById('graph-btn-fit');
-        if (btnFit) btnFit.addEventListener('click', graphFitView);
     }
 
     attachGraphEvents();
