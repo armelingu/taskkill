@@ -393,6 +393,40 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function attachGraphEvents() {
         if (!graphCanvas) return;
+        const tooltip = document.getElementById('graph-tooltip');
+
+        function showTooltip(node, mx, my) {
+            if (!tooltip || !node) return;
+            const typeLabel =
+                node.type === 'day'     ? 'Dia' :
+                node.type === 'project' ? 'Projeto' : 'Tag';
+            let detail = '';
+            if (node.type === 'project') {
+                const tc = (tasksData[node.key] || []).filter(t => !t.deleted).length;
+                detail = `<br><span class="gt-meta">${tc} task${tc !== 1 ? 's' : ''}</span>`;
+            } else if (node.type === 'day') {
+                let cnt = 0;
+                for (const tasks of Object.values(tasksData))
+                    cnt += tasks.filter(t => !t.deleted && String(t.due_date || '').trim() === node.key).length;
+                detail = `<br><span class="gt-meta">${cnt} task${cnt !== 1 ? 's' : ''} agendada${cnt !== 1 ? 's' : ''}</span>`;
+            } else {
+                const deg = (graph.model.edges || []).filter(e => e.a === node.id || e.b === node.id).length;
+                detail = `<br><span class="gt-meta">${deg} conexã${deg !== 1 ? 'ões' : 'o'}</span>`;
+            }
+            tooltip.innerHTML = `<span class="gt-type">${typeLabel}</span><strong>${escapeHTML(node.label)}</strong>${detail}`;
+            tooltip.style.display = 'block';
+            const tw = tooltip.offsetWidth, th = tooltip.offsetHeight;
+            const cRect = graphCanvas.getBoundingClientRect();
+            let tx = mx + 16, ty = my - 8;
+            if (tx + tw > cRect.width  - 8) tx = mx - tw - 12;
+            if (ty + th > cRect.height - 8) ty = my - th - 4;
+            tooltip.style.left = tx + 'px';
+            tooltip.style.top  = ty + 'px';
+        }
+
+        function hideTooltip() {
+            if (tooltip) tooltip.style.display = 'none';
+        }
 
         graphCanvas.addEventListener('mousemove', (e) => {
             const rect = graphCanvas.getBoundingClientRect();
@@ -401,8 +435,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const hit = graphHit(mx, my);
             graph.hoverId = hit ? hit.id : null;
             graphCanvas.style.cursor = hit ? 'pointer' : (graph.isPanning ? 'grabbing' : 'grab');
+            if (hit) showTooltip(hit, mx, my); else hideTooltip();
             if (!graph.running) graphDraw();
         });
+
+        graphCanvas.addEventListener('mouseleave', () => hideTooltip());
 
         graphCanvas.addEventListener('mousedown', (e) => {
             const rect = graphCanvas.getBoundingClientRect();
