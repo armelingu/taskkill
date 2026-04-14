@@ -112,18 +112,24 @@
                 </div>
             </div>
 
-            <!-- NOVO: Visão em Gráfico (estilo Obsidian) -->
+            <!-- Visão em Gráfico (Obsidian-like) -->
             <div id="graph-view" class="graph-view hidden">
                 <header class="project-header graph-header">
                     <div>
                         <h1 class="project-title">Gráfico</h1>
-                        <p class="graph-subtitle">Dias ↔ Projetos (tarefas agendadas) + Projetos ↔ Tags ↔ Projetos</p>
+                        <p class="graph-subtitle">Dias ↔ Projetos ↔ Tags — arraste, zoom e clique para navegar</p>
                     </div>
-                    <div class="graph-hint">Arraste para mover • Scroll para zoom • Clique em um nó para navegar</div>
+                    <div class="graph-controls">
+                        <span class="graph-hint">Scroll: zoom • Duplo-clique: centralizar • Toque: pinch-zoom</span>
+                        <button id="graph-btn-fit" class="graph-btn-fit" title="Centralizar e ajustar visualização">
+                            Centralizar
+                        </button>
+                    </div>
                 </header>
 
                 <div class="graph-canvas-wrap" role="application" aria-label="Grafo de relações">
                     <canvas id="graph-canvas"></canvas>
+                    <div id="graph-tooltip" class="graph-tooltip" style="display:none"></div>
                 </div>
             </div>
 

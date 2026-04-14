@@ -438,8 +438,8 @@ body.graph-mode .main-content {
     gap: 32px;
 }
 
-/* --------------- 
-   Visão em Gráfico (Obsidian-like)
+/* ---------------
+   Visão em Gráfico
    --------------- */
 .graph-view {
     animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
@@ -447,42 +447,76 @@ body.graph-mode .main-content {
     flex-direction: column;
     gap: 12px;
     flex: 1;
-    min-height: 0; /* permite o canvas consumir o espaço restante */
+    min-height: 0;
 }
 
 .graph-header {
     display: flex;
-    align-items: flex-end;
+    align-items: center;
     justify-content: space-between;
     gap: 24px;
-    margin-bottom: 6px; /* reduz “vazio” antes do canvas */
+    margin-bottom: 6px;
 }
 
 .graph-subtitle {
-    margin-top: 10px;
+    margin-top: 8px;
     color: var(--text-muted);
-    font-weight: 600;
+    font-weight: 500;
+    font-size: 0.9rem;
     letter-spacing: -0.01em;
+}
+
+.graph-controls {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-shrink: 0;
 }
 
 .graph-hint {
     color: #94a3b8;
-    font-size: 0.85rem;
-    font-weight: 600;
+    font-size: 0.82rem;
+    font-weight: 500;
     white-space: nowrap;
     user-select: none;
+}
+
+.graph-btn-fit {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 14px;
+    border-radius: 8px;
+    border: 1.5px solid #e2e8f0;
+    background: #fff;
+    color: #475569;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
+    font-family: inherit;
+}
+
+.graph-btn-fit:hover {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+    color: #1e293b;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+}
+
+.graph-btn-fit:active {
+    background: #e2e8f0;
 }
 
 .graph-canvas-wrap {
     width: 100%;
     flex: 1;
     min-height: 0;
-    /* Sem “card”: o grafo ocupa o espaço disponível */
     background: transparent;
     border: none;
     box-shadow: none;
     border-radius: 0;
-    overflow: hidden; /* mantém pan/zoom limpo dentro da área */
+    overflow: hidden;
     position: relative;
 }
 
@@ -490,7 +524,41 @@ body.graph-mode .main-content {
     width: 100%;
     height: 100%;
     display: block;
-    background: transparent; /* usa o background padrão do sistema */
+    background: transparent;
+}
+
+/* Tooltip do grafo */
+.graph-tooltip {
+    position: absolute;
+    pointer-events: none;
+    z-index: 20;
+    background: #fff;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 8px 13px;
+    font-size: 0.82rem;
+    color: #1e293b;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.10), 0 1px 4px rgba(0,0,0,0.06);
+    max-width: 220px;
+    line-height: 1.5;
+    white-space: nowrap;
+    animation: fadeIn 0.12s ease;
+}
+
+.graph-tooltip .gt-type {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #64748b;
+    margin-right: 4px;
+}
+
+.graph-tooltip .gt-meta {
+    color: #64748b;
+    font-size: 0.78rem;
+    font-weight: 500;
 }
 
 /* Grid Focado nos Projetos */
