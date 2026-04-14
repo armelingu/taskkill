@@ -70,8 +70,7 @@ document.addEventListener('DOMContentLoaded', () => {
         moved: false,
         pan: { x: 0, y: 0 },
         scale: 1,
-        last: { x: 0, y: 0 },
-        alpha: 1.0,  // resfriamento D3-style
+        last: { x: 0, y: 0 }
     };
 
     function normText(s) {
@@ -250,93 +249,52 @@ document.addEventListener('DOMContentLoaded', () => {
         const h = rect.height;
         ctx.clearRect(0, 0, w, h);
 
-        // Conjuntos de destaque (comportamento Obsidian)
-        const hov = graph.hoverId;
-        let connectedNodeIds = null;
-        let connectedEdgeSet = null;
-        if (hov) {
-            connectedNodeIds = new Set([hov]);
-            connectedEdgeSet = new Set();
-            for (const e of graph.model.edges) {
-                if (!e.na || !e.nb) continue;
-                if (e.na.id === hov || e.nb.id === hov) {
-                    connectedNodeIds.add(e.na.id);
-                    connectedNodeIds.add(e.nb.id);
-                    connectedEdgeSet.add(e);
-                }
-            }
-        }
-
-        // Arestas
+        // Edges
         for (const e of graph.model.edges) {
             if (!e.na || !e.nb) continue;
             const a = worldToScreen(e.na.x, e.na.y);
             const b = worldToScreen(e.nb.x, e.nb.y);
-
-            // Obsidian: arestas não-conectadas somem quase totalmente
-            const isConnected = !hov || connectedEdgeSet.has(e);
             const base =
-                e.kind === 'schedule' ? '100,116,139' :
-                e.kind === 'taglink'  ? '59,130,246'  :
-                '59,130,246';
-            let alpha;
-            if (!hov) {
-                alpha = e.kind === 'schedule' ? 0.22 : e.kind === 'taglink' ? 0.14 : 0.16;
-                alpha += Math.min(0.12, e.weight * 0.015);
-            } else if (isConnected) {
-                alpha = 0.75; // destaque forte
-            } else {
-                alpha = 0.04; // quase invisível
-            }
-
-            ctx.strokeStyle = `rgba(${base},${alpha})`;
-            ctx.lineWidth = isConnected && hov ? 2.0 : 1 + Math.min(2.0, e.weight * 0.22);
+                e.kind === 'schedule' ? '100,116,139' : // slate-500
+                e.kind === 'taglink' ? '59,130,246' :   // blue-500
+                '59,130,246';                           // tags compartilhadas
+            const alpha =
+                e.kind === 'schedule' ? 0.22 :
+                e.kind === 'taglink' ? 0.14 :
+                0.16;
+            ctx.strokeStyle = `rgba(${base}, ${alpha + Math.min(0.12, e.weight * 0.015)})`;
+            ctx.lineWidth = 1 + Math.min(2.0, e.weight * 0.22);
             ctx.beginPath();
             ctx.moveTo(a.x, a.y);
             ctx.lineTo(b.x, b.y);
             ctx.stroke();
         }
 
-        // Nós + labels
+        // Nodes + labels
         for (const n of graph.model.nodes) {
             const p = worldToScreen(n.x, n.y);
-            const isHover  = hov === n.id;
-            const isLinked = hov && connectedNodeIds && connectedNodeIds.has(n.id);
-            const isDimmed = hov && !isLinked;
-
-            // Opacidades estilo Obsidian
-            const nodeOpacity  = isDimmed ? 0.08 : 1.0;
-            const labelOpacity = isDimmed ? 0.0  : (isHover ? 1.0 : 0.78);
-
+            const isHover = graph.hoverId === n.id;
             const fill =
-                n.type === 'day' ? `rgba(226,232,240,${isDimmed ? 0.15 : 0.95})` :
-                n.type === 'tag' ? `rgba(239,246,255,${isDimmed ? 0.15 : 0.98})` :
-                                   `rgba(255,255,255,${isDimmed ? 0.15 : 0.98})`;
+                n.type === 'day' ? 'rgba(226,232,240,0.95)' :
+                n.type === 'tag' ? 'rgba(239,246,255,0.98)' :
+                'rgba(255,255,255,0.98)';
             const stroke =
-                n.type === 'day' ? `rgba(100,116,139,${isDimmed ? 0.08 : (isHover ? 0.9 : 0.55)})` :
-                n.type === 'tag' ? `rgba(59,130,246,${isDimmed  ? 0.08 : (isHover ? 0.9 : 0.50)})` :
-                                   `rgba(59,130,246,${isDimmed  ? 0.08 : (isHover ? 0.9 : 0.65)})`;
-
-            // Raio levemente maior no hover (pulso Obsidian)
-            const r = isHover ? n.r * 1.35 : n.r;
+                n.type === 'day' ? 'rgba(100,116,139,0.55)' :
+                n.type === 'tag' ? 'rgba(59,130,246,0.50)' :
+                'rgba(59,130,246,0.65)';
 
             ctx.beginPath();
-            ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+            ctx.arc(p.x, p.y, n.r, 0, Math.PI * 2);
             ctx.fillStyle = fill;
             ctx.fill();
             ctx.lineWidth = isHover ? 2.6 : 1.5;
-            ctx.strokeStyle = stroke;
+            ctx.strokeStyle = isHover ? 'rgba(15,23,42,0.65)' : stroke;
             ctx.stroke();
 
-            // Label: some com nós dimmed
-            if (labelOpacity > 0) {
-                ctx.font = `600 ${n.type === 'day' ? 12 : 12.5}px Inter, system-ui, -apple-system, Segoe UI, sans-serif`;
-                ctx.fillStyle = isHover
-                    ? 'rgba(15,23,42,0.95)'
-                    : `rgba(15,23,42,${labelOpacity})`;
-                ctx.textBaseline = 'middle';
-                ctx.fillText(n.label, p.x + r + 10, p.y);
-            }
+            ctx.font = `600 ${n.type === 'day' ? 12 : 12.5}px Inter, system-ui, -apple-system, Segoe UI, sans-serif`;
+            ctx.fillStyle = isHover ? 'rgba(15,23,42,0.92)' : 'rgba(15,23,42,0.78)';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(n.label, p.x + n.r + 10, p.y);
         }
     }
 
@@ -344,14 +302,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!graph.model) return;
         const nodes = graph.model.nodes;
         const edges = graph.model.edges;
-        const alpha  = graph.alpha;
 
         const repulsion = 22000;
-        const spring    = 0.02;
-        const center    = 0.0025;
-        const damping   = 0.88;
+        const spring = 0.02;
+        const center = 0.0025;
+        const damping = 0.88;
 
-        // Repulsão — escalonada pelo alpha para suavizar o início
+        // Repulsão (N pequeno: ok)
         for (let i = 0; i < nodes.length; i++) {
             for (let j = i + 1; j < nodes.length; j++) {
                 const a = nodes[i];
@@ -359,52 +316,56 @@ document.addEventListener('DOMContentLoaded', () => {
                 const dx = a.x - b.x;
                 const dy = a.y - b.y;
                 const dist2 = dx * dx + dy * dy + 0.01;
-                const f = (repulsion * alpha) / dist2;
+                const f = repulsion / dist2;
                 const inv = 1 / Math.sqrt(dist2);
                 const fx = dx * inv * f;
                 const fy = dy * inv * f;
-                a.vx += fx; a.vy += fy;
-                b.vx -= fx; b.vy -= fy;
+                a.vx += fx;
+                a.vy += fy;
+                b.vx -= fx;
+                b.vy -= fy;
             }
         }
 
-        // Molas nas arestas — escalonadas pelo alpha
+        // Molas nas arestas
         for (const e of edges) {
             if (!e.na || !e.nb) continue;
-            const a = e.na, b = e.nb;
+            const a = e.na;
+            const b = e.nb;
             const dx = b.x - a.x;
             const dy = b.y - a.y;
             const dist = Math.sqrt(dx * dx + dy * dy) + 0.001;
             const target = 170 / Math.sqrt(Math.max(1, e.weight));
             const diff = (dist - target);
-            const k = spring * (0.6 + e.weight * 0.05) * alpha;
+            const k = spring * (0.6 + e.weight * 0.05);
             const fx = (dx / dist) * diff * k;
             const fy = (dy / dist) * diff * k;
-            a.vx += fx; a.vy += fy;
-            b.vx -= fx; b.vy -= fy;
+            a.vx += fx;
+            a.vy += fy;
+            b.vx -= fx;
+            b.vy -= fy;
         }
 
-        // Integração + gravidade ao centro
+        let energy = 0;
         for (const n of nodes) {
             if (graph.dragId === n.id) {
-                n.vx = 0; n.vy = 0;
+                n.vx *= 0.2;
+                n.vy *= 0.2;
                 continue;
             }
-            n.vx += (-n.x) * center * alpha;
-            n.vy += (-n.y) * center * alpha;
+            n.vx += (-n.x) * center;
+            n.vy += (-n.y) * center;
             n.vx *= damping;
             n.vy *= damping;
-            n.x  += n.vx * 0.016;
-            n.y  += n.vy * 0.016;
+            n.x += n.vx * 0.016;
+            n.y += n.vy * 0.016;
+            energy += Math.abs(n.vx) + Math.abs(n.vy);
         }
-
-        // Resfriamento D3-style: convergência suave
-        graph.alpha *= (1 - 0.0228);
 
         graphDraw();
 
         if (!graph.running) return;
-        if (graph.alpha < 0.001) {
+        if (energy < 0.25) {
             graph.running = false;
             return;
         }
@@ -418,7 +379,6 @@ document.addEventListener('DOMContentLoaded', () => {
         graph.pan.x = rect.width * 0.5;
         graph.pan.y = rect.height * 0.52;
         graph.scale = 1;
-        graph.alpha = 1.0;
         graph.model = buildGraphModel();
         graph.running = true;
         cancelAnimationFrame(graph.raf);
@@ -492,15 +452,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const hit = graphHit(mx, my);
             if (hit) {
                 graph.dragId = hit.id;
-                // Obsidian: arrastar aquece levemente a simulação
-                // para os vizinhos responderem ao movimento
-                if (graph.alpha < 0.15) {
-                    graph.alpha = 0.25;
-                    if (!graph.running) {
-                        graph.running = true;
-                        graph.raf = requestAnimationFrame(graphStep);
-                    }
-                }
             } else {
                 graph.isPanning = true;
             }
