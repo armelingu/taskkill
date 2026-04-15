@@ -72,13 +72,13 @@ def init_db():
                 deleted BOOLEAN NOT NULL DEFAULT 0
             )
         ''')
-        
+
         # Migration: tenta inserir a coluna caso o banco já exista de versões anteriores
         try:
             cursor.execute('ALTER TABLE tasks ADD COLUMN created_date TEXT')
         except sqlite3.OperationalError:
             pass # Se a coluna já existir, ele segue ignorando silenciosamente
-            
+
         try:
             cursor.execute('ALTER TABLE tasks ADD COLUMN due_date TEXT')
         except sqlite3.OperationalError:

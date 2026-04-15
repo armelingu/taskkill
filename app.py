@@ -3,7 +3,7 @@ import secrets
 import sys
 from datetime import timedelta
 
-from flask import Flask, request, session
+from flask import Flask, request
 from werkzeug.middleware.proxy_fix import ProxyFix
 from database import init_db
 from routes import main_bp, api_bp

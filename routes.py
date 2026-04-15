@@ -355,19 +355,19 @@ def get_tasks():
         # Também escondemos tarefas arquivadas (deleted=1) por padrão.
         cursor.execute("SELECT * FROM tasks WHERE deleted = 0 ORDER BY project ASC, position ASC, id ASC")
         rows = cursor.fetchall()
-        
+
         # O JS espera um formato Dictionary/HashMap de categorias pro Dashboard Global
         tasks_data = {}
         for row in rows:
             project = row['project']
             if project not in tasks_data:
                 tasks_data[project] = []
-            
+
             c_date = row['created_date'] if 'created_date' in row.keys() else None
             d_date = row['due_date'] if 'due_date' in row.keys() else None
             pos = row['position'] if 'position' in row.keys() else 0
             del_flag = bool(row['deleted']) if 'deleted' in row.keys() else False
-            
+
             tasks_data[project].append({
                 'id': row['id'],
                 'project': row['project'],
@@ -378,7 +378,7 @@ def get_tasks():
                 'position': pos,
                 'deleted': del_flag
             })
-            
+
         return jsonify(tasks_data)
 
 # 2. CREATE: Adicionar uma nova tarefa em um projeto
@@ -389,17 +389,17 @@ def create_task():
         return jsonify({"error": "Bad Request: JSON body is required"}), 400
     project = data.get('project')
     text = data.get('text')
-    
+
     # SEGURANÇA BÁSICA: Validando Entradas do Usuário para evitar crashs e spam
     if not project or not text:
         return jsonify({"error": "Bad Request: project and text are required"}), 400
-        
+
     project = str(project).strip()
     text = str(text).strip()
     due_date = data.get('due_date') # Opcional
     if due_date is not None:
         due_date = str(due_date).strip()
-    
+
     if len(project) == 0 or len(project) > MAX_PROJECT_LEN:
         return jsonify({"error": "Bad Request: project length invalid"}), 400
 
@@ -408,10 +408,10 @@ def create_task():
 
     if due_date is not None and due_date not in ALLOWED_DUE_DAYS:
         return jsonify({"error": "Bad Request: due_date invalid"}), 400
-        
+
     # Salva apenas a data formata sem hora no padrão brasileiro para minimalismo.
     today_str = date.today().strftime("%d/%m/%Y")
-    
+
     with get_db_connection() as conn:
         cursor = conn.cursor()
         # Define a posição no FINAL do projeto para manter o ranking consistente
@@ -429,11 +429,11 @@ def create_task():
         )
         conn.commit()
         task_id = cursor.lastrowid # Recupera ID criado para UX não piscar e deletar certo sem refresh
-        
+
         return jsonify({
-            "id": task_id, 
-            "project": project, 
-            "text": text, 
+            "id": task_id,
+            "project": project,
+            "text": text,
             "completed": False,
             "created_date": today_str,
             "due_date": due_date,
@@ -450,7 +450,7 @@ def update_task(task_id):
     text = data.get('text')
     completed = data.get('completed')
     due_date = data.get('due_date')
-    
+
     # Sanitização do Update
     if text is not None:
         text = str(text).strip()
@@ -469,10 +469,10 @@ def update_task(task_id):
             completed = _coerce_01(completed, 'completed')
         except ValueError as e:
             return jsonify({"error": f"Bad Request: {e}"}), 400
-    
+
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        
+
         # Logica inteligente que aceita um payload só de update text ou só update status.
         if text is not None and completed is not None:
             cursor.execute("UPDATE tasks SET text = ?, completed = ? WHERE id = ?", (text, completed, task_id))
@@ -480,11 +480,11 @@ def update_task(task_id):
              cursor.execute("UPDATE tasks SET text = ? WHERE id = ?", (text, task_id))
         elif completed is not None:
              cursor.execute("UPDATE tasks SET completed = ? WHERE id = ?", (completed, task_id))
-        
+
         # Faz um update separado/adicional de due_date se ele for enviado no objeto PUT
         if 'due_date' in data:
             cursor.execute("UPDATE tasks SET due_date = ? WHERE id = ?", (due_date, task_id))
-             
+
         # Faz update da flag deleted (Lixeira/Arquivo)
         if 'deleted' in data:
             try:
@@ -492,7 +492,7 @@ def update_task(task_id):
             except ValueError as e:
                 return jsonify({"error": f"Bad Request: {e}"}), 400
             cursor.execute("UPDATE tasks SET deleted = ? WHERE id = ?", (deleted, task_id))
-            
+
         # Update the project if changed (used for drag and drop)
         if 'project' in data and data['project']:
             new_project = str(data['project']).strip()
@@ -511,9 +511,9 @@ def update_task(task_id):
                 "UPDATE tasks SET project = ?, position = ? WHERE id = ?",
                 (new_project, new_pos, task_id)
             )
-            
+
         conn.commit()
-        
+
     return jsonify({"success": True})
 
 # 3.5. BATCH UPDATE: Reordenar posições após o arrastar e soltar do usuário
@@ -568,7 +568,7 @@ def reorder_tasks():
 
         cursor.executemany("UPDATE tasks SET position = ? WHERE id = ?", updates)
         conn.commit()
-        
+
     return jsonify({"success": True})
 
 # 4. DELETE: Arrancar os dados de fato do SQLite
