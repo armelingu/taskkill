@@ -2,6 +2,16 @@
 
 Gerenciador de tarefas e projetos com interface web minimalista, grafo de dependências interativo e autenticação segura.
 
+## Origem
+
+Nunca consegui usar nenhum sistema de gerenciamento de tarefas por muito tempo. Notion, Trello, Linear, Things — testei vários, e no final sempre voltava ao papel. Não por falta de funcionalidade, mas porque nenhum deles refletia a forma como eu realmente pensava e organizava as coisas.
+
+No papel eu tinha uma estrutura simples que funcionava: projetos separados, uma visão da semana e conexões visuais entre o que dependia do quê. Certo dia decidi digitalizar exatamente isso — sem tentar replicar nenhuma ferramenta existente, só transportar o que já funcionava.
+
+O Taskkill nasceu disso. A visão semanal, os projetos como categorias e o grafo de dependências são exatamente os três elementos que eu usava no papel. A inspiração para o grafo veio do Obsidian, que trouxe conexões visuais para gestão de conhecimento — aqui a ideia é a mesma, mas aplicada a tarefas.
+
+A maioria dos gerenciadores de tarefas é lista ou kanban. O Taskkill não tenta ser mais um — ele é a estrutura que funcionou para mim, construída do jeito que eu precisava que fosse.
+
 ## Stack
 
 - **Backend:** Python 3 + Flask, SQLite 3 (WAL mode), Werkzeug Security
