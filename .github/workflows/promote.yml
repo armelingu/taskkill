@@ -1,0 +1,43 @@
+name: Promover desenv para master
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [desenv]
+
+permissions:
+  contents: write
+
+jobs:
+  promover:
+    name: Merge desenv → master
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Checkout completo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configurar identidade do bot
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Atualizar referências remotas
+        run: git fetch origin
+
+      - name: Merge desenv → master
+        run: |
+          git checkout master
+          git merge origin/desenv --ff-only
+          git push origin master
+
+      - name: Resumo da promoção
+        run: |
+          echo "### Promoção concluída" >> $GITHUB_STEP_SUMMARY
+          echo "**desenv** mergeado em **master** com sucesso." >> $GITHUB_STEP_SUMMARY
+          echo "Commit: $(git rev-parse --short HEAD)" >> $GITHUB_STEP_SUMMARY
