@@ -63,7 +63,7 @@ api_bp = Blueprint('api', __name__, url_prefix='/api')
 
 # Regras de domínio (local single-user)
 ALLOWED_DUE_DAYS = {'', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'}
-MAX_PROJECT_LEN = 120
+MAX_PROJECT_LEN = 18
 MAX_TEXT_LEN = 1000
 
 def _coerce_01(value, field_name: str):
@@ -241,6 +241,44 @@ def admin():
 # ===================================================================
 # ROTAS DA API REST (A conexão com o JavaScript Puro - "CRUD")
 # ===================================================================
+
+# ── Projetos ────────────────────────────────────────────────────────
+
+@api_bp.route('/projects', methods=['GET'])
+def get_projects():
+    with get_db_connection() as conn:
+        rows = conn.execute("SELECT name FROM projects ORDER BY name ASC").fetchall()
+    return jsonify([r['name'] for r in rows])
+
+
+@api_bp.route('/projects', methods=['POST'])
+def create_project():
+    data = request.json or {}
+    name = str(data.get('name') or '').strip()
+    if not name:
+        return jsonify({"error": "Nome do projeto é obrigatório"}), 400
+    if len(name) > MAX_PROJECT_LEN:
+        return jsonify({"error": f"Nome muito longo (máx {MAX_PROJECT_LEN} chars)"}), 400
+    with get_db_connection() as conn:
+        try:
+            conn.execute("INSERT INTO projects (name) VALUES (?)", (name,))
+            conn.commit()
+        except Exception:
+            return jsonify({"error": "Projeto já existe"}), 409
+    return jsonify({"name": name}), 201
+
+
+@api_bp.route('/projects/<path:project_name>', methods=['DELETE'])
+def delete_project(project_name):
+    name = project_name.strip()
+    with get_db_connection() as conn:
+        conn.execute("DELETE FROM projects WHERE name = ?", (name,))
+        conn.execute("UPDATE tasks SET deleted = 1 WHERE project = ?", (name,))
+        conn.commit()
+    return jsonify({"deleted": name})
+
+
+# ── Tarefas ─────────────────────────────────────────────────────────
 
 # 1. READ: Buscar todas as tarefas agrupadas por projeto
 @api_bp.route('/tasks', methods=['GET'])

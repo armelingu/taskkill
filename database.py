@@ -147,4 +147,27 @@ def init_db():
         ''')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_chamados_sync_task_id ON chamados_sync(task_id)')
 
+        # Projetos gerenciáveis pelo usuário
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS projects (
+                id   INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE
+            )
+        ''')
+
+        # Seed: migra os projetos hardcoded para o banco (idempotente)
+        _default_projects = [
+            'Protheus', 'Salesforce', 'Vitreum',
+            'SW Engineering', 'Saas', 'Pessoal',
+        ]
+        for _p in _default_projects:
+            cursor.execute("INSERT OR IGNORE INTO projects (name) VALUES (?)", (_p,))
+
+        # Seed adicional: projetos que existam em tasks mas ainda não estejam na tabela
+        cursor.execute(
+            "SELECT DISTINCT project FROM tasks WHERE deleted = 0 AND project IS NOT NULL AND project != ''"
+        )
+        for _row in cursor.fetchall():
+            cursor.execute("INSERT OR IGNORE INTO projects (name) VALUES (?)", (_row['project'],))
+
         conn.commit()

@@ -284,7 +284,7 @@ html {
 /* Tipografia de Seções */
 .section-header {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     justify-content: space-between;
     padding: 0 12px;
     margin-bottom: 8px;
@@ -379,6 +379,196 @@ html {
     font-weight: 600; /* Levemente destacado, sem gritar */
 }
 
+/* ── Projetos dinâmicos ─────────────────────────────────────── */
+
+/* Botão "+" circular — mesmo estilo do task-checkbox-placeholder */
+.btn-add-project {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 2px dashed #cbd5e1;
+    background: none;
+    cursor: pointer;
+    color: #cbd5e1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: border-color 0.18s ease, color 0.18s ease, border-style 0.18s ease;
+    padding: 0;
+    /* alinha verticalmente com o lixinho dos itens */
+    align-self: center;
+}
+.btn-add-project svg {
+    width: 8px;
+    height: 8px;
+}
+.btn-add-project:hover {
+    border-style: solid;
+    border-color: #64748b;
+    color: #64748b;
+}
+
+/* Wrapper de cada item de projeto (para posicionar o lixinho) */
+.project-nav-item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0;
+}
+.project-nav-item .project-nav {
+    flex: 1;
+    min-width: 0;          /* necessário para o ellipsis funcionar dentro de flex */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Botão lixinha circular — oculto por padrão, surge no hover do wrapper */
+.btn-delete-project {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    background: none;
+    cursor: pointer;
+    color: #94a3b8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    /* mesmo recuo direito que o padding do .section-header → alinha com o + */
+    margin-right: 12px;
+    padding: 0;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.18s ease, border-color 0.18s ease, color 0.18s ease, background-color 0.18s ease;
+}
+.project-nav-item:hover .btn-delete-project {
+    opacity: 1;
+    pointer-events: auto;
+}
+.btn-delete-project:hover {
+    border-color: #fca5a5;
+    background-color: #fef2f2;
+    color: #ef4444;
+}
+
+/* Input inline para criação de novo projeto */
+.project-new-input {
+    cursor: text;
+    background-color: #f1f5f9;
+    border: 1.5px solid #cbd5e1;
+    outline: none;
+    font-family: inherit;
+    min-height: 32px;
+}
+.project-new-input:focus {
+    border-color: #64748b;
+    background-color: #fff;
+}
+
+/* ── Modal de confirmação de exclusão ───────────────────────── */
+
+.project-confirm-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.15s ease;
+}
+.project-confirm-overlay.hidden {
+    display: none;
+}
+
+.project-confirm-modal {
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.18), 0 4px 16px rgba(0,0,0,0.08);
+    padding: 32px 28px 24px;
+    width: 100%;
+    max-width: 360px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    animation: modalSlideUp 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes modalSlideUp {
+    from { opacity: 0; transform: translateY(16px) scale(0.97); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.project-confirm-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: #fef2f2;
+    border: 2px solid #fecaca;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #ef4444;
+    margin-bottom: 4px;
+}
+
+.project-confirm-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 0;
+    text-align: center;
+}
+
+.project-confirm-body {
+    font-size: 0.85rem;
+    color: #64748b;
+    margin: 0;
+    text-align: center;
+    line-height: 1.5;
+}
+
+.project-confirm-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+    width: 100%;
+}
+
+.project-confirm-btn {
+    flex: 1;
+    padding: 9px 0;
+    border-radius: 8px;
+    border: none;
+    font-size: 0.9rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background-color 0.15s ease, transform 0.1s ease;
+}
+.project-confirm-btn:active {
+    transform: scale(0.97);
+}
+.project-confirm-btn--cancel {
+    background: #f1f5f9;
+    color: #475569;
+}
+.project-confirm-btn--cancel:hover {
+    background: #e2e8f0;
+}
+.project-confirm-btn--danger {
+    background: #ef4444;
+    color: #fff;
+}
+.project-confirm-btn--danger:hover {
+    background: #dc2626;
+}
 
 /* --------------- 
    Área de Conteúdo (Main Dashboard Element)
