@@ -637,6 +637,38 @@ document.addEventListener('DOMContentLoaded', () => {
         renderTasks();
     }
 
+    // Modal de confirmação de logout
+    const logoutTrigger  = document.getElementById('sidebar-logout-trigger');
+    const logoutOverlay  = document.getElementById('logout-confirm-overlay');
+    const logoutCancel   = document.getElementById('logout-confirm-cancel');
+    const logoutConfirm  = document.getElementById('logout-confirm-ok');
+    const logoutForm     = document.getElementById('logout-form');
+
+    if (logoutTrigger && logoutOverlay) {
+        logoutTrigger.addEventListener('click', () => {
+            logoutOverlay.classList.remove('hidden');
+            logoutConfirm.focus();
+        });
+
+        logoutCancel.addEventListener('click', () => {
+            logoutOverlay.classList.add('hidden');
+        });
+
+        logoutConfirm.addEventListener('click', () => {
+            logoutForm.submit();
+        });
+
+        logoutOverlay.addEventListener('click', e => {
+            if (e.target === logoutOverlay) logoutOverlay.classList.add('hidden');
+        });
+
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape' && !logoutOverlay.classList.contains('hidden')) {
+                logoutOverlay.classList.add('hidden');
+            }
+        });
+    }
+
     // Ações de sistema (backup/restore)
     const btnBackup = document.getElementById('btn-backup');
     const btnRestore = document.getElementById('btn-restore');
