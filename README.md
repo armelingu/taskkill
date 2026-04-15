@@ -1,13 +1,12 @@
 # Taskkill
 
-Gerenciador de tarefas e projetos com interface web minimalista, grafo de dependências interativo e integração com sistemas externos de chamados.
+Gerenciador de tarefas e projetos com interface web minimalista, grafo de dependências interativo e autenticação segura.
 
 ## Stack
 
 - **Backend:** Python 3 + Flask, SQLite 3 (WAL mode), Werkzeug Security
 - **Frontend:** Vanilla JS, HTML5, CSS3 — sem frameworks externos
 - **Autenticação:** Sessions com CSRF, rate limiting, cookies HttpOnly/SameSite
-- **Integração:** MySQL (polling de chamados externos via `pymysql`)
 - **Deploy:** Docker + Docker Compose, Caddy (reverse proxy + TLS automático)
 
 ## Funcionalidades
@@ -20,7 +19,6 @@ Gerenciador de tarefas e projetos com interface web minimalista, grafo de depend
 - Subtarefas via sintaxe `[ ]` no corpo da tarefa
 - Optimistic UI: atualização visual imediata antes da resposta do servidor
 - Backup e restore do banco via painel admin
-- Integração com sistema de chamados MySQL: importação automática de tickets com ordenação por prioridade e status
 
 ## Estrutura
 
@@ -30,7 +28,7 @@ app/
 ├── database.py             # Schema, migrações e bootstrap do banco SQLite
 ├── routes.py               # Blueprints REST (tasks, projects, auth, admin)
 ├── requirements.txt
-├── .env.example            # Variáveis de ambiente necessárias
+├── .env.example
 ├── static/
 │   ├── css/style.css
 │   └── js/script.js
@@ -39,10 +37,8 @@ app/
 │   ├── login.html
 │   └── admin.html
 ├── scripts/
-│   ├── sync_chamados.py        # Polling MySQL → tasks (Protheus)
 │   ├── reset_admin_password.py
 │   ├── run_local.bat / .ps1
-│   ├── run_local_all.bat / .ps1
 │   ├── install_sync_task.ps1
 │   └── uninstall_sync_task.ps1
 ├── docker-compose.yml
@@ -124,27 +120,9 @@ docker compose -f docker-compose.yml -f docker-compose.vps.yml up -d --build
 
 O certificado TLS é emitido automaticamente pelo Caddy via Let's Encrypt. Portas 80 e 443 devem estar liberadas no firewall da VPS.
 
-## Integração com chamados (MySQL)
+## Integrações externas
 
-Configure no `.env`:
-
-```env
-CHAMADOS_SYNC_ENABLED=1
-CHAMADOS_MYSQL_HOST=seu_host
-CHAMADOS_MYSQL_PORT=3306
-CHAMADOS_MYSQL_DB=seu_banco
-CHAMADOS_MYSQL_USER=seu_usuario
-CHAMADOS_MYSQL_PASSWORD=sua_senha
-CHAMADOS_AGENT_ID=SEU_AGENT_ID
-CHAMADOS_POLL_SECONDS=45
-```
-
-O serviço `sync_chamados.py` faz polling no intervalo definido, cria tasks no projeto "Protheus" para tickets novos e marca como concluídas as que estiverem com status FECHADO/RESOLVIDO/CANCELADO/FINALIZADO. A importação é idempotente (tabela `chamados_sync`).
-
-**Agendar sync no logon do Windows:**
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\install_sync_task.ps1 -Hidden
-```
+Módulo em desenvolvimento. O objetivo é oferecer um sistema genérico e configurável para importar dados de fontes externas — APIs REST, bancos SQL, webhooks — e criar tasks automaticamente no Taskkill, com suporte a mapeamento de campos, deduplicação e controle de status.
 
 ## Segurança
 
