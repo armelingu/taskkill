@@ -264,6 +264,11 @@ def perfil():
                                 conn.commit()
                                 message = f'Usuário atualizado para "{new_username}".'
 
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        if error:
+            return jsonify({'error': error}), 400
+        return jsonify({'message': message, 'user': _current_user()})
+
     return render_template('perfil.html', user=_current_user(), csrf_token=csrf,
                            message=message, error=error, section=section)
 
