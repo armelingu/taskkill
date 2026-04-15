@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Taskkill — Perfil</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <link rel="shortcut icon" href="/static/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="auth-body">
+  <main class="auth-wrap">
+    <div class="auth-card perfil-card">
+
+      <!-- Cabeçalho -->
+      <div class="auth-brand" style="margin-bottom: 24px;">
+        <div class="auth-logo" aria-hidden="true"></div>
+        <div>
+          <div class="auth-title">Meu perfil</div>
+          <div class="auth-subtitle">Logado como <strong>{{ user.username }}</strong></div>
+        </div>
+      </div>
+
+      {% if message %}
+        <div class="auth-alert auth-alert-ok" role="alert">{{ message }}</div>
+      {% endif %}
+      {% if error %}
+        <div class="auth-alert auth-alert-error" role="alert">{{ error }}</div>
+      {% endif %}
+
+      <!-- Abas -->
+      <div class="perfil-tabs" role="tablist">
+        <a href="/perfil?s=senha"
+           class="perfil-tab {% if section == 'senha' %}perfil-tab--active{% endif %}"
+           role="tab" aria-selected="{{ 'true' if section == 'senha' else 'false' }}">
+          Alterar senha
+        </a>
+        <a href="/perfil?s=usuario"
+           class="perfil-tab {% if section == 'usuario' %}perfil-tab--active{% endif %}"
+           role="tab" aria-selected="{{ 'true' if section == 'usuario' else 'false' }}">
+          Alterar usuário
+        </a>
+      </div>
+
+      <!-- Painel: alterar senha -->
+      {% if section == 'senha' %}
+      <form method="POST" action="/perfil?s=senha" class="auth-form" novalidate>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="action" value="senha">
+
+        <label class="auth-label" for="current_password">Senha atual</label>
+        <input class="auth-input" id="current_password" name="current_password"
+               type="password" autocomplete="current-password" required autofocus>
+
+        <label class="auth-label" for="new_password">Nova senha <span class="auth-hint">(mín. 10 caracteres)</span></label>
+        <input class="auth-input" id="new_password" name="new_password"
+               type="password" autocomplete="new-password" minlength="10" required>
+
+        <label class="auth-label" for="confirm_password">Confirmar nova senha</label>
+        <input class="auth-input" id="confirm_password" name="confirm_password"
+               type="password" autocomplete="new-password" required>
+
+        <button class="auth-btn" type="submit">Salvar nova senha</button>
+      </form>
+      {% endif %}
+
+      <!-- Painel: alterar usuário -->
+      {% if section == 'usuario' %}
+      <form method="POST" action="/perfil?s=usuario" class="auth-form" novalidate>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="action" value="usuario">
+
+        <label class="auth-label" for="new_username">Novo nome de usuário</label>
+        <input class="auth-input" id="new_username" name="new_username"
+               type="text" autocomplete="username" maxlength="60"
+               value="{{ user.username }}" required autofocus>
+
+        <label class="auth-label" for="confirm_password_u">Confirme sua senha atual</label>
+        <input class="auth-input" id="confirm_password_u" name="confirm_password_u"
+               type="password" autocomplete="current-password" required>
+
+        <button class="auth-btn" type="submit">Salvar novo usuário</button>
+      </form>
+      {% endif %}
+
+      <!-- Rodapé -->
+      <div class="perfil-footer">
+        <a class="auth-link" href="/">Voltar ao app</a>
+        <form method="POST" action="/logout">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="auth-link" type="submit">Sair</button>
+        </form>
+      </div>
+
+    </div>
+  </main>
+</body>
+</html>

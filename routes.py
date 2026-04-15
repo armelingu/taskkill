@@ -203,6 +203,72 @@ def logout():
     return redirect(url_for('main.login'))
 
 
+@main_bp.route('/perfil', methods=['GET', 'POST'])
+@login_required
+def perfil():
+    user = _current_user()
+    csrf = _ensure_csrf_token()
+    message = None
+    error = None
+    section = request.args.get('s', 'senha')  # 'senha' | 'usuario'
+
+    if request.method == 'POST':
+        form_csrf = request.form.get('csrf_token')
+        if not form_csrf or form_csrf != csrf:
+            error = 'Sessão expirada. Recarregue e tente novamente.'
+        else:
+            action = request.form.get('action')
+
+            if action == 'senha':
+                section = 'senha'
+                current_pw  = request.form.get('current_password') or ''
+                new_pw      = request.form.get('new_password') or ''
+                confirm_pw  = request.form.get('confirm_password') or ''
+
+                if len(new_pw.strip()) < 10:
+                    error = 'A nova senha precisa ter pelo menos 10 caracteres.'
+                elif new_pw != confirm_pw:
+                    error = 'A confirmação da senha não confere.'
+                else:
+                    with get_db_connection() as conn:
+                        row = conn.execute('SELECT password_hash FROM users WHERE id = ?', (int(user['id']),)).fetchone()
+                        if not row or not check_password_hash(row['password_hash'], current_pw):
+                            error = 'Senha atual incorreta.'
+                        else:
+                            conn.execute('UPDATE users SET password_hash = ? WHERE id = ?',
+                                         (generate_password_hash(new_pw.strip()), int(user['id'])))
+                            conn.commit()
+                            message = 'Senha atualizada com sucesso.'
+
+            elif action == 'usuario':
+                section = 'usuario'
+                new_username = (request.form.get('new_username') or '').strip()
+                confirm_pw   = request.form.get('confirm_password_u') or ''
+
+                if not new_username:
+                    error = 'O nome de usuário não pode ser vazio.'
+                elif len(new_username) > 60:
+                    error = 'Nome de usuário muito longo (máx. 60 caracteres).'
+                else:
+                    with get_db_connection() as conn:
+                        row = conn.execute('SELECT password_hash FROM users WHERE id = ?', (int(user['id']),)).fetchone()
+                        if not row or not check_password_hash(row['password_hash'], confirm_pw):
+                            error = 'Senha incorreta.'
+                        else:
+                            exists = conn.execute('SELECT id FROM users WHERE username = ? AND id != ?',
+                                                  (new_username, int(user['id']))).fetchone()
+                            if exists:
+                                error = 'Esse nome de usuário já está em uso.'
+                            else:
+                                conn.execute('UPDATE users SET username = ? WHERE id = ?',
+                                             (new_username, int(user['id'])))
+                                conn.commit()
+                                message = f'Usuário atualizado para "{new_username}".'
+
+    return render_template('perfil.html', user=_current_user(), csrf_token=csrf,
+                           message=message, error=error, section=section)
+
+
 @main_bp.route('/admin', methods=['GET', 'POST'])
 @login_required
 @admin_required
