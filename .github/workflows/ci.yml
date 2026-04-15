@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [desenv]
+  pull_request:
+    branches: [desenv]
+
+jobs:
+  verificar:
+    name: Lint e verificação de sintaxe
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configurar Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Instalar dependências
+        run: pip install -r requirements.txt ruff
+
+      - name: Verificar sintaxe dos módulos principais
+        run: python -m py_compile app.py database.py routes.py
+
+      - name: Lint com ruff
+        run: |
+          ruff check . \
+            --select E,F,W \
+            --ignore E501 \
+            --exclude .venv
