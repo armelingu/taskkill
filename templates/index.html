@@ -74,27 +74,22 @@
                 </div>
             </section>
 
-            <section class="sidebar-section">
-                <div class="section-header section-header--toggle" id="sistema-toggle" aria-expanded="false" aria-controls="sistema-items" role="button" tabindex="0">
-                    <h2 class="section-title">Sistema</h2>
-                    <span class="section-toggle-icon" aria-hidden="true">›</span>
-                </div>
-                <div class="placeholder-container hidden" id="sistema-items">
-                    <a class="skeleton-item system-action" href="/perfil" aria-label="Meu perfil">Meu perfil</a>
-                    <a class="skeleton-item system-action" href="/admin" aria-label="Painel admin">Admin</a>
-                    <button type="button" class="skeleton-item system-action" id="btn-backup" aria-label="Exportar backup do banco">
-                        Exportar backup
+            <!-- Rodapé do sidebar: avatar e logout -->
+            <div class="sidebar-footer">
+                <a href="/perfil" class="sidebar-avatar" title="Meu perfil" aria-label="Meu perfil">
+                    <span class="sidebar-avatar-initials">{{ user.username[0].upper() if user else '?' }}</span>
+                </a>
+                <form method="POST" action="/logout">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <button type="submit" class="sidebar-logout-btn" title="Sair" aria-label="Sair">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                            <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <polyline points="16 17 21 12 16 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <line x1="21" y1="12" x2="9" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
                     </button>
-                    <button type="button" class="skeleton-item system-action" id="btn-restore" aria-label="Restaurar backup do banco">
-                        Restaurar backup
-                    </button>
-                    <input id="restore-file" class="hidden" type="file" accept=".db,application/octet-stream">
-                    <form method="POST" action="/logout">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                        <button type="submit" class="skeleton-item system-action" aria-label="Sair">Sair</button>
-                    </form>
-                </div>
-            </section>
+                </form>
+            </div>
         </aside>
 
         <!-- Área Principal -->
