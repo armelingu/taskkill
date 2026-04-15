@@ -140,8 +140,7 @@ def api_admin_required(fn):
 @main_bp.route('/')
 @login_required
 def index():
-    # O Flask mapeia essa função para bater no 'templates/index.html' por configuração.
-    return render_template('index.html', csrf_token=_ensure_csrf_token())
+    return render_template('index.html', csrf_token=_ensure_csrf_token(), user=_current_user())
 
 
 @main_bp.route('/login', methods=['GET', 'POST'])
@@ -210,7 +209,7 @@ def perfil():
     csrf = _ensure_csrf_token()
     message = None
     error = None
-    section = request.args.get('s', 'senha')  # 'senha' | 'usuario'
+    section = request.args.get('s', 'usuario')  # 'senha' | 'usuario' | 'sistema'
 
     if request.method == 'POST':
         form_csrf = request.form.get('csrf_token')
@@ -269,39 +268,10 @@ def perfil():
                            message=message, error=error, section=section)
 
 
-@main_bp.route('/admin', methods=['GET', 'POST'])
+@main_bp.route('/admin')
 @login_required
-@admin_required
 def admin():
-    user = _current_user()
-    csrf = _ensure_csrf_token()
-    message = None
-    error = None
-
-    if request.method == 'POST':
-        form_csrf = request.form.get('csrf_token')
-        if not form_csrf or form_csrf != csrf:
-            error = 'Sessão expirada. Recarregue e tente novamente.'
-        else:
-            current_pw = request.form.get('current_password') or ''
-            new_pw = request.form.get('new_password') or ''
-            confirm_pw = request.form.get('confirm_password') or ''
-
-            if len(new_pw.strip()) < 10:
-                error = 'A nova senha precisa ter pelo menos 10 caracteres.'
-            elif new_pw != confirm_pw:
-                error = 'A confirmação da senha não confere.'
-            else:
-                with get_db_connection() as conn:
-                    row = conn.execute('SELECT password_hash FROM users WHERE id = ?', (int(user['id']),)).fetchone()
-                    if not row or not check_password_hash(row['password_hash'], current_pw):
-                        error = 'Senha atual inválida.'
-                    else:
-                        conn.execute('UPDATE users SET password_hash = ? WHERE id = ?', (generate_password_hash(new_pw), int(user['id'])))
-                        conn.commit()
-                        message = 'Senha atualizada com sucesso.'
-
-    return render_template('admin.html', user=user, csrf_token=csrf, message=message, error=error)
+    return redirect(url_for('main.perfil'))
 
 
 # ===================================================================

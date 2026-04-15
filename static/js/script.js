@@ -5,7 +5,7 @@
 
 document.addEventListener('DOMContentLoaded', () => {
     // 1. Elementos da Interface
-    const skeletonItems = document.querySelectorAll('.skeleton-item:not(.system-action)');
+    const skeletonItems = document.querySelectorAll('.skeleton-item');
     const emptyState = document.getElementById('empty-state');
     const projectView = document.getElementById('project-view');
     const projectTitle = document.getElementById('project-title');
@@ -27,21 +27,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 '"': '&quot;'
             }[tag] || tag)
         );
-    }
-
-    // Seção "Sistema" colapsável
-    const sistemaToggle = document.getElementById('sistema-toggle');
-    const sistemaItems  = document.getElementById('sistema-items');
-    if (sistemaToggle && sistemaItems) {
-        const toggleSistema = () => {
-            const expanded = sistemaToggle.getAttribute('aria-expanded') === 'true';
-            sistemaToggle.setAttribute('aria-expanded', String(!expanded));
-            sistemaItems.classList.toggle('hidden', expanded);
-        };
-        sistemaToggle.addEventListener('click', toggleSistema);
-        sistemaToggle.addEventListener('keydown', e => {
-            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSistema(); }
-        });
     }
 
     // CSRF token por sessão (obrigatório no backend em /api para POST/PUT/DELETE)
