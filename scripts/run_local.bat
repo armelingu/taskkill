@@ -19,7 +19,7 @@ set TASKKILL_COOKIE_SECURE=0
 set TASKKILL_HOST=127.0.0.1
 set TASKKILL_PORT=5091
 
-".venv\Scripts\python.exe" "serve.py"
+".venv\Scripts\python.exe" "app.py"
 
 endlocal
 
