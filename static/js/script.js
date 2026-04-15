@@ -637,6 +637,116 @@ document.addEventListener('DOMContentLoaded', () => {
         renderTasks();
     }
 
+    // ── Perfil inline ──────────────────────────────────────────
+    const navPerfilBtn   = document.getElementById('nav-perfil');
+    const perfilView     = document.getElementById('perfil-view');
+    const perfilAlert    = document.getElementById('perfil-inline-alert');
+    const perfilNavBtns  = document.querySelectorAll('[data-perfil-tab]');
+    const perfilPanels   = document.querySelectorAll('[id^="perfil-tab-"]');
+
+    function showPerfilAlert(msg, isError) {
+        if (!perfilAlert) return;
+        perfilAlert.textContent = msg;
+        perfilAlert.className = 'perfil-alert auth-alert ' + (isError ? 'auth-alert-error' : 'auth-alert-ok');
+        perfilAlert.classList.remove('hidden');
+        setTimeout(() => perfilAlert.classList.add('hidden'), 5000);
+    }
+
+    function activatePerfilTab(tabId) {
+        perfilPanels.forEach(p => p.classList.toggle('hidden', p.id !== 'perfil-tab-' + tabId));
+        perfilNavBtns.forEach(b => b.classList.toggle('perfil-nav-item--active', b.dataset.perfilTab === tabId));
+    }
+
+    if (navPerfilBtn && perfilView) {
+        navPerfilBtn.addEventListener('click', () => {
+            // Esconde outras views e ativa o perfil
+            [emptyState, projectView, graphView, document.getElementById('dashboard-view')]
+                .forEach(v => v && v.classList.add('hidden'));
+            perfilView.classList.remove('hidden');
+            // Remove active dos itens do sidebar
+            document.querySelectorAll('.skeleton-item').forEach(s => s.classList.remove('active'));
+            activatePerfilTab('conta');
+        });
+
+        perfilNavBtns.forEach(btn => {
+            btn.addEventListener('click', () => activatePerfilTab(btn.dataset.perfilTab));
+        });
+
+        // Submissão AJAX do formulário de usuário
+        const formUsuario = document.getElementById('form-usuario');
+        if (formUsuario) {
+            formUsuario.addEventListener('submit', async e => {
+                e.preventDefault();
+                const data = new URLSearchParams(new FormData(formUsuario));
+                data.set('action', 'usuario');
+                data.set('csrf_token', getCsrfToken());
+                try {
+                    const res = await fetch('/perfil', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'X-CSRF-Token': getCsrfToken()
+                        },
+                        body: data.toString()
+                    });
+                    const json = await res.json();
+                    if (!res.ok) {
+                        showPerfilAlert(json.error || 'Erro ao salvar.', true);
+                    } else {
+                        showPerfilAlert(json.message || 'Salvo com sucesso.', false);
+                        // Atualiza nome no sidebar e no painel
+                        const newName = formUsuario.querySelector('[name="new_username"]').value.trim();
+                        if (newName && json.user) {
+                            const lbl = document.getElementById('sidebar-username-label');
+                            const disp = document.getElementById('perfil-username-display');
+                            const init = document.getElementById('perfil-avatar-xl');
+                            const sideInit = document.querySelector('.sidebar-avatar-initials');
+                            if (lbl) lbl.textContent = json.user.username;
+                            if (disp) disp.textContent = json.user.username;
+                            if (init) init.textContent = json.user.username[0].toUpperCase();
+                            if (sideInit) sideInit.textContent = json.user.username[0].toUpperCase();
+                        }
+                        formUsuario.querySelector('[name="confirm_password_u"]').value = '';
+                    }
+                } catch {
+                    showPerfilAlert('Erro de rede. Tente novamente.', true);
+                }
+            });
+        }
+
+        // Submissão AJAX do formulário de senha
+        const formSenha = document.getElementById('form-senha');
+        if (formSenha) {
+            formSenha.addEventListener('submit', async e => {
+                e.preventDefault();
+                const data = new URLSearchParams(new FormData(formSenha));
+                data.set('action', 'senha');
+                data.set('csrf_token', getCsrfToken());
+                try {
+                    const res = await fetch('/perfil', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'X-CSRF-Token': getCsrfToken()
+                        },
+                        body: data.toString()
+                    });
+                    const json = await res.json();
+                    if (!res.ok) {
+                        showPerfilAlert(json.error || 'Erro ao salvar.', true);
+                    } else {
+                        showPerfilAlert(json.message || 'Senha atualizada.', false);
+                        formSenha.reset();
+                    }
+                } catch {
+                    showPerfilAlert('Erro de rede. Tente novamente.', true);
+                }
+            });
+        }
+    }
+
     // Modal de confirmação de logout
     const logoutTrigger  = document.getElementById('sidebar-logout-trigger');
     const logoutOverlay  = document.getElementById('logout-confirm-overlay');

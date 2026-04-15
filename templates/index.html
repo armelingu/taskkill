@@ -76,12 +76,12 @@
 
             <!-- Rodapé do sidebar: user card -->
             <div class="sidebar-footer">
-                <a href="/perfil" class="sidebar-user-card" title="Meu perfil" aria-label="Meu perfil">
+                <button type="button" id="nav-perfil" class="sidebar-user-card" title="Meu perfil" aria-label="Meu perfil">
                     <div class="sidebar-avatar" aria-hidden="true">
                         <span class="sidebar-avatar-initials">{{ user.username[0].upper() if user else '?' }}</span>
                     </div>
-                    <span class="sidebar-username">{{ user.username if user else '' }}</span>
-                </a>
+                    <span class="sidebar-username" id="sidebar-username-label">{{ user.username if user else '' }}</span>
+                </button>
                 <form method="POST" action="/logout" id="logout-form">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <button type="button" id="sidebar-logout-trigger" class="sidebar-logout-btn" title="Sair" aria-label="Sair">
@@ -124,6 +124,88 @@
                     <canvas id="graph-canvas"></canvas>
                     <div id="graph-tooltip" class="graph-tooltip" style="display:none"></div>
                 </div>
+            </div>
+
+            <!-- Painel de perfil inline -->
+            <div id="perfil-view" class="perfil-inline-view hidden">
+                <div class="perfil-inline-body">
+
+                    <aside class="perfil-sidebar">
+                        <div class="perfil-avatar-xl" id="perfil-avatar-xl">{{ user.username[0].upper() if user else '?' }}</div>
+                        <div class="perfil-username" id="perfil-username-display">{{ user.username if user else '' }}</div>
+                        <div class="perfil-role">{% if user and user.is_admin %}Administrador{% else %}Usuário{% endif %}</div>
+                        <nav class="perfil-nav">
+                            <button class="perfil-nav-item" data-perfil-tab="conta">Conta</button>
+                            <button class="perfil-nav-item" data-perfil-tab="seguranca">Segurança</button>
+                            {% if user and user.is_admin %}
+                            <button class="perfil-nav-item" data-perfil-tab="sistema">Sistema</button>
+                            {% endif %}
+                        </nav>
+                    </aside>
+
+                    <div class="perfil-content">
+                        <div id="perfil-inline-alert" class="perfil-alert hidden" role="alert"></div>
+
+                        <!-- Aba: Conta -->
+                        <section class="perfil-panel" id="perfil-tab-conta">
+                            <h2 class="perfil-panel-title">Conta</h2>
+                            <form class="perfil-form" id="form-usuario" novalidate>
+                                <label class="auth-label" for="pi-new-username">Nome de usuário</label>
+                                <input class="auth-input" id="pi-new-username" name="new_username"
+                                       type="text" autocomplete="username" maxlength="60"
+                                       value="{{ user.username if user else '' }}" required>
+                                <label class="auth-label" for="pi-confirm-pw-u">Confirme sua senha atual</label>
+                                <input class="auth-input" id="pi-confirm-pw-u" name="confirm_password_u"
+                                       type="password" autocomplete="current-password" required>
+                                <button class="auth-btn" type="submit">Salvar alterações</button>
+                            </form>
+                        </section>
+
+                        <!-- Aba: Segurança -->
+                        <section class="perfil-panel hidden" id="perfil-tab-seguranca">
+                            <h2 class="perfil-panel-title">Segurança</h2>
+                            <form class="perfil-form" id="form-senha" novalidate>
+                                <label class="auth-label" for="pi-current-pw">Senha atual</label>
+                                <input class="auth-input" id="pi-current-pw" name="current_password"
+                                       type="password" autocomplete="current-password" required>
+                                <label class="auth-label" for="pi-new-pw">
+                                    Nova senha <span class="auth-hint">(mín. 10 caracteres)</span>
+                                </label>
+                                <input class="auth-input" id="pi-new-pw" name="new_password"
+                                       type="password" autocomplete="new-password" minlength="10" required>
+                                <label class="auth-label" for="pi-confirm-pw">Confirmar nova senha</label>
+                                <input class="auth-input" id="pi-confirm-pw" name="confirm_password"
+                                       type="password" autocomplete="new-password" required>
+                                <button class="auth-btn" type="submit">Salvar nova senha</button>
+                            </form>
+                        </section>
+
+                        {% if user and user.is_admin %}
+                        <!-- Aba: Sistema (admin) -->
+                        <section class="perfil-panel hidden" id="perfil-tab-sistema">
+                            <h2 class="perfil-panel-title">Sistema</h2>
+                            <div class="perfil-sistema-list">
+                                <div class="perfil-sistema-item">
+                                    <div>
+                                        <div class="perfil-sistema-label">Exportar backup</div>
+                                        <div class="perfil-sistema-desc">Baixa uma cópia do banco de dados SQLite.</div>
+                                    </div>
+                                    <button class="auth-btn perfil-sistema-btn" id="btn-backup" type="button">Exportar</button>
+                                </div>
+                                <div class="perfil-sistema-item">
+                                    <div>
+                                        <div class="perfil-sistema-label">Restaurar backup</div>
+                                        <div class="perfil-sistema-desc">Substitui o banco atual por um arquivo de backup (.db).</div>
+                                    </div>
+                                    <button class="auth-btn perfil-sistema-btn" id="btn-restore" type="button">Restaurar</button>
+                                </div>
+                            </div>
+                            <input id="restore-file" class="hidden" type="file" accept=".db,application/octet-stream">
+                        </section>
+                        {% endif %}
+
+                    </div><!-- .perfil-content -->
+                </div><!-- .perfil-inline-body -->
             </div>
 
             <!-- Visualização do Projeto (que vai mudar dinamicamente) -->
