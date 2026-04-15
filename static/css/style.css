@@ -246,52 +246,59 @@ body {
     text-decoration: underline;
 }
 
-/* ── Sidebar: rodapé com avatar e logout ─────────────── */
+/* ── Sidebar: rodapé user card ───────────────────────── */
 
 .sidebar-footer {
     margin-top: auto;
-    padding-top: 10px;
+    padding-top: 12px;
     border-top: 1px solid rgba(15, 23, 42, 0.07);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    padding-left: 8px;
+    padding-right: 8px;
 }
 
 .sidebar-user-card {
     display: flex;
     align-items: center;
-    gap: 8px;
-    background: rgba(15, 23, 42, 0.05);
-    border-radius: 10px;
-    padding: 8px 10px;
-}
-
-.sidebar-footer-user {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    text-decoration: none;
-    min-width: 0;
+    gap: 9px;
     flex: 1;
+    min-width: 0;
+    padding: 5px 6px;
+    border-radius: 8px;
+    text-decoration: none;
+    transition: background 0.15s ease;
 }
 
-.sidebar-avatar-initials {
-    width: 30px;
-    height: 30px;
+.sidebar-user-card:hover {
+    background: rgba(15, 23, 42, 0.05);
+}
+
+.sidebar-avatar {
+    width: 28px;
+    height: 28px;
     border-radius: 50%;
-    background: #EEEDFE;
-    color: #534AB7;
+    background: #475569;
+    color: #fff;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.75rem;
+    flex-shrink: 0;
+}
+
+.sidebar-avatar-initials {
+    font-size: 0.7rem;
     font-weight: 700;
     letter-spacing: 0.02em;
     line-height: 1;
-    flex-shrink: 0;
     user-select: none;
 }
 
-.sidebar-footer-name {
-    font-size: 13px;
-    font-weight: 500;
+.sidebar-username {
+    font-size: 0.82rem;
+    font-weight: 600;
     color: var(--text-title);
     white-space: nowrap;
     overflow: hidden;
@@ -299,9 +306,9 @@ body {
 }
 
 .sidebar-logout-btn {
-    margin-left: auto;
-    width: 26px;
-    height: 26px;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
     border: none;
     background: transparent;
     color: #94a3b8;
@@ -310,12 +317,11 @@ body {
     justify-content: center;
     cursor: pointer;
     flex-shrink: 0;
-    transition: color 0.15s ease;
-    padding: 0;
-    border-radius: 6px;
+    transition: background 0.15s ease, color 0.15s ease;
 }
 
 .sidebar-logout-btn:hover {
+    background: #e2e8f0;
     color: #0f172a;
 }
 
