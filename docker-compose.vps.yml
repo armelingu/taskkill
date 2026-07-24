@@ -1,3 +1,8 @@
+# NOTA: o serviço de sincronização de chamados (chamados_sync) foi removido
+# deste compose porque o módulo de Integrações externas ainda não foi
+# implementado (scripts/sync_chamados.py não existe). Ele retornará junto
+# com o módulo de Integrações.
+
 services:
   app:
     environment:

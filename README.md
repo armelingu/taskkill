@@ -33,26 +33,29 @@ A maioria dos gerenciadores de tarefas é lista ou kanban. O Taskkill não tenta
 ## Estrutura
 
 ```
-app/
-├── app.py                  # Inicialização Flask, middlewares e headers de segurança
-├── database.py             # Schema, migrações e bootstrap do banco SQLite
-├── routes.py               # Blueprints REST (tasks, projects, auth, admin)
+taskkill/
+├── app.py                     # Inicialização Flask, middlewares e headers de segurança
+├── database.py                # Schema, migrações e bootstrap do banco SQLite
+├── routes.py                  # Blueprints REST (tasks, projects, auth, perfil, backup)
+├── serve.py                   # Servidor WSGI local (waitress)
 ├── requirements.txt
 ├── .env.example
 ├── static/
 │   ├── css/style.css
-│   └── js/script.js
+│   ├── js/script.js
+│   └── favicon.svg
 ├── templates/
 │   ├── index.html
 │   ├── login.html
-│   └── admin.html
+│   └── perfil.html
 ├── scripts/
 │   ├── reset_admin_password.py
-│   ├── run_local.bat / .ps1
-│   ├── install_sync_task.ps1
-│   └── uninstall_sync_task.ps1
-├── docker-compose.yml
-└── docker-compose.local.yml
+│   └── run_local.bat / .ps1
+├── Dockerfile
+├── Caddyfile
+├── docker-compose.yml         # Base (app)
+├── docker-compose.local.yml   # Overlay para uso local
+└── docker-compose.vps.yml     # Overlay para produção (Caddy + HTTPS)
 ```
 
 ## Configuração
@@ -83,7 +86,7 @@ scripts\run_local.bat
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-python app.py
+python serve.py    # produção local (waitress); use `python app.py` para o modo dev
 ```
 
 Acesse `http://127.0.0.1:5091/login`.
@@ -113,7 +116,7 @@ sudo usermod -aG docker $USER && newgrp docker
 **2. Clonar e configurar:**
 ```bash
 git clone https://github.com/armelingu/taskkill taskkill
-cd taskkill/app
+cd taskkill
 cp .env.example .env
 # editar .env: TASKKILL_COOKIE_SECURE=1, DOMAIN, BASIC_AUTH_USER, BASIC_AUTH_HASH
 ```
