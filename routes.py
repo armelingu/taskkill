@@ -1,4 +1,5 @@
 import io
+import json
 import os
 import shutil
 import sqlite3
@@ -12,6 +13,9 @@ from flask import Blueprint, render_template, request, jsonify, send_file, sessi
 
 from database import get_db_connection, get_db_path, init_db
 from werkzeug.security import check_password_hash, generate_password_hash
+
+import integrations
+from integrations import IntegrationError
 
 # ---------------------------------------------------------------------------
 # Rate-limit de login (in-memory, por IP)
@@ -641,3 +645,175 @@ def restore_db():
             os.unlink(tmp_path)
         except OSError:
             pass
+
+
+# ===================================================================
+# Integrações externas (admin) — CRUD + test + preview + run
+# ===================================================================
+def _integration_row_to_dict(row):
+    try:
+        cfg = json.loads(row['config_json'])
+    except (ValueError, TypeError):
+        cfg = {}
+    return {
+        'id': row['id'],
+        'name': row['name'],
+        'enabled': bool(row['enabled']),
+        'last_run_at': row['last_run_at'],
+        'last_status': row['last_status'],
+        'last_error': row['last_error'],
+        'last_item_count': row['last_item_count'],
+        'config': integrations.mask_config(cfg),
+    }
+
+
+@api_bp.route('/integrations', methods=['GET'])
+@api_admin_required
+def list_integrations():
+    with get_db_connection() as conn:
+        rows = conn.execute('SELECT * FROM integrations ORDER BY name ASC').fetchall()
+    return jsonify([_integration_row_to_dict(r) for r in rows])
+
+
+@api_bp.route('/integrations', methods=['POST'])
+@api_admin_required
+def create_integration():
+    data = request.get_json(silent=True) or {}
+    name = str(data.get('name') or '').strip()
+    config = data.get('config') or {}
+    if not name:
+        return jsonify({"error": "Nome é obrigatório"}), 400
+    if not isinstance(config, dict):
+        return jsonify({"error": "Config inválida"}), 400
+
+    now = datetime.utcnow().isoformat()
+    with get_db_connection() as conn:
+        cursor = conn.execute(
+            "INSERT INTO integrations (name, enabled, config_json, last_status, created_at, updated_at) "
+            "VALUES (?, ?, ?, 'never', ?, ?)",
+            (name, 1 if data.get('enabled', True) else 0, json.dumps(config), now, now)
+        )
+        conn.commit()
+        new_id = cursor.lastrowid
+    return jsonify({"id": new_id}), 201
+
+
+@api_bp.route('/integrations/<int:integration_id>', methods=['GET'])
+@api_admin_required
+def get_integration(integration_id):
+    with get_db_connection() as conn:
+        row = conn.execute('SELECT * FROM integrations WHERE id = ?', (integration_id,)).fetchone()
+    if not row:
+        return jsonify({"error": "Não encontrada"}), 404
+    return jsonify(_integration_row_to_dict(row))
+
+
+@api_bp.route('/integrations/<int:integration_id>', methods=['PUT'])
+@api_admin_required
+def update_integration(integration_id):
+    data = request.get_json(silent=True) or {}
+    with get_db_connection() as conn:
+        row = conn.execute('SELECT config_json FROM integrations WHERE id = ?', (integration_id,)).fetchone()
+        if not row:
+            return jsonify({"error": "Não encontrada"}), 404
+        try:
+            old_cfg = json.loads(row['config_json'])
+        except (ValueError, TypeError):
+            old_cfg = {}
+
+        fields, params = [], []
+        if 'name' in data:
+            name = str(data.get('name') or '').strip()
+            if not name:
+                return jsonify({"error": "Nome é obrigatório"}), 400
+            fields.append('name = ?')
+            params.append(name)
+        if 'enabled' in data:
+            fields.append('enabled = ?')
+            params.append(1 if data.get('enabled') else 0)
+        if 'config' in data:
+            new_cfg = data.get('config') or {}
+            if not isinstance(new_cfg, dict):
+                return jsonify({"error": "Config inválida"}), 400
+            merged = integrations.merge_secrets(new_cfg, old_cfg)
+            fields.append('config_json = ?')
+            params.append(json.dumps(merged))
+
+        if not fields:
+            return jsonify({"success": True})
+
+        fields.append('updated_at = ?')
+        params.append(datetime.utcnow().isoformat())
+        params.append(integration_id)
+        conn.execute(f"UPDATE integrations SET {', '.join(fields)} WHERE id = ?", params)
+        conn.commit()
+    return jsonify({"success": True})
+
+
+@api_bp.route('/integrations/<int:integration_id>', methods=['DELETE'])
+@api_admin_required
+def delete_integration(integration_id):
+    with get_db_connection() as conn:
+        conn.execute('DELETE FROM integration_items WHERE integration_id = ?', (integration_id,))
+        conn.execute('DELETE FROM integrations WHERE id = ?', (integration_id,))
+        conn.commit()
+    return jsonify({"success": True})
+
+
+@api_bp.route('/integrations/test', methods=['POST'])
+@api_admin_required
+def test_integration():
+    """Faz o fetch e devolve arrays detectados + campos + item de exemplo."""
+    data = request.get_json(silent=True) or {}
+    connection = data.get('connection') or {}
+    try:
+        payload = integrations.fetch_payload(connection)
+    except IntegrationError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+    items_path = data.get('items_path') or ''
+    items = integrations.extract_items(payload, items_path)
+    sample = items[0] if items else payload
+    return jsonify({
+        "arrays": integrations.detect_array_paths(payload),
+        "fields": integrations.sample_fields(items[0]) if items else [],
+        "sample_item": sample,
+        "item_count": len(items),
+    })
+
+
+@api_bp.route('/integrations/preview', methods=['POST'])
+@api_admin_required
+def preview_integration():
+    """Dry-run: retorna as tasks que seriam criadas, sem persistir."""
+    data = request.get_json(silent=True) or {}
+    config = data.get('config') or {}
+    if not isinstance(config, dict):
+        return jsonify({"error": "Config inválida"}), 400
+
+    # Se veio um id, mescla os segredos mascarados com os já salvos.
+    if data.get('id'):
+        with get_db_connection() as conn:
+            row = conn.execute('SELECT config_json FROM integrations WHERE id = ?', (int(data['id']),)).fetchone()
+        if row:
+            try:
+                old = json.loads(row['config_json'])
+            except (ValueError, TypeError):
+                old = {}
+            config = integrations.merge_secrets(config, old)
+
+    try:
+        result = integrations.run_config(config, dry_run=True)
+    except IntegrationError as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify(result)
+
+
+@api_bp.route('/integrations/<int:integration_id>/run', methods=['POST'])
+@api_admin_required
+def run_integration_endpoint(integration_id):
+    try:
+        result = integrations.run_integration(integration_id, dry_run=False)
+    except IntegrationError as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify(result)

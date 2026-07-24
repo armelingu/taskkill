@@ -623,6 +623,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (emptyState) emptyState.classList.add('hidden');
         if (dashboardView) dashboardView.classList.add('hidden');
         if (graphView) graphView.classList.add('hidden');
+        hideIntegrationsView();
+        if (perfilView) perfilView.classList.add('hidden');
         graphStop();
 
         if (projectView) {
@@ -662,6 +664,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Esconde outras views e ativa o perfil
             [emptyState, projectView, graphView, document.getElementById('dashboard-view')]
                 .forEach(v => v && v.classList.add('hidden'));
+            hideIntegrationsView();
             perfilView.classList.remove('hidden');
             // Remove active dos itens do sidebar
             document.querySelectorAll('.skeleton-item').forEach(s => s.classList.remove('active'));
@@ -935,6 +938,9 @@ document.addEventListener('DOMContentLoaded', () => {
             document.querySelectorAll('.skeleton-item').forEach(s => s.classList.remove('active'));
             item.classList.add('active');
 
+            hideIntegrationsView();
+            if (perfilView) perfilView.classList.add('hidden');
+
             document.body.classList.remove('graph-mode');
             currentCategory = normText(item.textContent);
             currentWeekDay = null;
@@ -1162,6 +1168,9 @@ document.addEventListener('DOMContentLoaded', () => {
             document.querySelectorAll('.skeleton-item').forEach(sib => sib.classList.remove('active'));
             item.classList.add('active');
 
+            if (item.id !== 'nav-integrations') hideIntegrationsView();
+            if (perfilView) perfilView.classList.add('hidden');
+
             // Se for o Dashboard
             if (item.id === 'nav-dashboard') {
                 document.body.classList.remove('graph-mode');
@@ -1201,6 +1210,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     graphView.style.animation = null;
                 }
                 graphStart();
+                return;
+            }
+
+            // Se for as Integrações (admin)
+            if (item.id === 'nav-integrations') {
+                openIntegrations();
                 return;
             }
             
@@ -1267,7 +1282,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // LOGICA DE DRAG AND DROP (Soltar tarefas no menu lateral)
         // ----------------------------------------------------
         item.addEventListener('dragover', e => {
-            if (item.id === 'nav-dashboard') return; // Não permite soltar no dashboard global
+            if (item.id === 'nav-dashboard' || item.id === 'nav-integrations') return; // Não permite soltar aqui
             e.preventDefault(); // Permitir o Drop
             item.classList.add('drag-over');
         });
@@ -1279,7 +1294,7 @@ document.addEventListener('DOMContentLoaded', () => {
         item.addEventListener('drop', e => {
             e.preventDefault();
             item.classList.remove('drag-over');
-            if (item.id === 'nav-dashboard') return;
+            if (item.id === 'nav-dashboard' || item.id === 'nav-integrations') return;
 
             const droppedTaskId = e.dataTransfer.getData('text/plain');
             if (!droppedTaskId) return;
@@ -1769,5 +1784,571 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     });
+
+    // ================================================================
+    // INTEGRAÇÕES EXTERNAS (admin) — wizard + CRUD
+    // ================================================================
+    const integrationsView = document.getElementById('integrations-view');
+    const intListPanel   = document.getElementById('int-list-panel');
+    const intListEl      = document.getElementById('int-list');
+    const intEmptyEl     = document.getElementById('int-empty');
+    const intEditor      = document.getElementById('int-editor');
+    const intEditorTitle = document.getElementById('int-editor-title');
+    const intAlert       = document.getElementById('int-alert');
+    const intFormMode    = document.getElementById('int-form-mode');
+    const intJsonMode    = document.getElementById('int-json-mode');
+    const intJson        = document.getElementById('int-json');
+    const intId          = document.getElementById('int-id');
+    const intName        = document.getElementById('int-name');
+    const intBaseUrl     = document.getElementById('int-base-url');
+    const intPath        = document.getElementById('int-path');
+    const intMethod      = document.getElementById('int-method');
+    const intAuthType    = document.getElementById('int-auth-type');
+    const intAuthFields  = document.getElementById('int-auth-fields');
+    const intHeaders     = document.getElementById('int-headers');
+    const intQuery       = document.getElementById('int-query');
+    const intAllowPrivate= document.getElementById('int-allow-private');
+    const intItemsPath   = document.getElementById('int-items-path');
+    const intExternalId  = document.getElementById('int-external-id');
+    const intProjectMode = document.getElementById('int-project-mode');
+    const intProjectValue= document.getElementById('int-project-value');
+    const intProjectField= document.getElementById('int-project-field');
+    const intTextTemplate= document.getElementById('int-text-template');
+    const intFieldChips  = document.getElementById('int-field-chips');
+    const intOnUpdate    = document.getElementById('int-on-update');
+    const intTestResult  = document.getElementById('int-test-result');
+    const intPreviewResult = document.getElementById('int-preview-result');
+    const intNewBtn      = document.getElementById('int-new-btn');
+    const intBackBtn     = document.getElementById('int-back-btn');
+    const intAddHeader   = document.getElementById('int-add-header');
+    const intAddQuery    = document.getElementById('int-add-query');
+    const intTestBtn     = document.getElementById('int-test-btn');
+    const intPreviewBtn  = document.getElementById('int-preview-btn');
+    const intSaveBtn     = document.getElementById('int-save-btn');
+    const intRunBtn      = document.getElementById('int-run-btn');
+    const intDeleteBtn   = document.getElementById('int-delete-btn');
+
+    let intJsonModeOn = false;
+
+    function hideIntegrationsView() {
+        if (integrationsView) integrationsView.classList.add('hidden');
+    }
+
+    function openIntegrations() {
+        if (!integrationsView) return;
+        document.body.classList.remove('graph-mode');
+        currentCategory = null;
+        currentWeekDay = null;
+        currentTag = null;
+        if (emptyState)    emptyState.classList.add('hidden');
+        if (projectView)   projectView.classList.add('hidden');
+        if (dashboardView) dashboardView.classList.add('hidden');
+        if (graphView)     graphView.classList.add('hidden');
+        if (perfilView)    perfilView.classList.add('hidden');
+        graphStop();
+        integrationsView.classList.remove('hidden');
+        intShowList();
+        loadIntegrations();
+    }
+
+    function intShowList() {
+        if (intListPanel) intListPanel.classList.remove('hidden');
+        if (intEditor)    intEditor.classList.add('hidden');
+    }
+
+    function intShowEditor() {
+        if (intListPanel) intListPanel.classList.add('hidden');
+        if (intEditor)    intEditor.classList.remove('hidden');
+    }
+
+    function intAlertShow(msg, isError, hide) {
+        if (!intAlert) return;
+        if (hide || !msg) {
+            intAlert.classList.add('hidden');
+            intAlert.textContent = '';
+            return;
+        }
+        intAlert.textContent = msg;
+        intAlert.className = 'auth-alert ' + (isError ? 'auth-alert-error' : 'auth-alert-ok');
+        intAlert.classList.remove('hidden');
+    }
+
+    function intValOf(id) {
+        const el = document.getElementById(id);
+        return el ? el.value : '';
+    }
+
+    function intAuthFieldRow(label, id, value, type) {
+        const wrap = document.createElement('div');
+        const lbl = document.createElement('label');
+        lbl.className = 'auth-label';
+        lbl.setAttribute('for', id);
+        lbl.textContent = label;
+        const inp = document.createElement('input');
+        inp.className = 'auth-input';
+        inp.id = id;
+        inp.type = type || 'text';
+        inp.value = value || '';
+        inp.autocomplete = 'off';
+        wrap.appendChild(lbl);
+        wrap.appendChild(inp);
+        return wrap;
+    }
+
+    function renderAuthFields(type, vals) {
+        vals = vals || {};
+        if (!intAuthFields) return;
+        intAuthFields.innerHTML = '';
+        if (type === 'api_key') {
+            intAuthFields.appendChild(intAuthFieldRow('Header', 'int-auth-header', vals.header || 'X-API-Key', 'text'));
+            intAuthFields.appendChild(intAuthFieldRow('Valor', 'int-auth-value', vals.value || '', 'text'));
+        } else if (type === 'bearer') {
+            intAuthFields.appendChild(intAuthFieldRow('Token', 'int-auth-token', vals.token || '', 'text'));
+        } else if (type === 'basic') {
+            intAuthFields.appendChild(intAuthFieldRow('Usuário', 'int-auth-username', vals.username || '', 'text'));
+            intAuthFields.appendChild(intAuthFieldRow('Senha', 'int-auth-password', vals.password || '', 'password'));
+        }
+    }
+
+    function readAuth() {
+        const type = intAuthType.value;
+        const auth = { type };
+        if (type === 'api_key') {
+            auth.header = intValOf('int-auth-header');
+            auth.value = intValOf('int-auth-value');
+        } else if (type === 'bearer') {
+            auth.token = intValOf('int-auth-token');
+        } else if (type === 'basic') {
+            auth.username = intValOf('int-auth-username');
+            auth.password = intValOf('int-auth-password');
+        }
+        return auth;
+    }
+
+    function kvAddRow(container, key, value) {
+        if (!container) return;
+        const row = document.createElement('div');
+        row.className = 'int-kv-row';
+        const kEl = document.createElement('input');
+        kEl.className = 'auth-input int-kv-key';
+        kEl.type = 'text';
+        kEl.placeholder = 'chave';
+        kEl.value = key || '';
+        const vEl = document.createElement('input');
+        vEl.className = 'auth-input int-kv-val';
+        vEl.type = 'text';
+        vEl.placeholder = 'valor';
+        vEl.value = value || '';
+        const del = document.createElement('button');
+        del.className = 'int-kv-del';
+        del.type = 'button';
+        del.setAttribute('aria-label', 'Remover');
+        del.textContent = '×';
+        del.addEventListener('click', () => row.remove());
+        row.appendChild(kEl);
+        row.appendChild(vEl);
+        row.appendChild(del);
+        container.appendChild(row);
+    }
+
+    function collectKv(container) {
+        const obj = {};
+        if (!container) return obj;
+        container.querySelectorAll('.int-kv-row').forEach(row => {
+            const k = row.querySelector('.int-kv-key').value.trim();
+            const v = row.querySelector('.int-kv-val').value;
+            if (k) obj[k] = v;
+        });
+        return obj;
+    }
+
+    function updateProjectModeUI() {
+        const isField = intProjectMode.value === 'field';
+        intProjectValue.classList.toggle('hidden', isField);
+        intProjectField.classList.toggle('hidden', !isField);
+    }
+
+    function syncProjectDropdown(selected) {
+        const names = Array.from(document.querySelectorAll('.project-nav'))
+            .map(el => normText(el.textContent)).filter(Boolean);
+        intProjectValue.innerHTML = '';
+        names.forEach(n => {
+            const opt = document.createElement('option');
+            opt.value = n;
+            opt.textContent = n;
+            if (n === selected) opt.selected = true;
+            intProjectValue.appendChild(opt);
+        });
+        if (selected && !names.includes(selected)) {
+            const opt = document.createElement('option');
+            opt.value = selected;
+            opt.textContent = selected;
+            opt.selected = true;
+            intProjectValue.appendChild(opt);
+        }
+    }
+
+    function insertAtCursor(textarea, text) {
+        const start = textarea.selectionStart != null ? textarea.selectionStart : textarea.value.length;
+        const end = textarea.selectionEnd != null ? textarea.selectionEnd : textarea.value.length;
+        textarea.value = textarea.value.slice(0, start) + text + textarea.value.slice(end);
+        textarea.focus();
+        const pos = start + text.length;
+        textarea.setSelectionRange(pos, pos);
+    }
+
+    function renderFieldChips(fields) {
+        if (!intFieldChips) return;
+        intFieldChips.innerHTML = '';
+        (fields || []).forEach(f => {
+            const chip = document.createElement('button');
+            chip.type = 'button';
+            chip.className = 'int-chip';
+            chip.textContent = f;
+            chip.addEventListener('click', () => insertAtCursor(intTextTemplate, `{{ ${f} }}`));
+            intFieldChips.appendChild(chip);
+        });
+    }
+
+    function getFormConfig() {
+        const projectMode = intProjectMode.value;
+        const project = projectMode === 'field'
+            ? { mode: 'field', field: intProjectField.value.trim() }
+            : { mode: 'fixed', value: intProjectValue.value };
+        return {
+            connection: {
+                base_url: intBaseUrl.value.trim(),
+                path: intPath.value.trim(),
+                method: intMethod.value,
+                headers: collectKv(intHeaders),
+                query: collectKv(intQuery),
+                auth: readAuth(),
+                allow_private: intAllowPrivate.checked,
+            },
+            items_path: intItemsPath.value.trim(),
+            mapping: {
+                external_id: intExternalId.value.trim() || 'id',
+                project: project,
+                text_template: intTextTemplate.value,
+                due_date: { mode: 'none' },
+            },
+            on_update: intOnUpdate.value,
+        };
+    }
+
+    function applyConfig(cfg) {
+        cfg = cfg || {};
+        const conn = cfg.connection || {};
+        const map = cfg.mapping || {};
+        intBaseUrl.value = conn.base_url || '';
+        intPath.value = conn.path || '';
+        intMethod.value = (conn.method || 'GET').toUpperCase();
+        intAllowPrivate.checked = !!conn.allow_private;
+        const auth = conn.auth || { type: 'none' };
+        intAuthType.value = auth.type || 'none';
+        renderAuthFields(intAuthType.value, auth);
+        intHeaders.innerHTML = '';
+        Object.entries(conn.headers || {}).forEach(([k, v]) => kvAddRow(intHeaders, k, v));
+        intQuery.innerHTML = '';
+        Object.entries(conn.query || {}).forEach(([k, v]) => kvAddRow(intQuery, k, v));
+        intItemsPath.value = cfg.items_path || '';
+        intExternalId.value = map.external_id || '';
+        const proj = map.project || { mode: 'fixed' };
+        intProjectMode.value = proj.mode === 'field' ? 'field' : 'fixed';
+        syncProjectDropdown(proj.mode === 'field' ? '' : (proj.value || ''));
+        intProjectField.value = proj.field || '';
+        updateProjectModeUI();
+        intTextTemplate.value = map.text_template || '';
+        intOnUpdate.value = cfg.on_update || 'skip';
+    }
+
+    function fillForm(integ) {
+        intId.value = integ && integ.id ? integ.id : '';
+        intName.value = integ && integ.name ? integ.name : '';
+        applyConfig((integ && integ.config) || {});
+        renderFieldChips([]);
+        if (intTestResult) intTestResult.innerHTML = '<p class="int-muted">Rode "Testar conexão" para carregar o payload.</p>';
+        if (intPreviewResult) intPreviewResult.innerHTML = '';
+    }
+
+    function setJsonMode(on) {
+        intJsonModeOn = on;
+        document.querySelectorAll('[data-int-mode]').forEach(b => {
+            b.classList.toggle('int-tab-btn--active', b.dataset.intMode === (on ? 'json' : 'form'));
+        });
+        intFormMode.classList.toggle('hidden', on);
+        intJsonMode.classList.toggle('hidden', !on);
+        if (on) {
+            intJson.value = JSON.stringify(getFormConfig(), null, 2);
+        } else {
+            try {
+                applyConfig(JSON.parse(intJson.value));
+            } catch (e) {
+                // mantém o formulário como estava se o JSON estiver inválido
+            }
+        }
+    }
+
+    async function loadIntegrations() {
+        if (!intListEl) return;
+        try {
+            const res = await apiFetch('/api/integrations');
+            if (!res.ok) return;
+            renderIntList(await res.json());
+        } catch (e) {
+            console.error('Erro ao listar integrações:', e);
+        }
+    }
+
+    function renderIntList(list) {
+        intListEl.innerHTML = '';
+        if (!list.length) {
+            intEmptyEl.classList.remove('hidden');
+            return;
+        }
+        intEmptyEl.classList.add('hidden');
+        list.forEach(integ => {
+            const status = integ.last_status || 'never';
+            const statusText = status === 'ok' ? 'OK' : (status === 'error' ? 'Erro' : 'Nunca rodou');
+            const baseUrl = (integ.config && integ.config.connection && integ.config.connection.base_url) || '';
+            const card = document.createElement('div');
+            card.className = 'int-card';
+            card.innerHTML = `
+                <div class="int-card-main">
+                    <div class="int-card-title">${escapeHTML(integ.name)}</div>
+                    <div class="int-card-sub">${escapeHTML(baseUrl)}</div>
+                </div>
+                <div class="int-card-status int-status-${escapeHTML(status)}">${statusText}</div>
+                <div class="int-card-actions">
+                    <button class="int-text-btn" data-act="edit">Editar</button>
+                    <button class="int-text-btn int-btn-runcard" data-act="run">Executar</button>
+                </div>`;
+            card.querySelector('[data-act="edit"]').addEventListener('click', () => openEditorById(integ.id));
+            card.querySelector('[data-act="run"]').addEventListener('click', () => runById(integ.id));
+            intListEl.appendChild(card);
+        });
+    }
+
+    async function openEditorById(id) {
+        try {
+            const res = await apiFetch(`/api/integrations/${id}`);
+            if (!res.ok) { showToast('Falha ao carregar integração'); return; }
+            const integ = await res.json();
+            intAlertShow('', false, true);
+            setJsonMode(false);
+            fillForm(integ);
+            intEditorTitle.textContent = integ.name;
+            intRunBtn.classList.remove('hidden');
+            intDeleteBtn.classList.remove('hidden');
+            intShowEditor();
+        } catch (e) {
+            showToast('Erro ao carregar integração');
+        }
+    }
+
+    function openNewIntegration() {
+        intAlertShow('', false, true);
+        setJsonMode(false);
+        fillForm(null);
+        intEditorTitle.textContent = 'Nova integração';
+        intRunBtn.classList.add('hidden');
+        intDeleteBtn.classList.add('hidden');
+        intShowEditor();
+    }
+
+    async function onTest() {
+        intTestResult.innerHTML = '<p class="int-muted">Testando…</p>';
+        const cfg = getFormConfig();
+        try {
+            const res = await apiFetch('/api/integrations/test', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ connection: cfg.connection, items_path: cfg.items_path }),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                intTestResult.innerHTML = `<div class="int-error">${escapeHTML(data.error || 'Falha no teste.')}</div>`;
+                return;
+            }
+            renderTestResult(data);
+        } catch (e) {
+            intTestResult.innerHTML = '<div class="int-error">Erro de rede ao testar.</div>';
+        }
+    }
+
+    function renderTestResult(data) {
+        const arrays = data.arrays || [];
+        const fields = data.fields || [];
+        let html = '';
+        if (arrays.length) {
+            html += '<div class="int-muted">Arrays encontrados (clique para usar como caminho dos itens):</div><div class="int-chips">';
+            arrays.forEach(a => {
+                const label = (a.path || '(raiz)') + ` [${a.count}]`;
+                html += `<button type="button" class="int-chip int-chip-array" data-path="${escapeHTML(a.path)}">${escapeHTML(label)}</button>`;
+            });
+            html += '</div>';
+        }
+        html += `<p class="int-muted">${data.item_count} item(ns) no caminho atual.</p>`;
+        const sampleStr = JSON.stringify(data.sample_item, null, 2) || '';
+        html += `<pre class="int-json-preview">${escapeHTML(sampleStr.slice(0, 4000))}</pre>`;
+        intTestResult.innerHTML = html;
+        intTestResult.querySelectorAll('.int-chip-array').forEach(btn => {
+            btn.addEventListener('click', () => {
+                intItemsPath.value = btn.getAttribute('data-path') || '';
+                onTest();
+            });
+        });
+        renderFieldChips(fields);
+        if (!intExternalId.value && fields.indexOf('id') !== -1) intExternalId.value = 'id';
+    }
+
+    async function onPreview() {
+        intPreviewResult.innerHTML = '<p class="int-muted">Gerando preview…</p>';
+        const body = { config: getFormConfig() };
+        if (intId.value) body.id = parseInt(intId.value, 10);
+        try {
+            const res = await apiFetch('/api/integrations/preview', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                intPreviewResult.innerHTML = `<div class="int-error">${escapeHTML(data.error || 'Falha no preview.')}</div>`;
+                return;
+            }
+            renderPreview(data);
+        } catch (e) {
+            intPreviewResult.innerHTML = '<div class="int-error">Erro de rede no preview.</div>';
+        }
+    }
+
+    function renderPreview(data) {
+        const rows = data.preview || [];
+        if (!rows.length) {
+            intPreviewResult.innerHTML = '<p class="int-muted">Nenhum item para importar.</p>';
+            return;
+        }
+        let html = `<p class="int-muted">${data.total_items} item(ns) no total; mostrando ${rows.length}.</p>`;
+        html += '<table class="int-table"><thead><tr><th>ID</th><th>Projeto</th><th>Texto</th><th></th></tr></thead><tbody>';
+        rows.forEach(r => {
+            html += `<tr class="${r.valid ? '' : 'int-row-invalid'}">
+                <td>${escapeHTML(r.external_id)}</td>
+                <td>${escapeHTML(r.project)}</td>
+                <td>${escapeHTML(r.text)}</td>
+                <td>${r.valid ? '✓' : '⚠'}</td></tr>`;
+        });
+        html += '</tbody></table>';
+        intPreviewResult.innerHTML = html;
+    }
+
+    async function onSave() {
+        const name = intName.value.trim();
+        if (!name) { intAlertShow('Dê um nome à integração.', true); return; }
+        let config;
+        if (intJsonModeOn) {
+            try {
+                config = JSON.parse(intJson.value);
+            } catch (e) {
+                intAlertShow('JSON inválido.', true);
+                return;
+            }
+        } else {
+            config = getFormConfig();
+        }
+        const editingId = intId.value ? parseInt(intId.value, 10) : null;
+        try {
+            const res = editingId
+                ? await apiFetch(`/api/integrations/${editingId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, config }),
+                })
+                : await apiFetch('/api/integrations', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, config }),
+                });
+            const data = await res.json();
+            if (!res.ok) { intAlertShow(data.error || 'Falha ao salvar.', true); return; }
+            if (!editingId && data.id) intId.value = data.id;
+            intEditorTitle.textContent = name;
+            intRunBtn.classList.remove('hidden');
+            intDeleteBtn.classList.remove('hidden');
+            intAlertShow('Integração salva.', false);
+            showToast('Integração salva');
+            loadIntegrations();
+        } catch (e) {
+            intAlertShow('Erro de rede ao salvar.', true);
+        }
+    }
+
+    async function onRun() {
+        if (!intId.value) { intAlertShow('Salve a integração antes de executar.', true); return; }
+        intAlertShow('Executando…', false);
+        try {
+            const res = await apiFetch(`/api/integrations/${parseInt(intId.value, 10)}/run`, { method: 'POST' });
+            const data = await res.json();
+            if (!res.ok) { intAlertShow(data.error || 'Falha ao executar.', true); return; }
+            intAlertShow(`Importado: ${data.created} criada(s), ${data.updated} atualizada(s), ${data.skipped} ignorada(s).`, false);
+            showToast('Integração executada');
+            await fetchInitialData();
+            loadIntegrations();
+        } catch (e) {
+            intAlertShow('Erro de rede ao executar.', true);
+        }
+    }
+
+    async function runById(id) {
+        showToast('Executando integração…');
+        try {
+            const res = await apiFetch(`/api/integrations/${id}/run`, { method: 'POST' });
+            const data = await res.json();
+            if (!res.ok) { showToast(data.error || 'Falha ao executar'); return; }
+            showToast(`Criadas: ${data.created} • ignoradas: ${data.skipped}`);
+            await fetchInitialData();
+            loadIntegrations();
+        } catch (e) {
+            showToast('Erro ao executar');
+        }
+    }
+
+    async function onDelete() {
+        if (!intId.value) return;
+        const ok = await _confirmModal(
+            'Excluir integração?',
+            'A configuração será removida. As tarefas já criadas permanecem.'
+        );
+        if (!ok) return;
+        try {
+            const res = await apiFetch(`/api/integrations/${parseInt(intId.value, 10)}`, { method: 'DELETE' });
+            if (res.ok) {
+                showToast('Integração excluída');
+                intShowList();
+                loadIntegrations();
+            } else {
+                intAlertShow('Falha ao excluir.', true);
+            }
+        } catch (e) {
+            intAlertShow('Erro de rede ao excluir.', true);
+        }
+    }
+
+    if (integrationsView) {
+        intNewBtn.addEventListener('click', openNewIntegration);
+        intBackBtn.addEventListener('click', () => { intShowList(); loadIntegrations(); });
+        intAuthType.addEventListener('change', () => renderAuthFields(intAuthType.value, {}));
+        intAddHeader.addEventListener('click', () => kvAddRow(intHeaders, '', ''));
+        intAddQuery.addEventListener('click', () => kvAddRow(intQuery, '', ''));
+        intProjectMode.addEventListener('change', updateProjectModeUI);
+        intTestBtn.addEventListener('click', onTest);
+        intPreviewBtn.addEventListener('click', onPreview);
+        intSaveBtn.addEventListener('click', onSave);
+        intRunBtn.addEventListener('click', onRun);
+        intDeleteBtn.addEventListener('click', onDelete);
+        document.querySelectorAll('[data-int-mode]').forEach(b => {
+            b.addEventListener('click', () => setJsonMode(b.dataset.intMode === 'json'));
+        });
+    }
 
 });

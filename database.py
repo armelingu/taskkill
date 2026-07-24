@@ -170,4 +170,42 @@ def init_db():
         for _row in cursor.fetchall():
             cursor.execute("INSERT OR IGNORE INTO projects (name) VALUES (?)", (_row['project'],))
 
+        # Integrações externas (genérico: API REST/JSON -> tasks)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS integrations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                enabled INTEGER NOT NULL DEFAULT 1,
+                config_json TEXT NOT NULL,
+                last_run_at TEXT,
+                last_status TEXT NOT NULL DEFAULT 'never',
+                last_error TEXT,
+                last_item_count INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT,
+                updated_at TEXT
+            )
+        ''')
+
+        # Itens já importados por integração (dedup + vínculo com a task criada)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS integration_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                integration_id INTEGER NOT NULL,
+                external_id TEXT NOT NULL,
+                task_id INTEGER,
+                content_hash TEXT,
+                created_at TEXT,
+                updated_at TEXT,
+                FOREIGN KEY (integration_id) REFERENCES integrations(id) ON DELETE CASCADE
+            )
+        ''')
+        cursor.execute(
+            'CREATE UNIQUE INDEX IF NOT EXISTS idx_integration_items_unique '
+            'ON integration_items(integration_id, external_id)'
+        )
+        cursor.execute(
+            'CREATE INDEX IF NOT EXISTS idx_integration_items_integration '
+            'ON integration_items(integration_id)'
+        )
+
         conn.commit()

@@ -57,6 +57,11 @@
                     <div class="skeleton-item" id="nav-graph" aria-label="Visualização em gráfico">
                         Gráfico
                     </div>
+                    {% if user and user.is_admin %}
+                    <div class="skeleton-item" id="nav-integrations" aria-label="Integrações externas">
+                        Integrações
+                    </div>
+                    {% endif %}
                 </div>
             </section>
 
@@ -206,6 +211,159 @@
 
                     </div><!-- .perfil-content -->
                 </div><!-- .perfil-inline-body -->
+            </div>
+
+            <!-- Integrações externas (admin) -->
+            <div id="integrations-view" class="integrations-view hidden">
+
+                <!-- Lista de integrações -->
+                <div id="int-list-panel">
+                    <header class="project-header int-header">
+                        <h1 class="project-title">Integrações</h1>
+                        <button id="int-new-btn" class="auth-btn int-inline-btn" type="button">Nova integração</button>
+                    </header>
+                    <p class="int-intro">Importe itens de qualquer API REST/JSON como tarefas. Configure a conexão, mapeie os campos e rode quando quiser.</p>
+                    <div id="int-list" class="int-list"></div>
+                    <div id="int-empty" class="int-empty hidden">Nenhuma integração ainda. Clique em "Nova integração" para começar.</div>
+                </div>
+
+                <!-- Editor / wizard -->
+                <div id="int-editor" class="int-editor hidden">
+                    <header class="project-header int-header">
+                        <h1 class="project-title" id="int-editor-title">Nova integração</h1>
+                        <button id="int-back-btn" class="int-text-btn" type="button">← Voltar</button>
+                    </header>
+
+                    <div id="int-alert" class="auth-alert hidden" role="alert"></div>
+
+                    <div class="int-mode-toggle">
+                        <button class="int-tab-btn int-tab-btn--active" data-int-mode="form" type="button">Formulário</button>
+                        <button class="int-tab-btn" data-int-mode="json" type="button">Editar JSON</button>
+                    </div>
+
+                    <!-- Modo formulário -->
+                    <div id="int-form-mode">
+                        <input type="hidden" id="int-id">
+
+                        <section class="int-section">
+                            <label class="auth-label" for="int-name">Nome da integração</label>
+                            <input class="auth-input" id="int-name" type="text" maxlength="80" placeholder="Ex: Chamados do Suporte">
+                        </section>
+
+                        <section class="int-section">
+                            <h2 class="int-section-title">1. Conexão</h2>
+                            <div class="int-grid">
+                                <div>
+                                    <label class="auth-label" for="int-base-url">Base URL</label>
+                                    <input class="auth-input" id="int-base-url" type="text" placeholder="https://api.exemplo.com">
+                                </div>
+                                <div>
+                                    <label class="auth-label" for="int-path">Caminho (path)</label>
+                                    <input class="auth-input" id="int-path" type="text" placeholder="/v1/tickets">
+                                </div>
+                                <div class="int-narrow">
+                                    <label class="auth-label" for="int-method">Método</label>
+                                    <select class="auth-input" id="int-method">
+                                        <option value="GET">GET</option>
+                                        <option value="POST">POST</option>
+                                    </select>
+                                </div>
+                                <div class="int-narrow">
+                                    <label class="auth-label" for="int-auth-type">Autenticação</label>
+                                    <select class="auth-input" id="int-auth-type">
+                                        <option value="none">Nenhuma</option>
+                                        <option value="api_key">API Key (header)</option>
+                                        <option value="bearer">Bearer token</option>
+                                        <option value="basic">Basic (usuário/senha)</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div id="int-auth-fields" class="int-auth-fields"></div>
+
+                            <label class="auth-label">Headers</label>
+                            <div id="int-headers" class="int-kv-list"></div>
+                            <button class="int-text-btn" id="int-add-header" type="button">+ header</button>
+
+                            <label class="auth-label">Query params</label>
+                            <div id="int-query" class="int-kv-list"></div>
+                            <button class="int-text-btn" id="int-add-query" type="button">+ query param</button>
+
+                            <label class="int-checkbox">
+                                <input type="checkbox" id="int-allow-private">
+                                Permitir rede interna (IPs privados) — use com cautela
+                            </label>
+
+                            <div class="int-actions-row">
+                                <button class="auth-btn int-inline-btn int-btn-secondary" id="int-test-btn" type="button">Testar conexão</button>
+                            </div>
+                        </section>
+
+                        <section class="int-section">
+                            <h2 class="int-section-title">2. Payload</h2>
+                            <div id="int-test-result" class="int-test-result">
+                                <p class="int-muted">Rode "Testar conexão" para carregar o payload.</p>
+                            </div>
+                        </section>
+
+                        <section class="int-section">
+                            <h2 class="int-section-title">3. Mapeamento</h2>
+                            <div class="int-grid">
+                                <div>
+                                    <label class="auth-label" for="int-items-path">Caminho dos itens</label>
+                                    <input class="auth-input" id="int-items-path" type="text" placeholder="data.tickets">
+                                </div>
+                                <div>
+                                    <label class="auth-label" for="int-external-id">Campo de ID único (dedup)</label>
+                                    <input class="auth-input" id="int-external-id" type="text" placeholder="id">
+                                </div>
+                                <div class="int-narrow">
+                                    <label class="auth-label" for="int-project-mode">Projeto</label>
+                                    <select class="auth-input" id="int-project-mode">
+                                        <option value="fixed">Fixo</option>
+                                        <option value="field">De um campo</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="auth-label" for="int-project-value">Projeto de destino</label>
+                                    <select class="auth-input" id="int-project-value"></select>
+                                    <input class="auth-input hidden" id="int-project-field" type="text" placeholder="queue">
+                                </div>
+                            </div>
+                            <label class="auth-label" for="int-text-template">Texto da tarefa (template)</label>
+                            <textarea class="auth-input int-textarea" id="int-text-template" rows="2" placeholder="{{ id }} — {{ subject }}"></textarea>
+                            <div id="int-field-chips" class="int-chips"></div>
+                            <div class="int-narrow">
+                                <label class="auth-label" for="int-on-update">Se já importado</label>
+                                <select class="auth-input" id="int-on-update">
+                                    <option value="skip">Ignorar (não duplicar)</option>
+                                    <option value="update_text">Atualizar o texto</option>
+                                </select>
+                            </div>
+                        </section>
+
+                        <section class="int-section">
+                            <h2 class="int-section-title">4. Preview</h2>
+                            <div class="int-actions-row">
+                                <button class="auth-btn int-inline-btn int-btn-secondary" id="int-preview-btn" type="button">Gerar preview</button>
+                            </div>
+                            <div id="int-preview-result" class="int-preview-result"></div>
+                        </section>
+                    </div>
+
+                    <!-- Modo JSON -->
+                    <div id="int-json-mode" class="hidden">
+                        <label class="auth-label" for="int-json">Configuração (JSON)</label>
+                        <textarea class="auth-input int-json-editor" id="int-json" rows="18" spellcheck="false"></textarea>
+                        <p class="int-muted">Segredos aparecem mascarados (••••); deixe assim para preservar o valor salvo.</p>
+                    </div>
+
+                    <div class="int-footer-actions">
+                        <button class="auth-btn int-inline-btn" id="int-save-btn" type="button">Salvar</button>
+                        <button class="auth-btn int-inline-btn int-btn-success hidden" id="int-run-btn" type="button">Executar agora</button>
+                        <button class="int-text-btn int-danger hidden" id="int-delete-btn" type="button">Excluir</button>
+                    </div>
+                </div>
             </div>
 
             <!-- Visualização do Projeto (que vai mudar dinamicamente) -->

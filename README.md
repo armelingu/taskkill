@@ -36,7 +36,8 @@ A maioria dos gerenciadores de tarefas é lista ou kanban. O Taskkill não tenta
 taskkill/
 ├── app.py                     # Inicialização Flask, middlewares e headers de segurança
 ├── database.py                # Schema, migrações e bootstrap do banco SQLite
-├── routes.py                  # Blueprints REST (tasks, projects, auth, perfil, backup)
+├── routes.py                  # Blueprints REST (tasks, projects, auth, perfil, backup, integrações)
+├── integrations.py            # Núcleo das integrações externas (REST/JSON -> tasks)
 ├── serve.py                   # Servidor WSGI local (waitress)
 ├── requirements.txt
 ├── .env.example
@@ -135,7 +136,22 @@ O certificado TLS é emitido automaticamente pelo Caddy via Let's Encrypt. Porta
 
 ## Integrações externas
 
-Módulo em desenvolvimento. O objetivo é oferecer um sistema genérico e configurável para importar dados de fontes externas — APIs REST, bancos SQL, webhooks — e criar tasks automaticamente no Taskkill, com suporte a mapeamento de campos, deduplicação e controle de status.
+Módulo genérico para importar itens de uma API REST/JSON como tarefas, configurado por uma interface amigável (ou por JSON bruto). Acessível pelo item **Integrações** no menu lateral (apenas admin).
+
+**Fluxo (wizard):**
+
+1. **Conexão** — nome, base URL, path, método (GET/POST), headers, query params e autenticação (nenhuma, API key em header, Bearer token ou Basic).
+2. **Payload** — botão "Testar conexão" busca a resposta e sugere os caminhos de array (`items_path`) e os campos disponíveis.
+3. **Mapeamento** — campo de ID único (deduplicação), projeto de destino (fixo ou vindo de um campo) e o texto da tarefa via template seguro `{{ campo }}`.
+4. **Preview & executar** — "Gerar preview" mostra (dry-run) as tarefas que seriam criadas; "Executar agora" importa de fato.
+
+O botão **Editar JSON** expõe a mesma configuração declarativa para importar/exportar/editar diretamente.
+
+**Modelo de dados:** `integrations` (config + status da última execução) e `integration_items` (deduplicação por `external_id` e vínculo com a task criada).
+
+**Segurança:** endpoints restritos a admin + CSRF; guarda de SSRF (bloqueia por padrão IPs privados/loopback/metadata de cloud — há um toggle "permitir rede interna"); timeout de 10s e limite de 5 MB na resposta; segredos mascarados nas respostas da API e preservados em atualizações. O mapeamento usa apenas templates `{{ campo }}` — nunca executa código arbitrário.
+
+**Fora do MVP (próximas fases):** agendamento automático (polling), fontes SQL e webhooks, criptografia dos segredos em repouso e mapeamento de `due_date`.
 
 ## Segurança
 
