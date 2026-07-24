@@ -30,6 +30,9 @@ MAX_ITEMS_PER_RUN = 500
 PREVIEW_LIMIT = 20
 MAX_TEXT_LEN = 1000                    # espelha routes.MAX_TEXT_LEN
 MAX_PROJECT_LEN = 18                   # espelha routes.MAX_PROJECT_LEN
+# Dias da semana válidos p/ due_date (espelha routes.ALLOWED_DUE_DAYS).
+# No Taskkill, o "prazo" da tarefa é um dia da semana, não uma data.
+ALLOWED_DUE_DAYS = {'', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'}
 
 ALLOWED_METHODS = {'GET', 'POST'}
 SECRET_MASK = '••••••••'
@@ -268,7 +271,23 @@ def build_task_from_item(item, mapping):
     if len(text) > MAX_TEXT_LEN:
         text = text[:MAX_TEXT_LEN]
 
-    return {'external_id': external_id, 'project': project, 'text': text}
+    due_date = _resolve_due_date(mapping.get('due_date'), item)
+
+    return {'external_id': external_id, 'project': project, 'text': text, 'due_date': due_date}
+
+
+def _resolve_due_date(due_cfg, item):
+    """Resolve o dia da semana (Segunda–Sexta) da tarefa a partir do mapeamento."""
+    due_cfg = due_cfg or {}
+    mode = (due_cfg.get('mode') or 'none').lower()
+    if mode == 'fixed':
+        due = str(due_cfg.get('value') or '').strip()
+    elif mode == 'field':
+        val = resolve_path(item, due_cfg.get('field') or '')
+        due = '' if val is None else str(val).strip()
+    else:
+        due = ''
+    return due if due in ALLOWED_DUE_DAYS else ''
 
 
 # ── Execução (preview e importação real) ───────────────────────────
@@ -296,6 +315,7 @@ def run_config(config, dry_run=True, integration_id=None, conn=None):
             'external_id': b['external_id'],
             'project': b['project'],
             'text': b['text'],
+            'due_date': b.get('due_date', ''),
             'valid': bool(b['external_id'] and b['project'] and b['text']),
         } for b in built[:PREVIEW_LIMIT]]
         return {
@@ -313,50 +333,61 @@ def run_config(config, dry_run=True, integration_id=None, conn=None):
 
     for b in built:
         ext, project, text = b['external_id'], b['project'], b['text']
+        due = b.get('due_date', '')
         if not ext or not project or not text:
             skipped += 1
             continue
-
-        # Garante o projeto na tabela (para aparecer no sidebar).
-        conn.execute('INSERT OR IGNORE INTO projects (name) VALUES (?)', (project,))
-
-        existing = conn.execute(
-            'SELECT id, task_id FROM integration_items '
-            'WHERE integration_id = ? AND external_id = ?',
-            (integration_id, ext)
-        ).fetchone()
-
-        if existing:
-            if on_update == 'update_text' and existing['task_id']:
-                conn.execute('UPDATE tasks SET text = ? WHERE id = ?', (text, existing['task_id']))
-                conn.execute('UPDATE integration_items SET updated_at = ? WHERE id = ?',
-                             (now_iso, existing['id']))
-                updated += 1
-            else:
-                skipped += 1
-            continue
-
-        row = conn.execute(
-            'SELECT COALESCE(MAX(position), -1) AS max_pos FROM tasks '
-            'WHERE project = ? AND deleted = 0',
-            (project,)
-        ).fetchone()
-        new_pos = int(row['max_pos']) + 1
-
-        cur = conn.execute(
-            'INSERT INTO tasks (project, text, completed, created_date, due_date, position, deleted) '
-            'VALUES (?, ?, 0, ?, ?, ?, 0)',
-            (project, text, today_str, '', new_pos)
+        created_i, updated_i, skipped_i = _upsert_task(
+            conn, integration_id, ext, project, text, due, on_update, today_str, now_iso
         )
-        task_id = cur.lastrowid
-        conn.execute(
-            'INSERT INTO integration_items (integration_id, external_id, task_id, created_at, updated_at) '
-            'VALUES (?, ?, ?, ?, ?)',
-            (integration_id, ext, task_id, now_iso, now_iso)
-        )
-        created += 1
+        created += created_i
+        updated += updated_i
+        skipped += skipped_i
 
     return {'total_items': len(items), 'created': created, 'updated': updated, 'skipped': skipped}
+
+
+def _upsert_task(conn, integration_id, ext, project, text, due, on_update, today_str, now_iso):
+    """Cria ou atualiza uma task a partir de um item já resolvido. Retorna (created, updated, skipped)."""
+    if due not in ALLOWED_DUE_DAYS:
+        due = ''
+
+    # Garante o projeto na tabela (para aparecer no sidebar).
+    conn.execute('INSERT OR IGNORE INTO projects (name) VALUES (?)', (project,))
+
+    existing = conn.execute(
+        'SELECT id, task_id FROM integration_items '
+        'WHERE integration_id = ? AND external_id = ?',
+        (integration_id, ext)
+    ).fetchone()
+
+    if existing:
+        if on_update == 'update_text' and existing['task_id']:
+            conn.execute('UPDATE tasks SET text = ? WHERE id = ?', (text, existing['task_id']))
+            conn.execute('UPDATE integration_items SET updated_at = ? WHERE id = ?',
+                         (now_iso, existing['id']))
+            return (0, 1, 0)
+        return (0, 0, 1)
+
+    row = conn.execute(
+        'SELECT COALESCE(MAX(position), -1) AS max_pos FROM tasks '
+        'WHERE project = ? AND deleted = 0',
+        (project,)
+    ).fetchone()
+    new_pos = int(row['max_pos']) + 1
+
+    cur = conn.execute(
+        'INSERT INTO tasks (project, text, completed, created_date, due_date, position, deleted) '
+        'VALUES (?, ?, 0, ?, ?, ?, 0)',
+        (project, text, today_str, due, new_pos)
+    )
+    task_id = cur.lastrowid
+    conn.execute(
+        'INSERT INTO integration_items (integration_id, external_id, task_id, created_at, updated_at) '
+        'VALUES (?, ?, ?, ?, ?)',
+        (integration_id, ext, task_id, now_iso, now_iso)
+    )
+    return (1, 0, 0)
 
 
 def run_integration(integration_id, dry_run=False):
@@ -390,6 +421,54 @@ def run_integration(integration_id, dry_run=False):
         )
         conn.commit()
         return result
+
+
+def commit_items(integration_id, items, on_update='skip'):
+    """
+    Importação interativa: cria/atualiza tasks a partir de uma lista explícita
+    de itens já editados/selecionados pelo usuário na prévia.
+
+    items: lista de dicts {external_id, project, text, due_date}.
+    Aplica dedup por (integration_id, external_id) e a política on_update.
+    """
+    integration_id = int(integration_id)
+    on_update = (on_update or 'skip').lower()
+    items = items or []
+    if len(items) > MAX_ITEMS_PER_RUN:
+        items = items[:MAX_ITEMS_PER_RUN]
+
+    with get_db_connection() as conn:
+        row = conn.execute('SELECT id FROM integrations WHERE id = ?', (integration_id,)).fetchone()
+        if not row:
+            raise IntegrationError('Integração não encontrada.')
+
+        created = updated = skipped = 0
+        today_str = date.today().strftime('%d/%m/%Y')
+        now_iso = datetime.utcnow().isoformat()
+
+        for it in items:
+            it = it or {}
+            ext = str(it.get('external_id') or '').strip()
+            project = str(it.get('project') or '').strip()[:MAX_PROJECT_LEN]
+            text = str(it.get('text') or '').strip()[:MAX_TEXT_LEN]
+            due = str(it.get('due_date') or '').strip()
+            if not ext or not project or not text:
+                skipped += 1
+                continue
+            created_i, updated_i, skipped_i = _upsert_task(
+                conn, integration_id, ext, project, text, due, on_update, today_str, now_iso
+            )
+            created += created_i
+            updated += updated_i
+            skipped += skipped_i
+
+        conn.execute(
+            'UPDATE integrations SET last_run_at = ?, last_status = ?, last_error = NULL, '
+            'last_item_count = ? WHERE id = ?',
+            (datetime.utcnow().isoformat(), 'ok', created, integration_id)
+        )
+        conn.commit()
+        return {'created': created, 'updated': updated, 'skipped': skipped}
 
 
 # ── Mascaramento / merge de segredos ───────────────────────────────

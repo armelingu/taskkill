@@ -50,6 +50,12 @@ app = Flask(
 
 app.config['SECRET_KEY'] = os.environ.get('TASKKILL_SECRET_KEY') or secrets.token_urlsafe(32)
 
+# Recarrega templates do disco a cada render (sem isso, o Jinja mantém a versão
+# compilada em memória e mudanças no HTML só aparecem após reiniciar o servidor).
+# Custo é um stat() por render — irrelevante para o volume deste app.
+app.config['TEMPLATES_AUTO_RELOAD'] = True
+app.jinja_env.auto_reload = True
+
 # Limite global de payload para evitar abuso/acidente (DoS local via request gigante).
 # Precisa ser suficiente para upload de backup/restore do SQLite.
 app.config['MAX_CONTENT_LENGTH'] = int(os.environ.get('TASKKILL_MAX_CONTENT_LENGTH', str(10 * 1024 * 1024)))
@@ -74,6 +80,21 @@ app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(
 )
 app.config['SESSION_REFRESH_EACH_REQUEST'] = True
 
+# Cache-busting de assets estáticos: gera /static/<arquivo>?v=<mtime>.
+# Assim, ao editar CSS/JS, a URL muda e o navegador baixa a versão nova
+# (evita o clássico "recarreguei e continua o JS antigo em cache").
+@app.context_processor
+def inject_asset_helper():
+    def asset(filename):
+        try:
+            full = os.path.join(app.static_folder, filename)
+            version = int(os.path.getmtime(full))
+        except OSError:
+            version = 0
+        return f"{app.static_url_path}/{filename}?v={version}"
+    return {'asset': asset}
+
+
 # Configurações Iniciais de Banco (Tabela, SQLite)
 init_db()
 
@@ -90,6 +111,11 @@ if os.environ.get('TASKKILL_BEHIND_PROXY', '').strip() == '1':
 # ===================================================================
 @app.after_request
 def add_security_headers(response):
+    # Documentos HTML nunca devem ser cacheados: garante que mudanças na
+    # estrutura da página apareçam sempre no reload (os assets CSS/JS têm
+    # cache-busting via ?v=<mtime>, então podem ser cacheados normalmente).
+    if response.mimetype == 'text/html':
+        response.headers['Cache-Control'] = 'no-store'
     # Força navegadores a só usar HTTPS (somente faz sentido quando a requisição é HTTPS)
     if request.is_secure:
         response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'

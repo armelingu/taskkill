@@ -817,3 +817,19 @@ def run_integration_endpoint(integration_id):
     except IntegrationError as exc:
         return jsonify({"error": str(exc)}), 400
     return jsonify(result)
+
+
+@api_bp.route('/integrations/<int:integration_id>/import', methods=['POST'])
+@api_admin_required
+def import_integration_items(integration_id):
+    """Importação interativa: cria as tasks a partir das linhas editadas na prévia."""
+    data = request.get_json(silent=True) or {}
+    items = data.get('items')
+    if not isinstance(items, list):
+        return jsonify({"error": "Envie a lista de itens a importar."}), 400
+    on_update = data.get('on_update') or 'skip'
+    try:
+        result = integrations.commit_items(integration_id, items, on_update=on_update)
+    except IntegrationError as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify(result)

@@ -12,7 +12,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="{{ asset('css/style.css') }}">
 </head>
 
 <body>
@@ -227,7 +227,7 @@
                     <div id="int-empty" class="int-empty hidden">Nenhuma integração ainda. Clique em "Nova integração" para começar.</div>
                 </div>
 
-                <!-- Editor / wizard -->
+                <!-- Editor / wizard passo a passo -->
                 <div id="int-editor" class="int-editor hidden">
                     <header class="project-header int-header">
                         <h1 class="project-title" id="int-editor-title">Nova integração</h1>
@@ -236,133 +236,176 @@
 
                     <div id="int-alert" class="auth-alert hidden" role="alert"></div>
 
-                    <div class="int-mode-toggle">
-                        <button class="int-tab-btn int-tab-btn--active" data-int-mode="form" type="button">Formulário</button>
-                        <button class="int-tab-btn" data-int-mode="json" type="button">Editar JSON</button>
-                    </div>
+                    <!-- Indicador de passos -->
+                    <ol class="int-stepper" id="int-stepper">
+                        <li class="int-step is-active" data-step="1"><span class="int-step-num">1</span><span class="int-step-label">Conexão</span></li>
+                        <li class="int-step" data-step="2"><span class="int-step-num">2</span><span class="int-step-label">Itens</span></li>
+                        <li class="int-step" data-step="3"><span class="int-step-num">3</span><span class="int-step-label">Tarefa</span></li>
+                        <li class="int-step" data-step="4"><span class="int-step-num">4</span><span class="int-step-label">Revisar</span></li>
+                    </ol>
 
-                    <!-- Modo formulário -->
-                    <div id="int-form-mode">
-                        <input type="hidden" id="int-id">
+                    <input type="hidden" id="int-id">
 
-                        <section class="int-section">
-                            <label class="auth-label" for="int-name">Nome da integração</label>
-                            <input class="auth-input" id="int-name" type="text" maxlength="80" placeholder="Ex: Chamados do Suporte">
-                        </section>
+                    <!-- PASSO 1: Conexão -->
+                    <section class="int-step-panel" data-panel="1">
+                        <h2 class="int-step-title">De onde buscar os dados?</h2>
+                        <p class="int-step-help">Informe o endereço da API que devolve seus itens em JSON. Ela precisa estar acessível pela internet.</p>
 
-                        <section class="int-section">
-                            <h2 class="int-section-title">1. Conexão</h2>
-                            <div class="int-grid">
-                                <div>
-                                    <label class="auth-label" for="int-base-url">Base URL</label>
-                                    <input class="auth-input" id="int-base-url" type="text" placeholder="https://api.exemplo.com">
-                                </div>
-                                <div>
-                                    <label class="auth-label" for="int-path">Caminho (path)</label>
-                                    <input class="auth-input" id="int-path" type="text" placeholder="/v1/tickets">
-                                </div>
-                                <div class="int-narrow">
-                                    <label class="auth-label" for="int-method">Método</label>
-                                    <select class="auth-input" id="int-method">
-                                        <option value="GET">GET</option>
-                                        <option value="POST">POST</option>
-                                    </select>
-                                </div>
-                                <div class="int-narrow">
-                                    <label class="auth-label" for="int-auth-type">Autenticação</label>
-                                    <select class="auth-input" id="int-auth-type">
-                                        <option value="none">Nenhuma</option>
-                                        <option value="api_key">API Key (header)</option>
-                                        <option value="bearer">Bearer token</option>
-                                        <option value="basic">Basic (usuário/senha)</option>
-                                    </select>
-                                </div>
-                            </div>
+                        <label class="auth-label" for="int-name">Nome da integração</label>
+                        <input class="auth-input" id="int-name" type="text" maxlength="80" placeholder="Ex: Chamados do Suporte">
 
-                            <div id="int-auth-fields" class="int-auth-fields"></div>
+                        <label class="auth-label" for="int-url">URL da API</label>
+                        <input class="auth-input" id="int-url" type="text" placeholder="https://api.exemplo.com/v1/tickets">
 
-                            <label class="auth-label">Headers</label>
-                            <div id="int-headers" class="int-kv-list"></div>
-                            <button class="int-text-btn" id="int-add-header" type="button">+ header</button>
+                        <label class="auth-label" for="int-auth-type">Essa API precisa de autenticação?</label>
+                        <select class="auth-input" id="int-auth-type">
+                            <option value="none">Não precisa (aberta)</option>
+                            <option value="bearer">Sim — token de acesso</option>
+                            <option value="api_key">Sim — chave de API</option>
+                            <option value="basic">Sim — usuário e senha</option>
+                        </select>
+                        <div id="int-auth-fields" class="int-auth-fields"></div>
 
-                            <label class="auth-label">Query params</label>
-                            <div id="int-query" class="int-kv-list"></div>
-                            <button class="int-text-btn" id="int-add-query" type="button">+ query param</button>
-
-                            <label class="int-checkbox">
-                                <input type="checkbox" id="int-allow-private">
-                                Permitir rede interna (IPs privados) — use com cautela
-                            </label>
-
-                            <div class="int-actions-row">
-                                <button class="auth-btn int-inline-btn int-btn-secondary" id="int-test-btn" type="button">Testar conexão</button>
-                            </div>
-                        </section>
-
-                        <section class="int-section">
-                            <h2 class="int-section-title">2. Payload</h2>
-                            <div id="int-test-result" class="int-test-result">
-                                <p class="int-muted">Rode "Testar conexão" para carregar o payload.</p>
-                            </div>
-                        </section>
-
-                        <section class="int-section">
-                            <h2 class="int-section-title">3. Mapeamento</h2>
-                            <div class="int-grid">
-                                <div>
-                                    <label class="auth-label" for="int-items-path">Caminho dos itens</label>
-                                    <input class="auth-input" id="int-items-path" type="text" placeholder="data.tickets">
-                                </div>
-                                <div>
-                                    <label class="auth-label" for="int-external-id">Campo de ID único (dedup)</label>
-                                    <input class="auth-input" id="int-external-id" type="text" placeholder="id">
-                                </div>
-                                <div class="int-narrow">
-                                    <label class="auth-label" for="int-project-mode">Projeto</label>
-                                    <select class="auth-input" id="int-project-mode">
-                                        <option value="fixed">Fixo</option>
-                                        <option value="field">De um campo</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="auth-label" for="int-project-value">Projeto de destino</label>
-                                    <select class="auth-input" id="int-project-value"></select>
-                                    <input class="auth-input hidden" id="int-project-field" type="text" placeholder="queue">
-                                </div>
-                            </div>
-                            <label class="auth-label" for="int-text-template">Texto da tarefa (template)</label>
-                            <textarea class="auth-input int-textarea" id="int-text-template" rows="2" placeholder="{{ id }} — {{ subject }}"></textarea>
-                            <div id="int-field-chips" class="int-chips"></div>
-                            <div class="int-narrow">
-                                <label class="auth-label" for="int-on-update">Se já importado</label>
-                                <select class="auth-input" id="int-on-update">
-                                    <option value="skip">Ignorar (não duplicar)</option>
-                                    <option value="update_text">Atualizar o texto</option>
+                        <details class="int-advanced">
+                            <summary>Opções avançadas (opcional)</summary>
+                            <div class="int-advanced-body">
+                                <label class="auth-label" for="int-method">Método HTTP</label>
+                                <select class="auth-input int-inline-select" id="int-method">
+                                    <option value="GET">GET</option>
+                                    <option value="POST">POST</option>
                                 </select>
+
+                                <label class="auth-label">Cabeçalhos (headers)</label>
+                                <div id="int-headers" class="int-kv-list"></div>
+                                <button class="int-text-btn" id="int-add-header" type="button">+ cabeçalho</button>
+
+                                <label class="auth-label">Parâmetros de URL (query)</label>
+                                <div id="int-query" class="int-kv-list"></div>
+                                <button class="int-text-btn" id="int-add-query" type="button">+ parâmetro</button>
+
+                                <label class="int-checkbox">
+                                    <input type="checkbox" id="int-allow-private">
+                                    Permitir rede interna (IPs privados) — use com cautela
+                                </label>
                             </div>
-                        </section>
+                        </details>
 
-                        <section class="int-section">
-                            <h2 class="int-section-title">4. Preview</h2>
-                            <div class="int-actions-row">
-                                <button class="auth-btn int-inline-btn int-btn-secondary" id="int-preview-btn" type="button">Gerar preview</button>
+                        <div class="int-step-actions">
+                            <button class="auth-btn int-inline-btn" id="int-fetch-btn" type="button">Buscar dados →</button>
+                            <span id="int-fetch-status" class="int-inline-status"></span>
+                        </div>
+                    </section>
+
+                    <!-- PASSO 2: Itens -->
+                    <section class="int-step-panel hidden" data-panel="2">
+                        <h2 class="int-step-title">O que encontramos</h2>
+                        <div id="int-items-summary" class="int-summary"></div>
+
+                        <div id="int-items-choice" class="hidden">
+                            <label class="auth-label" for="int-items-path-sel">Onde está a lista de itens?</label>
+                            <p class="int-step-help">Encontramos mais de uma lista. Escolha a que contém seus itens.</p>
+                            <select class="auth-input" id="int-items-path-sel"></select>
+                        </div>
+
+                        <details class="int-advanced">
+                            <summary>Ver um exemplo do que veio da API</summary>
+                            <pre id="int-sample" class="int-json-preview"></pre>
+                        </details>
+
+                        <div class="int-step-actions">
+                            <button class="int-text-btn" data-goto="1" type="button">← Voltar</button>
+                            <button class="auth-btn int-inline-btn" id="int-to-3-btn" type="button">Continuar →</button>
+                        </div>
+                    </section>
+
+                    <!-- PASSO 3: Tarefa -->
+                    <section class="int-step-panel hidden" data-panel="3">
+                        <h2 class="int-step-title">Como cada item vira uma tarefa?</h2>
+
+                        <label class="auth-label" for="int-text-template">O que aparece no texto da tarefa?</label>
+                        <p class="int-step-help">Clique nos campos abaixo para incluí-los. Você também pode digitar texto entre eles.</p>
+                        <div id="int-field-chips" class="int-chips"></div>
+                        <textarea class="auth-input int-textarea" id="int-text-template" rows="2" placeholder="Clique num campo acima para começar"></textarea>
+                        <div class="int-preview-line">Prévia: <span id="int-title-preview" class="int-title-preview">—</span></div>
+
+                        <label class="auth-label" for="int-project-value">Para qual projeto vão as tarefas?</label>
+                        <select class="auth-input" id="int-project-value"></select>
+                        <details class="int-advanced">
+                            <summary>Definir o projeto por um campo do item</summary>
+                            <div class="int-advanced-body">
+                                <label class="int-checkbox">
+                                    <input type="checkbox" id="int-project-by-field">
+                                    Usar o valor de um campo como nome do projeto
+                                </label>
+                                <select class="auth-input hidden" id="int-project-mode" aria-hidden="true">
+                                    <option value="fixed">Fixo</option>
+                                    <option value="field">De um campo</option>
+                                </select>
+                                <input class="auth-input hidden" id="int-project-field" type="text" placeholder="Ex: queue">
                             </div>
-                            <div id="int-preview-result" class="int-preview-result"></div>
-                        </section>
-                    </div>
+                        </details>
 
-                    <!-- Modo JSON -->
-                    <div id="int-json-mode" class="hidden">
-                        <label class="auth-label" for="int-json">Configuração (JSON)</label>
-                        <textarea class="auth-input int-json-editor" id="int-json" rows="18" spellcheck="false"></textarea>
-                        <p class="int-muted">Segredos aparecem mascarados (••••); deixe assim para preservar o valor salvo.</p>
-                    </div>
+                        <label class="auth-label" for="int-external-id">Campo que identifica cada item</label>
+                        <p class="int-step-help">Usamos isso para não importar o mesmo item duas vezes.</p>
+                        <select class="auth-input" id="int-external-id"></select>
 
-                    <div class="int-footer-actions">
-                        <button class="auth-btn int-inline-btn" id="int-save-btn" type="button">Salvar</button>
-                        <button class="auth-btn int-inline-btn int-btn-success hidden" id="int-run-btn" type="button">Executar agora</button>
-                        <button class="int-text-btn int-danger hidden" id="int-delete-btn" type="button">Excluir</button>
-                    </div>
+                        <label class="auth-label" for="int-on-update">Se um item já tiver sido importado antes</label>
+                        <select class="auth-input" id="int-on-update">
+                            <option value="skip">Ignorar (não duplicar)</option>
+                            <option value="update_text">Atualizar o texto da tarefa</option>
+                        </select>
+
+                        <div class="int-step-actions">
+                            <button class="int-text-btn" data-goto="2" type="button">← Voltar</button>
+                            <button class="auth-btn int-inline-btn" id="int-to-4-btn" type="button">Ver prévia →</button>
+                        </div>
+                    </section>
+
+                    <!-- PASSO 4: Revisar -->
+                    <section class="int-step-panel hidden" data-panel="4">
+                        <h2 class="int-step-title">Revise e importe</h2>
+                        <p class="int-step-help">Aqui é onde você define o dia da semana e o projeto de cada tarefa (por linha ou em massa). Marque quais importar. Linhas incompletas (amarelo) são ignoradas.</p>
+
+                        <div id="int-bulk-bar" class="int-bulk-bar hidden">
+                            <span id="int-bulk-count" class="int-bulk-count">0 selecionada(s)</span>
+                            <div class="int-bulk-group">
+                                <label class="int-bulk-label">Mover para</label>
+                                <select class="auth-input int-bulk-select" id="int-bulk-project"></select>
+                                <button class="int-text-btn" id="int-bulk-project-apply" type="button">Aplicar</button>
+                            </div>
+                            <div class="int-bulk-group">
+                                <label class="int-bulk-label">Definir dia</label>
+                                <select class="auth-input int-bulk-select" id="int-bulk-weekday">
+                                    <option value="">Sem dia</option>
+                                    <option value="Segunda">Segunda</option>
+                                    <option value="Terça">Terça</option>
+                                    <option value="Quarta">Quarta</option>
+                                    <option value="Quinta">Quinta</option>
+                                    <option value="Sexta">Sexta</option>
+                                </select>
+                                <button class="int-text-btn" id="int-bulk-weekday-apply" type="button">Aplicar</button>
+                            </div>
+                        </div>
+
+                        <div id="int-preview-result" class="int-preview-result"></div>
+
+                        <div class="int-step-actions int-footer-actions">
+                            <button class="int-text-btn" data-goto="3" type="button">← Voltar</button>
+                            <button class="auth-btn int-inline-btn int-btn-secondary" id="int-save-btn" type="button">Salvar</button>
+                            <button class="auth-btn int-inline-btn int-btn-success" id="int-run-btn" type="button">Salvar e importar agora</button>
+                            <button class="int-text-btn int-danger hidden" id="int-delete-btn" type="button">Excluir</button>
+                        </div>
+                    </section>
+
+                    <!-- Avançado: editar JSON bruto -->
+                    <details class="int-advanced int-json-advanced">
+                        <summary>Editar como JSON (avançado)</summary>
+                        <div class="int-advanced-body">
+                            <textarea class="auth-input int-json-editor" id="int-json" rows="16" spellcheck="false"></textarea>
+                            <p class="int-muted">Segredos aparecem mascarados (••••); deixe assim para preservar o valor salvo.</p>
+                            <button class="int-text-btn" id="int-json-apply" type="button">Aplicar ao formulário</button>
+                        </div>
+                    </details>
                 </div>
             </div>
 
@@ -433,7 +476,7 @@
         </div>
     </div>
 
-    <script src="/static/js/script.js"></script>
+    <script src="{{ asset('js/script.js') }}"></script>
 </body>
 
 </html>
