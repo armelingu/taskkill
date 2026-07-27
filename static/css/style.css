@@ -2090,6 +2090,18 @@ body.graph-mode .main-content {
 @media (max-width: 720px) {
     .int-step-label { display: none; }
     .int-step { flex: 0 0 auto; justify-content: center; }
+
+    /* Card: empilha conteúdo e ações para não transbordar em tela estreita */
+    .int-card {
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    .int-card-main { flex: 1 1 100%; }
+    .int-card-actions {
+        flex: 1 1 100%;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
 }
 
 /* Painéis de passo */
