@@ -2832,9 +2832,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await apiFetch(`/api/integrations/${id}/run`, { method: 'POST' });
             const data = await res.json();
             if (!res.ok) { showToast(data.error || 'Falha ao executar'); return; }
-            showToast(`Criadas: ${data.created} • ignoradas: ${data.skipped}`);
+            const parts = [`${data.created} criada(s)`];
+            if (data.updated) parts.push(`${data.updated} atualizada(s)`);
+            if (data.skipped) parts.push(`${data.skipped} ignorada(s)`);
+            showToast('Importado: ' + parts.join(' • '));
             await fetchInitialData();
             loadIntegrations();
+            if (intHistoryCurrent && intHistoryCurrent.id === id) loadHistory();
         } catch (e) {
             showToast('Erro ao executar');
         }
