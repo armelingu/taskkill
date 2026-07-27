@@ -1586,6 +1586,33 @@ body.graph-mode .main-content {
     color: #6366f1;
     margin-top: 4px;
 }
+.int-card-sched--paused { color: #b45309; }
+
+.int-card--paused {
+    opacity: 0.72;
+    background: #fbfaf7;
+}
+.int-card--paused .int-card-title::after {
+    content: 'pausada';
+    font-size: 0.62rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #b45309;
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    border-radius: 999px;
+    padding: 1px 7px;
+    margin-left: 8px;
+    vertical-align: middle;
+}
+
+.auth-input.is-disabled,
+.auth-input:disabled {
+    opacity: 0.5;
+    background: #f1f5f9;
+    cursor: not-allowed;
+}
 
 .int-card-status {
     font-size: 0.72rem;
@@ -1618,6 +1645,11 @@ body.graph-mode .main-content {
     margin-bottom: 12px;
 }
 .int-history-head .project-confirm-title { margin: 0; }
+.int-history-head-actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+}
 .int-history-body {
     overflow-y: auto;
     display: flex;

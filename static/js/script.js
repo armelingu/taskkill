@@ -2051,12 +2051,21 @@ document.addEventListener('DOMContentLoaded', () => {
         return { enabled, interval_minutes: interval };
     }
 
+    function updateSchedUI() {
+        const on = !!(intSchedEnabled && intSchedEnabled.checked);
+        if (intSchedInterval) {
+            intSchedInterval.disabled = !on;
+            intSchedInterval.classList.toggle('is-disabled', !on);
+        }
+    }
+
     function applySchedule(integ) {
         if (intSchedEnabled) intSchedEnabled.checked = !!(integ && integ.schedule_enabled);
         if (intSchedInterval) {
             const iv = integ && integ.schedule_interval_minutes ? integ.schedule_interval_minutes : 60;
             intSchedInterval.value = iv;
         }
+        updateSchedUI();
     }
 
     function readPagination() {
@@ -2391,13 +2400,20 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 meta = 'Ainda não foi executada';
             }
+            const paused = !integ.enabled;
             let schedLine = '';
-            if (integ.schedule_enabled && integ.schedule_interval_minutes) {
+            if (paused) {
+                schedLine = '<div class="int-card-sched int-card-sched--paused">⏸ Pausada — não roda automaticamente</div>';
+            } else if (integ.schedule_enabled && integ.schedule_interval_minutes) {
                 const nextWhen = intFmtNext(integ.next_run_at);
                 schedLine = `<div class="int-card-sched">⏱ A cada ${integ.schedule_interval_minutes} min${nextWhen ? ' • próxima ' + nextWhen : ''}</div>`;
             }
             const card = document.createElement('div');
-            card.className = 'int-card';
+            card.className = 'int-card' + (paused ? ' int-card--paused' : '');
+            const toggleLabel = paused ? 'Ativar' : 'Pausar';
+            const toggleTitle = paused
+                ? 'Reativa a integração (volta a rodar no agendamento)'
+                : 'Pausa a integração (não roda no agendamento; ainda dá para executar manualmente)';
             card.innerHTML = `
                 <div class="int-card-main">
                     <div class="int-card-title">${escapeHTML(integ.name)}</div>
@@ -2409,10 +2425,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="int-card-actions">
                     <button class="int-text-btn" data-act="edit">Editar</button>
                     <button class="int-text-btn" data-act="history">Histórico</button>
+                    <button class="int-text-btn" data-act="toggle" title="${toggleTitle}">${toggleLabel}</button>
                     <button class="int-text-btn int-btn-runcard" data-act="run" title="Re-importa da fonte aplicando as regras automáticas (sem os ajustes manuais da revisão)">Executar</button>
                 </div>`;
             card.querySelector('[data-act="edit"]').addEventListener('click', () => openEditorById(integ.id));
             card.querySelector('[data-act="history"]').addEventListener('click', () => openHistory(integ.id, integ.name));
+            card.querySelector('[data-act="toggle"]').addEventListener('click', () => toggleEnabled(integ.id, !integ.enabled));
             card.querySelector('[data-act="run"]').addEventListener('click', () => runById(integ.id));
             intListEl.appendChild(card);
         });
@@ -2731,8 +2749,12 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const id = await saveIntegration();
             if (id) {
-                intAlertShow('Integração salva.', false);
-                showToast('Integração salva');
+                const sched = readSchedule();
+                const msg = sched.enabled && sched.interval_minutes
+                    ? `Integração salva • agendada a cada ${sched.interval_minutes} min`
+                    : 'Integração salva';
+                intAlertShow(msg, false);
+                showToast(msg);
                 loadIntegrations();
             }
         } catch (e) {
@@ -2789,6 +2811,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    async function toggleEnabled(id, enabled) {
+        try {
+            const res = await apiFetch(`/api/integrations/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled }),
+            });
+            if (!res.ok) { showToast('Falha ao atualizar'); return; }
+            showToast(enabled ? 'Integração reativada' : 'Integração pausada');
+            loadIntegrations();
+        } catch (e) {
+            showToast('Erro de rede');
+        }
+    }
+
     async function runById(id) {
         showToast('Executando integração…');
         try {
@@ -2808,6 +2845,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const intHistoryBody    = document.getElementById('int-history-body');
     const intHistoryTitle   = document.getElementById('int-history-title');
     const intHistoryClose   = document.getElementById('int-history-close');
+    const intHistoryRefresh = document.getElementById('int-history-refresh');
+    let intHistoryCurrent   = null;
 
     function intTriggerLabel(t) {
         if (t === 'import') return 'Revisão manual';
@@ -2839,13 +2878,11 @@ document.addEventListener('DOMContentLoaded', () => {
         intHistoryBody.innerHTML = rows;
     }
 
-    async function openHistory(id, name) {
-        if (!intHistoryOverlay) return;
-        intHistoryTitle.textContent = `Histórico — ${name}`;
+    async function loadHistory() {
+        if (!intHistoryCurrent) return;
         intHistoryBody.innerHTML = '<p class="int-muted">Carregando…</p>';
-        intHistoryOverlay.classList.remove('hidden');
         try {
-            const res = await apiFetch(`/api/integrations/${id}/runs?limit=50`);
+            const res = await apiFetch(`/api/integrations/${intHistoryCurrent.id}/runs?limit=50`);
             const data = await res.json();
             if (!res.ok) {
                 intHistoryBody.innerHTML = `<p class="int-error-inline">${escapeHTML(data.error || 'Falha ao carregar histórico.')}</p>`;
@@ -2857,8 +2894,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function openHistory(id, name) {
+        if (!intHistoryOverlay) return;
+        intHistoryCurrent = { id, name };
+        intHistoryTitle.textContent = `Histórico — ${name}`;
+        intHistoryOverlay.classList.remove('hidden');
+        loadHistory();
+    }
+
     function closeHistory() {
         if (intHistoryOverlay) intHistoryOverlay.classList.add('hidden');
+        intHistoryCurrent = null;
     }
 
     async function onDelete() {
@@ -2888,6 +2934,7 @@ document.addEventListener('DOMContentLoaded', () => {
         intBackBtn.addEventListener('click', () => { intShowList(); loadIntegrations(); });
         intAuthType.addEventListener('change', () => renderAuthFields(intAuthType.value, {}));
         if (intPagMode) intPagMode.addEventListener('change', () => renderPagFields(intPagMode.value, {}));
+        if (intSchedEnabled) intSchedEnabled.addEventListener('change', updateSchedUI);
         intAddHeader.addEventListener('click', () => kvAddRow(intHeaders, '', ''));
         intAddQuery.addEventListener('click', () => kvAddRow(intQuery, '', ''));
         intProjectByField.addEventListener('change', updateProjectModeUI);
@@ -2903,6 +2950,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (intBulkWeekdayApply) intBulkWeekdayApply.addEventListener('click', applyBulkWeekday);
 
         if (intHistoryClose) intHistoryClose.addEventListener('click', closeHistory);
+        if (intHistoryRefresh) intHistoryRefresh.addEventListener('click', loadHistory);
         if (intHistoryOverlay) {
             intHistoryOverlay.addEventListener('click', (e) => {
                 if (e.target === intHistoryOverlay) closeHistory();
