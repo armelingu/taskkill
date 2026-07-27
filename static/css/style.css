@@ -1818,6 +1818,18 @@ body.graph-mode .main-content {
     font-weight: 600;
 }
 
+.int-warn {
+    background: #fffbeb;
+    color: #92400e;
+    border: 1px solid rgba(245, 158, 11, 0.25);
+    border-radius: 10px;
+    padding: 9px 12px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    margin: 8px 0;
+    line-height: 1.45;
+}
+
 .int-test-result,
 .int-preview-result {
     margin-top: 4px;

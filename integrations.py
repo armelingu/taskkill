@@ -27,7 +27,10 @@ from database import get_db_connection
 FETCH_TIMEOUT_SECS = 10.0
 MAX_RESPONSE_BYTES = 5 * 1024 * 1024   # 5 MB
 MAX_ITEMS_PER_RUN = 500
-PREVIEW_LIMIT = 20
+# Nº de linhas retornadas na prévia. Como a prévia agora é interativa (o
+# usuário seleciona/importa exatamente o que vê), este também é o teto de
+# itens importáveis por vez pelo assistente.
+PREVIEW_LIMIT = 200
 MAX_TEXT_LEN = 1000                    # espelha routes.MAX_TEXT_LEN
 MAX_PROJECT_LEN = 18                   # espelha routes.MAX_PROJECT_LEN
 # Dias da semana válidos p/ due_date (espelha routes.ALLOWED_DUE_DAYS).

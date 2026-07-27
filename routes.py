@@ -766,6 +766,20 @@ def test_integration():
     """Faz o fetch e devolve arrays detectados + campos + item de exemplo."""
     data = request.get_json(silent=True) or {}
     connection = data.get('connection') or {}
+
+    # Ao editar (id presente), restaura segredos mascarados a partir do salvo,
+    # para que o teste use a credencial real (mesma lógica do /preview).
+    if data.get('id'):
+        with get_db_connection() as conn:
+            row = conn.execute('SELECT config_json FROM integrations WHERE id = ?', (int(data['id']),)).fetchone()
+        if row:
+            try:
+                old = json.loads(row['config_json'])
+            except (ValueError, TypeError):
+                old = {}
+            merged = integrations.merge_secrets({'connection': connection}, old)
+            connection = merged.get('connection') or connection
+
     try:
         payload = integrations.fetch_payload(connection)
     except IntegrationError as exc:

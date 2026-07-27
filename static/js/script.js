@@ -1933,6 +1933,9 @@ document.addEventListener('DOMContentLoaded', () => {
             s.classList.toggle('is-active', sn === n);
             s.classList.toggle('is-done', sn < n);
         });
+        if (n === 2 && !intSampleItem && intItemsSummary && !intItemsSummary.innerHTML.trim()) {
+            intItemsSummary.innerHTML = '<div class="int-muted">Volte ao passo 1 e clique em "Buscar dados" para carregar os itens da API.</div>';
+        }
         if (n === 3) { renderFieldChips(intFieldsList); updateTitlePreview(); }
         if (n === 4) {
             // Só regenera a prévia se a configuração mudou (senão preserva os ajustes por linha).
@@ -2293,7 +2296,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="int-card-status int-status-${escapeHTML(status)}">${statusText}</div>
                 <div class="int-card-actions">
                     <button class="int-text-btn" data-act="edit">Editar</button>
-                    <button class="int-text-btn int-btn-runcard" data-act="run">Executar</button>
+                    <button class="int-text-btn int-btn-runcard" data-act="run" title="Re-importa da fonte aplicando as regras automáticas (sem os ajustes manuais da revisão)">Executar</button>
                 </div>`;
             card.querySelector('[data-act="edit"]').addEventListener('click', () => openEditorById(integ.id));
             card.querySelector('[data-act="run"]').addEventListener('click', () => runById(integ.id));
@@ -2330,16 +2333,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ── Passo 1 -> 2: buscar dados e detectar ──────────────────────
+    function intTestBody() {
+        const cfg = getFormConfig();
+        const body = { connection: cfg.connection, items_path: cfg.items_path };
+        // Ao editar, envia o id para o backend restaurar segredos mascarados.
+        if (intId.value) body.id = parseInt(intId.value, 10);
+        return body;
+    }
+
     async function onFetch() {
         if (!intUrl.value.trim()) { intFetchStatus.textContent = 'Informe a URL da API.'; return; }
         intFetchBtn.disabled = true;
         intFetchStatus.textContent = 'Buscando…';
-        const cfg = getFormConfig();
         try {
             const res = await apiFetch('/api/integrations/test', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ connection: cfg.connection, items_path: cfg.items_path }),
+                body: JSON.stringify(intTestBody()),
             });
             const data = await res.json();
             if (!res.ok) {
@@ -2413,12 +2423,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function onItemsPathChange() {
         // Rebusca para atualizar contagem/campos ao trocar a lista de itens.
-        const cfg = getFormConfig();
         try {
             const res = await apiFetch('/api/integrations/test', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ connection: cfg.connection, items_path: cfg.items_path }),
+                body: JSON.stringify(intTestBody()),
             });
             const data = await res.json();
             if (!res.ok) return;
@@ -2490,13 +2499,22 @@ document.addEventListener('DOMContentLoaded', () => {
         const shown = intPreviewRows.length;
         let html = `<div class="int-preview-head"><span class="int-muted">${intPreviewTotal} item(ns) no total • exibindo ${shown}. Ajuste o que quiser antes de importar.</span>` +
             '<button id="int-reload-preview" class="int-text-btn" type="button" title="Descarta ajustes e busca de novo da fonte">↻ Recarregar da fonte</button></div>';
+        if (intPreviewTotal > shown) {
+            html += `<div class="int-warn">Mostrando os primeiros ${shown} de ${intPreviewTotal} itens. O assistente importa apenas os exibidos; para importar todos de uma vez (aplicando as regras automáticas), use "Executar" na lista.</div>`;
+        }
         html += '<table class="int-table int-table-edit"><thead><tr>' +
             '<th class="int-col-check"><input type="checkbox" id="int-check-all" title="Selecionar todas"></th>' +
             '<th>Identificador</th><th>Projeto</th><th>Dia</th><th>Texto da tarefa</th><th></th>' +
             '</tr></thead><tbody>';
         intPreviewRows.forEach((r, i) => {
             const valid = rowIsValid(r);
-            const projOpts = optionsHtml(projects.indexOf(r.project) === -1 && r.project ? [r.project].concat(projects) : projects, r.project);
+            // Monta as opções de projeto garantindo que o valor atual (mesmo vazio
+            // ou vindo de um campo) apareça e fique selecionado, sem desalinhar do estado.
+            const projValues = [];
+            if (!r.project) projValues.push('');
+            if (r.project && projects.indexOf(r.project) === -1) projValues.push(r.project);
+            projects.forEach(p => projValues.push(p));
+            const projOpts = optionsHtml(projValues, r.project);
             const dayOpts = optionsHtml([''].concat(WEEKDAYS), r.due_date);
             html += `<tr class="${valid ? '' : 'int-row-invalid'}" data-i="${i}">
                 <td class="int-col-check"><input type="checkbox" class="int-row-check" ${r.include ? 'checked' : ''}></td>
