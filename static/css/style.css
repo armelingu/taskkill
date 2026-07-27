@@ -2182,6 +2182,36 @@ body.graph-mode .main-content {
 .int-inline-select { max-width: 160px; }
 .int-json-advanced { margin-top: 20px; }
 
+/* Resumo da configuração (passo 4) */
+.int-config-recap-wrap { margin-top: 4px; margin-bottom: 10px; }
+.int-config-recap {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 4px 20px;
+    padding: 4px 14px 14px;
+}
+.int-recap-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 5px 0;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 0.82rem;
+}
+.int-recap-key {
+    color: var(--text-muted);
+    font-weight: 600;
+    flex-shrink: 0;
+}
+.int-recap-val {
+    color: var(--text-title);
+    font-weight: 600;
+    text-align: right;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* Prévia do título ao vivo */
 .int-preview-line {
     font-size: 0.82rem;

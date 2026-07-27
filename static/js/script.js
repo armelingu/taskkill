@@ -1821,6 +1821,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const intTextTemplate= document.getElementById('int-text-template');
     const intTitlePreview= document.getElementById('int-title-preview');
     const intFieldChips  = document.getElementById('int-field-chips');
+    const intConfigRecap = document.getElementById('int-config-recap');
     const intOnUpdate    = document.getElementById('int-on-update');
     const intReimportDeleted = document.getElementById('int-reimport-deleted');
     const intSchedEnabled = document.getElementById('int-sched-enabled');
@@ -1943,6 +1944,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (n === 3) { renderFieldChips(intFieldsList); updateTitlePreview(); }
         if (n === 4) {
+            renderConfigRecap();
             // Só regenera a prévia se a configuração mudou (senão preserva os ajustes por linha).
             if (intPreviewRows.length && getPreviewSig() === intPreviewSig) {
                 renderPreviewTable();
@@ -1950,6 +1952,61 @@ document.addEventListener('DOMContentLoaded', () => {
                 onPreview();
             }
         }
+    }
+
+    // ── Resumo da configuração (passo 4) ───────────────────────────
+    function humanAuth(type) {
+        return {
+            none: 'Nenhuma (API aberta)',
+            bearer: 'Token (Bearer)',
+            api_key: 'Chave de API (no cabeçalho)',
+            query_key: 'Chave/token na URL',
+            basic: 'Usuário e senha',
+            oauth2: 'OAuth2 (client credentials)',
+        }[(type || 'none')] || 'Nenhuma (API aberta)';
+    }
+
+    function humanPagination(pag) {
+        pag = pag || {};
+        const base = {
+            none: 'Sem paginação',
+            page: 'Por número de página',
+            offset: 'Por offset',
+            cursor: 'Por cursor/next',
+        }[(pag.mode || 'none')] || 'Sem paginação';
+        return pag.mode && pag.mode !== 'none' && pag.max_pages
+            ? `${base} (até ${pag.max_pages} páginas)`
+            : base;
+    }
+
+    function humanOnUpdate(v) {
+        return {
+            skip: 'Ignora (não duplica)',
+            update_text: 'Atualiza o texto',
+            update_all: 'Atualiza texto, projeto e dia',
+        }[(v || 'skip')] || 'Ignora (não duplica)';
+    }
+
+    function renderConfigRecap() {
+        if (!intConfigRecap) return;
+        const c = getFormConfig();
+        const sched = readSchedule();
+        const conn = c.connection || {};
+        const map = c.mapping || {};
+        const proj = map.project || {};
+        const upd = humanOnUpdate(c.on_update) + (c.reimport_deleted ? ' • recria excluídas' : '');
+        const rows = [
+            ['Fonte', (conn.base_url || '—') + (conn.method && conn.method !== 'GET' ? ` (${conn.method})` : '')],
+            ['Autenticação', humanAuth((conn.auth || {}).type)],
+            ['Paginação', humanPagination(c.pagination)],
+            ['Projeto', proj.mode === 'field' ? `do campo "${proj.field || '—'}"` : `"${proj.value || '—'}"`],
+            ['Identificador', map.external_id || 'id'],
+            ['Se já importado', upd],
+            ['Agendamento', sched.enabled && sched.interval_minutes ? `a cada ${sched.interval_minutes} min` : 'manual'],
+        ];
+        intConfigRecap.innerHTML = rows.map(([k, v]) =>
+            `<div class="int-recap-row"><span class="int-recap-key">${escapeHTML(k)}</span><span class="int-recap-val">${escapeHTML(v)}</span></div>`
+        ).join('');
     }
 
     function getPreviewSig() {
