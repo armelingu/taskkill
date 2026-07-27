@@ -117,6 +117,19 @@ def init_db():
 
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)')
 
+        # Migrações idempotentes em users: avatar, último acesso e versão de
+        # sessão (usada para "sair de todos os dispositivos").
+        for _ddl in (
+            'ALTER TABLE users ADD COLUMN last_login_at TEXT',
+            'ALTER TABLE users ADD COLUMN avatar_mime TEXT',
+            'ALTER TABLE users ADD COLUMN avatar_data BLOB',
+            'ALTER TABLE users ADD COLUMN session_version INTEGER NOT NULL DEFAULT 0',
+        ):
+            try:
+                cursor.execute(_ddl)
+            except sqlite3.OperationalError:
+                pass
+
         # Bootstrap do admin no primeiro boot (obrigatório para ambiente web)
         cursor.execute('SELECT COUNT(*) AS cnt FROM users')
         cnt = int(cursor.fetchone()['cnt'])

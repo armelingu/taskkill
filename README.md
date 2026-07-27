@@ -48,8 +48,7 @@ taskkill/
 │   └── favicon.svg
 ├── templates/
 │   ├── index.html
-│   ├── login.html
-│   └── perfil.html
+│   └── login.html          # perfil é um painel inline em index.html
 ├── scripts/
 │   ├── reset_admin_password.py
 │   └── run_local.bat / .ps1

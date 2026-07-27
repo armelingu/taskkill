@@ -9,7 +9,7 @@ from datetime import date, datetime, timedelta
 
 from functools import wraps
 
-from flask import Blueprint, render_template, request, jsonify, send_file, session, redirect, url_for, abort
+from flask import Blueprint, render_template, request, jsonify, send_file, session, redirect, url_for, abort, Response
 
 from database import get_db_connection, get_db_path, init_db
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -92,14 +92,27 @@ def _current_user():
     if not uid:
         return None
     with get_db_connection() as conn:
-        row = conn.execute('SELECT id, username, is_admin FROM users WHERE id = ?', (int(uid),)).fetchone()
-        return dict(row) if row else None
+        row = conn.execute(
+            'SELECT id, username, is_admin, created_at, last_login_at, '
+            '       session_version, avatar_mime '
+            'FROM users WHERE id = ?', (int(uid),)
+        ).fetchone()
+    if not row:
+        return None
+    # Valida a versão de sessão: se o usuário clicou em "sair de todos os
+    # dispositivos", a versão no banco muda e os cookies antigos deixam de valer.
+    if int(row['session_version']) != int(session.get('sv', 0)):
+        return None
+    data = dict(row)
+    data['has_avatar'] = bool(row['avatar_mime'])
+    return data
 
 
 def login_required(fn):
     @wraps(fn)
     def wrapper(*args, **kwargs):
-        if not session.get('user_id'):
+        if not _current_user():
+            session.clear()
             return redirect(url_for('main.login'))
         return fn(*args, **kwargs)
     return wrapper
@@ -117,8 +130,8 @@ def admin_required(fn):
 
 @api_bp.before_request
 def require_auth_and_csrf():
-    # Bloqueia API sem sessão
-    if not session.get('user_id'):
+    # Bloqueia API sem sessão válida (inclui checagem de versão de sessão)
+    if not _current_user():
         return jsonify({"error": "Unauthorized"}), 401
 
     # CSRF para métodos mutáveis
@@ -187,10 +200,22 @@ def login():
 
         # Login bem-sucedido: reseta contador e regenera sessão (previne session fixation)
         _reset_login_attempts(ip)
+
+        now_iso = datetime.utcnow().isoformat()
+        with get_db_connection() as conn:
+            prev = conn.execute('SELECT last_login_at, session_version FROM users WHERE id = ?',
+                                (int(row['id']),)).fetchone()
+            prev_login = prev['last_login_at'] if prev else None
+            session_version = int(prev['session_version']) if prev else 0
+            conn.execute('UPDATE users SET last_login_at = ? WHERE id = ?', (now_iso, int(row['id'])))
+            conn.commit()
+
         session.clear()                       # descarta sessão anterior (novo ID gerado pelo Flask)
         session.permanent = True              # ativa expiração por PERMANENT_SESSION_LIFETIME
         session['user_id']  = int(row['id'])
         session['is_admin'] = int(row['is_admin'])
+        session['sv']       = session_version  # versão de sessão (logout global)
+        session['prev_login'] = prev_login     # acesso anterior (para exibir no perfil)
         _ensure_csrf_token()                  # gera novo CSRF token na sessão limpa
         return redirect(url_for('main.index'))
 
@@ -207,81 +232,145 @@ def logout():
     return redirect(url_for('main.login'))
 
 
-@main_bp.route('/perfil', methods=['GET', 'POST'])
-@login_required
-def perfil():
-    user = _current_user()
-    csrf = _ensure_csrf_token()
-    message = None
-    error = None
-    section = request.args.get('s', 'usuario')  # 'senha' | 'usuario' | 'sistema'
-
-    if request.method == 'POST':
-        form_csrf = request.form.get('csrf_token')
-        if not form_csrf or form_csrf != csrf:
-            error = 'Sessão expirada. Recarregue e tente novamente.'
-        else:
-            action = request.form.get('action')
-
-            if action == 'senha':
-                section = 'senha'
-                current_pw  = request.form.get('current_password') or ''
-                new_pw      = request.form.get('new_password') or ''
-                confirm_pw  = request.form.get('confirm_password') or ''
-
-                if len(new_pw.strip()) < 10:
-                    error = 'A nova senha precisa ter pelo menos 10 caracteres.'
-                elif new_pw != confirm_pw:
-                    error = 'A confirmação da senha não confere.'
-                else:
-                    with get_db_connection() as conn:
-                        row = conn.execute('SELECT password_hash FROM users WHERE id = ?', (int(user['id']),)).fetchone()
-                        if not row or not check_password_hash(row['password_hash'], current_pw):
-                            error = 'Senha atual incorreta.'
-                        else:
-                            conn.execute('UPDATE users SET password_hash = ? WHERE id = ?',
-                                         (generate_password_hash(new_pw.strip()), int(user['id'])))
-                            conn.commit()
-                            message = 'Senha atualizada com sucesso.'
-
-            elif action == 'usuario':
-                section = 'usuario'
-                new_username = (request.form.get('new_username') or '').strip()
-                confirm_pw   = request.form.get('confirm_password_u') or ''
-
-                if not new_username:
-                    error = 'O nome de usuário não pode ser vazio.'
-                elif len(new_username) > 60:
-                    error = 'Nome de usuário muito longo (máx. 60 caracteres).'
-                else:
-                    with get_db_connection() as conn:
-                        row = conn.execute('SELECT password_hash FROM users WHERE id = ?', (int(user['id']),)).fetchone()
-                        if not row or not check_password_hash(row['password_hash'], confirm_pw):
-                            error = 'Senha incorreta.'
-                        else:
-                            exists = conn.execute('SELECT id FROM users WHERE username = ? AND id != ?',
-                                                  (new_username, int(user['id']))).fetchone()
-                            if exists:
-                                error = 'Esse nome de usuário já está em uso.'
-                            else:
-                                conn.execute('UPDATE users SET username = ? WHERE id = ?',
-                                             (new_username, int(user['id'])))
-                                conn.commit()
-                                message = f'Usuário atualizado para "{new_username}".'
-
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        if error:
-            return jsonify({'error': error}), 400
-        return jsonify({'message': message, 'user': _current_user()})
-
-    return render_template('perfil.html', user=_current_user(), csrf_token=csrf,
-                           message=message, error=error, section=section)
-
-
+# Rotas legadas: o perfil agora é um painel inline no app (index.html).
+@main_bp.route('/perfil')
 @main_bp.route('/admin')
 @login_required
-def admin():
-    return redirect(url_for('main.perfil'))
+def perfil():
+    return redirect(url_for('main.index'))
+
+
+# ===================================================================
+# Perfil / conta (API JSON)
+# ===================================================================
+ALLOWED_AVATAR_MIMES = {'image/png', 'image/jpeg', 'image/gif', 'image/webp'}
+MAX_AVATAR_BYTES = 2 * 1024 * 1024  # 2 MB
+
+
+def _sniff_image_mime(data: bytes):
+    """Detecta o tipo de imagem por magic bytes (sem confiar na extensão)."""
+    if data[:8] == b'\x89PNG\r\n\x1a\n':
+        return 'image/png'
+    if data[:3] == b'\xff\xd8\xff':
+        return 'image/jpeg'
+    if data[:6] in (b'GIF87a', b'GIF89a'):
+        return 'image/gif'
+    if data[:4] == b'RIFF' and data[8:12] == b'WEBP':
+        return 'image/webp'
+    return None
+
+
+@api_bp.route('/profile', methods=['GET'])
+def get_profile():
+    user = _current_user()
+    return jsonify({
+        'username': user['username'],
+        'is_admin': bool(user['is_admin']),
+        'created_at': user.get('created_at'),
+        'last_login_at': user.get('last_login_at'),
+        'prev_login_at': session.get('prev_login'),
+        'has_avatar': user.get('has_avatar', False),
+    })
+
+
+@api_bp.route('/profile/username', methods=['POST'])
+def update_username():
+    user = _current_user()
+    data = request.get_json(silent=True) or {}
+    new_username = str(data.get('new_username') or '').strip()
+    password = data.get('password') or ''
+    if not new_username:
+        return jsonify({"error": "O nome de usuário não pode ser vazio."}), 400
+    if len(new_username) > 60:
+        return jsonify({"error": "Nome de usuário muito longo (máx. 60 caracteres)."}), 400
+    with get_db_connection() as conn:
+        row = conn.execute('SELECT password_hash FROM users WHERE id = ?', (int(user['id']),)).fetchone()
+        if not row or not check_password_hash(row['password_hash'], password):
+            return jsonify({"error": "Senha incorreta."}), 400
+        exists = conn.execute('SELECT id FROM users WHERE username = ? AND id != ?',
+                              (new_username, int(user['id']))).fetchone()
+        if exists:
+            return jsonify({"error": "Esse nome de usuário já está em uso."}), 400
+        conn.execute('UPDATE users SET username = ? WHERE id = ?', (new_username, int(user['id'])))
+        conn.commit()
+    return jsonify({"message": f'Usuário atualizado para "{new_username}".', "username": new_username})
+
+
+@api_bp.route('/profile/password', methods=['POST'])
+def update_password():
+    user = _current_user()
+    data = request.get_json(silent=True) or {}
+    current_pw = data.get('current_password') or ''
+    new_pw = data.get('new_password') or ''
+    confirm_pw = data.get('confirm_password') or ''
+    if len(new_pw.strip()) < 10:
+        return jsonify({"error": "A nova senha precisa ter pelo menos 10 caracteres."}), 400
+    if new_pw != confirm_pw:
+        return jsonify({"error": "A confirmação da senha não confere."}), 400
+    with get_db_connection() as conn:
+        row = conn.execute('SELECT password_hash FROM users WHERE id = ?', (int(user['id']),)).fetchone()
+        if not row or not check_password_hash(row['password_hash'], current_pw):
+            return jsonify({"error": "Senha atual incorreta."}), 400
+        conn.execute('UPDATE users SET password_hash = ? WHERE id = ?',
+                     (generate_password_hash(new_pw.strip()), int(user['id'])))
+        conn.commit()
+    return jsonify({"message": "Senha atualizada com sucesso."})
+
+
+@api_bp.route('/profile/avatar', methods=['POST'])
+def upload_avatar():
+    user = _current_user()
+    file = request.files.get('file')
+    if not file:
+        return jsonify({"error": "Nenhum arquivo enviado."}), 400
+    data = file.read(MAX_AVATAR_BYTES + 1)
+    if len(data) > MAX_AVATAR_BYTES:
+        return jsonify({"error": "Imagem muito grande (limite de 2 MB)."}), 400
+    mime = _sniff_image_mime(data)
+    if mime not in ALLOWED_AVATAR_MIMES:
+        return jsonify({"error": "Formato inválido. Use PNG, JPEG, GIF ou WEBP."}), 400
+    with get_db_connection() as conn:
+        conn.execute('UPDATE users SET avatar_mime = ?, avatar_data = ? WHERE id = ?',
+                     (mime, sqlite3.Binary(data), int(user['id'])))
+        conn.commit()
+    return jsonify({"message": "Foto atualizada.", "has_avatar": True})
+
+
+@api_bp.route('/profile/avatar', methods=['DELETE'])
+def delete_avatar():
+    user = _current_user()
+    with get_db_connection() as conn:
+        conn.execute('UPDATE users SET avatar_mime = NULL, avatar_data = NULL WHERE id = ?',
+                     (int(user['id']),))
+        conn.commit()
+    return jsonify({"message": "Foto removida.", "has_avatar": False})
+
+
+@api_bp.route('/profile/logout-all', methods=['POST'])
+def logout_all_devices():
+    user = _current_user()
+    with get_db_connection() as conn:
+        conn.execute('UPDATE users SET session_version = session_version + 1 WHERE id = ?',
+                     (int(user['id']),))
+        new_sv = conn.execute('SELECT session_version FROM users WHERE id = ?',
+                              (int(user['id']),)).fetchone()['session_version']
+        conn.commit()
+    # Mantém a sessão atual válida atualizando a versão no cookie.
+    session['sv'] = int(new_sv)
+    return jsonify({"message": "As outras sessões foram encerradas."})
+
+
+@api_bp.route('/avatar', methods=['GET'])
+def get_avatar():
+    user = _current_user()
+    with get_db_connection() as conn:
+        row = conn.execute('SELECT avatar_mime, avatar_data FROM users WHERE id = ?',
+                           (int(user['id']),)).fetchone()
+    if not row or not row['avatar_mime'] or row['avatar_data'] is None:
+        return jsonify({"error": "Sem avatar"}), 404
+    resp = Response(bytes(row['avatar_data']), mimetype=row['avatar_mime'])
+    resp.headers['Cache-Control'] = 'private, no-cache'
+    return resp
 
 
 # ===================================================================
