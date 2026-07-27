@@ -1580,6 +1580,13 @@ body.graph-mode .main-content {
 .int-meta-error { color: #dc2626; }
 .int-meta-never { color: #94a3b8; }
 
+.int-card-sched {
+    font-size: 0.74rem;
+    font-weight: 600;
+    color: #6366f1;
+    margin-top: 4px;
+}
+
 .int-card-status {
     font-size: 0.72rem;
     font-weight: 700;
@@ -1592,6 +1599,60 @@ body.graph-mode .main-content {
 .int-status-ok     { background: #ecfdf5; color: #065f46; }
 .int-status-error  { background: #fef2f2; color: #991b1b; }
 .int-status-never  { background: #f1f5f9; color: #64748b; }
+
+/* Modal de histórico de execuções */
+.int-history-modal {
+    background: #fff;
+    border-radius: 14px;
+    padding: 20px 22px;
+    width: min(560px, 92vw);
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 50px rgba(15, 23, 42, 0.25);
+}
+.int-history-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+.int-history-head .project-confirm-title { margin: 0; }
+.int-history-body {
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.int-run-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid #eef2f7;
+    border-radius: 10px;
+    background: #fbfcfe;
+}
+.int-run-status {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 3px 9px;
+    border-radius: 999px;
+    flex-shrink: 0;
+}
+.int-run-info { min-width: 0; }
+.int-run-detail {
+    font-size: 0.86rem;
+    font-weight: 600;
+    color: #334155;
+}
+.int-run-meta {
+    font-size: 0.74rem;
+    color: #94a3b8;
+    margin-top: 2px;
+}
 
 .int-card-actions {
     display: flex;

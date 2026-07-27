@@ -1804,6 +1804,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const intMethod      = document.getElementById('int-method');
     const intAuthType    = document.getElementById('int-auth-type');
     const intAuthFields  = document.getElementById('int-auth-fields');
+    const intPagMode     = document.getElementById('int-pag-mode');
+    const intPagFields   = document.getElementById('int-pag-fields');
     const intHeaders     = document.getElementById('int-headers');
     const intQuery       = document.getElementById('int-query');
     const intAllowPrivate= document.getElementById('int-allow-private');
@@ -1820,6 +1822,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const intTitlePreview= document.getElementById('int-title-preview');
     const intFieldChips  = document.getElementById('int-field-chips');
     const intOnUpdate    = document.getElementById('int-on-update');
+    const intReimportDeleted = document.getElementById('int-reimport-deleted');
+    const intSchedEnabled = document.getElementById('int-sched-enabled');
+    const intSchedInterval = document.getElementById('int-sched-interval');
     const intPreviewResult = document.getElementById('int-preview-result');
     const intBulkBar     = document.getElementById('int-bulk-bar');
     const intBulkCount   = document.getElementById('int-bulk-count');
@@ -2002,10 +2007,79 @@ document.addEventListener('DOMContentLoaded', () => {
             intAuthFields.appendChild(intAuthFieldRow('Chave', 'int-auth-value', vals.value || '', 'text'));
         } else if (type === 'bearer') {
             intAuthFields.appendChild(intAuthFieldRow('Token de acesso', 'int-auth-token', vals.token || '', 'text', 'Cole o token; ele será enviado como "Authorization: Bearer ...".'));
+        } else if (type === 'query_key') {
+            intAuthFields.appendChild(intAuthFieldRow('Nome do parâmetro na URL', 'int-auth-param', vals.param || 'api_key', 'text', 'Ex: "api_key" ou "token" — vira ?api_key=...'));
+            intAuthFields.appendChild(intAuthFieldRow('Valor da chave/token', 'int-auth-value', vals.value || '', 'text'));
         } else if (type === 'basic') {
             intAuthFields.appendChild(intAuthFieldRow('Usuário', 'int-auth-username', vals.username || '', 'text'));
             intAuthFields.appendChild(intAuthFieldRow('Senha', 'int-auth-password', vals.password || '', 'password'));
+        } else if (type === 'oauth2') {
+            intAuthFields.appendChild(intAuthFieldRow('URL do token', 'int-auth-token-url', vals.token_url || '', 'text', 'Endpoint que emite o token (grant_type=client_credentials).'));
+            intAuthFields.appendChild(intAuthFieldRow('Client ID', 'int-auth-client-id', vals.client_id || '', 'text'));
+            intAuthFields.appendChild(intAuthFieldRow('Client Secret', 'int-auth-client-secret', vals.client_secret || '', 'text'));
+            intAuthFields.appendChild(intAuthFieldRow('Escopo (opcional)', 'int-auth-scope', vals.scope || '', 'text'));
         }
+    }
+
+    // ── Paginação ──────────────────────────────────────────────────
+    function renderPagFields(mode, vals) {
+        vals = vals || {};
+        if (!intPagFields) return;
+        intPagFields.innerHTML = '';
+        if (mode === 'page' || mode === 'offset') {
+            const paramLbl = mode === 'page' ? 'Nome do parâmetro de página' : 'Nome do parâmetro de offset';
+            const paramPh = mode === 'page' ? 'page' : 'offset';
+            intPagFields.appendChild(intAuthFieldRow(paramLbl, 'int-pag-param', vals.param || paramPh, 'text'));
+            const startLbl = mode === 'page' ? 'Página inicial' : 'Offset inicial';
+            const startDef = mode === 'page' ? 1 : 0;
+            intPagFields.appendChild(intAuthFieldRow(startLbl, 'int-pag-start', (vals.start ?? startDef), 'number'));
+            intPagFields.appendChild(intAuthFieldRow('Nome do parâmetro de tamanho (opcional)', 'int-pag-size-param', vals.size_param || (mode === 'offset' ? 'limit' : ''), 'text'));
+            intPagFields.appendChild(intAuthFieldRow('Itens por página (tamanho)', 'int-pag-size', (vals.size ?? (mode === 'offset' ? 50 : '')), 'number'));
+        } else if (mode === 'cursor') {
+            intPagFields.appendChild(intAuthFieldRow('Onde está o próximo cursor/URL na resposta', 'int-pag-next-path', vals.next_path || '', 'text', 'Ex: meta.next ou links.next. Pode ser uma URL completa ou um token.'));
+            intPagFields.appendChild(intAuthFieldRow('Nome do parâmetro do cursor (se for token)', 'int-pag-param', vals.param || 'cursor', 'text', 'Ignorado quando a resposta já traz uma URL completa.'));
+        }
+        if (mode !== 'none') {
+            intPagFields.appendChild(intAuthFieldRow('Máximo de páginas a buscar', 'int-pag-max', (vals.max_pages ?? 10), 'number'));
+        }
+    }
+
+    function readSchedule() {
+        const enabled = !!(intSchedEnabled && intSchedEnabled.checked);
+        let interval = parseInt(intSchedInterval ? intSchedInterval.value : '0', 10);
+        if (isNaN(interval)) interval = 0;
+        return { enabled, interval_minutes: interval };
+    }
+
+    function applySchedule(integ) {
+        if (intSchedEnabled) intSchedEnabled.checked = !!(integ && integ.schedule_enabled);
+        if (intSchedInterval) {
+            const iv = integ && integ.schedule_interval_minutes ? integ.schedule_interval_minutes : 60;
+            intSchedInterval.value = iv;
+        }
+    }
+
+    function readPagination() {
+        const mode = intPagMode ? intPagMode.value : 'none';
+        if (!mode || mode === 'none') return { mode: 'none' };
+        const pag = { mode };
+        const num = (id, def) => {
+            const v = parseInt(intValOf(id), 10);
+            return isNaN(v) ? def : v;
+        };
+        if (mode === 'page' || mode === 'offset') {
+            pag.param = intValOf('int-pag-param').trim();
+            pag.start = num('int-pag-start', mode === 'page' ? 1 : 0);
+            const sp = intValOf('int-pag-size-param').trim();
+            if (sp) pag.size_param = sp;
+            const sz = num('int-pag-size', 0);
+            if (sz) pag.size = sz;
+        } else if (mode === 'cursor') {
+            pag.next_path = intValOf('int-pag-next-path').trim();
+            pag.param = intValOf('int-pag-param').trim();
+        }
+        pag.max_pages = num('int-pag-max', 10);
+        return pag;
     }
 
     function readAuth() {
@@ -2016,9 +2090,17 @@ document.addEventListener('DOMContentLoaded', () => {
             auth.value = intValOf('int-auth-value');
         } else if (type === 'bearer') {
             auth.token = intValOf('int-auth-token');
+        } else if (type === 'query_key') {
+            auth.param = intValOf('int-auth-param');
+            auth.value = intValOf('int-auth-value');
         } else if (type === 'basic') {
             auth.username = intValOf('int-auth-username');
             auth.password = intValOf('int-auth-password');
+        } else if (type === 'oauth2') {
+            auth.token_url = intValOf('int-auth-token-url');
+            auth.client_id = intValOf('int-auth-client-id');
+            auth.client_secret = intValOf('int-auth-client-secret');
+            auth.scope = intValOf('int-auth-scope');
         }
         return auth;
     }
@@ -2176,6 +2258,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 due_date: { mode: 'none' },
             },
             on_update: intOnUpdate.value,
+            reimport_deleted: !!(intReimportDeleted && intReimportDeleted.checked),
+            pagination: readPagination(),
         };
     }
 
@@ -2212,6 +2296,13 @@ document.addEventListener('DOMContentLoaded', () => {
         fillSelect(intExternalId, [savedExt], savedExt);
         intTextTemplate.value = map.text_template || '';
         intOnUpdate.value = cfg.on_update || 'skip';
+        if (intReimportDeleted) intReimportDeleted.checked = !!cfg.reimport_deleted;
+
+        const pag = cfg.pagination || { mode: 'none' };
+        if (intPagMode) {
+            intPagMode.value = pag.mode || 'none';
+            renderPagFields(intPagMode.value, pag);
+        }
     }
 
     function fillForm(integ) {
@@ -2223,6 +2314,7 @@ document.addEventListener('DOMContentLoaded', () => {
         intPreviewTotal = 0;
         intPreviewSig = '';
         applyConfig((integ && integ.config) || {});
+        applySchedule(integ);
         renderFieldChips([]);
         if (intItemsSummary) intItemsSummary.innerHTML = '';
         if (intItemsChoice) intItemsChoice.classList.add('hidden');
@@ -2264,6 +2356,20 @@ document.addEventListener('DOMContentLoaded', () => {
         return days === 1 ? 'ontem' : `há ${days} dias`;
     }
 
+    function intFmtNext(iso) {
+        if (!iso) return '';
+        const norm = /[zZ]|[+-]\d\d:?\d\d$/.test(iso) ? iso : iso + 'Z';
+        const d = new Date(norm);
+        if (isNaN(d.getTime())) return '';
+        const min = Math.round((d.getTime() - Date.now()) / 60000);
+        if (min <= 0) return 'em instantes';
+        if (min < 60) return `em ${min} min`;
+        const h = Math.floor(min / 60);
+        if (h < 24) return `em ${h} h`;
+        const days = Math.floor(h / 24);
+        return days === 1 ? 'amanhã' : `em ${days} dias`;
+    }
+
     function renderIntList(list) {
         intListEl.innerHTML = '';
         if (!list.length) {
@@ -2285,6 +2391,11 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 meta = 'Ainda não foi executada';
             }
+            let schedLine = '';
+            if (integ.schedule_enabled && integ.schedule_interval_minutes) {
+                const nextWhen = intFmtNext(integ.next_run_at);
+                schedLine = `<div class="int-card-sched">⏱ A cada ${integ.schedule_interval_minutes} min${nextWhen ? ' • próxima ' + nextWhen : ''}</div>`;
+            }
             const card = document.createElement('div');
             card.className = 'int-card';
             card.innerHTML = `
@@ -2292,13 +2403,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="int-card-title">${escapeHTML(integ.name)}</div>
                     <div class="int-card-sub">${escapeHTML(baseUrl)}</div>
                     <div class="int-card-meta int-meta-${escapeHTML(status)}">${escapeHTML(meta)}</div>
+                    ${schedLine}
                 </div>
                 <div class="int-card-status int-status-${escapeHTML(status)}">${statusText}</div>
                 <div class="int-card-actions">
                     <button class="int-text-btn" data-act="edit">Editar</button>
+                    <button class="int-text-btn" data-act="history">Histórico</button>
                     <button class="int-text-btn int-btn-runcard" data-act="run" title="Re-importa da fonte aplicando as regras automáticas (sem os ajustes manuais da revisão)">Executar</button>
                 </div>`;
             card.querySelector('[data-act="edit"]').addEventListener('click', () => openEditorById(integ.id));
+            card.querySelector('[data-act="history"]').addEventListener('click', () => openHistory(integ.id, integ.name));
             card.querySelector('[data-act="run"]').addEventListener('click', () => runById(integ.id));
             intListEl.appendChild(card);
         });
@@ -2589,17 +2703,19 @@ document.addEventListener('DOMContentLoaded', () => {
         const name = intName.value.trim();
         if (!name) { intAlertShow('Dê um nome à integração (passo 1).', true); return null; }
         const config = getFormConfig();
+        const schedule = readSchedule();
         const editingId = intId.value ? parseInt(intId.value, 10) : null;
+        const payload = { name, config, schedule };
         const res = editingId
             ? await apiFetch(`/api/integrations/${editingId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, config }),
+                body: JSON.stringify(payload),
             })
             : await apiFetch('/api/integrations', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, config }),
+                body: JSON.stringify(payload),
             });
         const data = await res.json();
         if (!res.ok) { intAlertShow(data.error || 'Falha ao salvar.', true); return null; }
@@ -2650,7 +2766,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await apiFetch(`/api/integrations/${id}/import`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ items, on_update: intOnUpdate.value }),
+                body: JSON.stringify({
+                    items,
+                    on_update: intOnUpdate.value,
+                    reimport_deleted: !!(intReimportDeleted && intReimportDeleted.checked),
+                }),
             });
             const data = await res.json();
             if (!res.ok) { intAlertShow(data.error || 'Falha ao importar.', true); return; }
@@ -2683,6 +2803,64 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // ── Histórico de execuções ─────────────────────────────────────
+    const intHistoryOverlay = document.getElementById('int-history-overlay');
+    const intHistoryBody    = document.getElementById('int-history-body');
+    const intHistoryTitle   = document.getElementById('int-history-title');
+    const intHistoryClose   = document.getElementById('int-history-close');
+
+    function intTriggerLabel(t) {
+        if (t === 'import') return 'Revisão manual';
+        if (t === 'schedule') return 'Agendado';
+        return 'Manual';
+    }
+
+    function renderRuns(runs) {
+        if (!runs.length) {
+            intHistoryBody.innerHTML = '<p class="int-muted">Nenhuma execução registrada ainda.</p>';
+            return;
+        }
+        const rows = runs.map(r => {
+            const when = intFmtWhen(r.finished_at || r.started_at) || '';
+            const st = r.status === 'ok' ? 'ok' : 'error';
+            const stText = r.status === 'ok' ? 'OK' : 'Erro';
+            const detail = r.status === 'ok'
+                ? `${r.created} criada(s) • ${r.updated} atualizada(s) • ${r.skipped} ignorada(s)`
+                : escapeHTML(r.error || 'erro desconhecido');
+            return `
+                <div class="int-run-row">
+                    <span class="int-run-status int-status-${st}">${stText}</span>
+                    <div class="int-run-info">
+                        <div class="int-run-detail">${detail}</div>
+                        <div class="int-run-meta">${escapeHTML(intTriggerLabel(r.trigger))}${when ? ' • ' + when : ''} • ${r.total_items} item(ns)</div>
+                    </div>
+                </div>`;
+        }).join('');
+        intHistoryBody.innerHTML = rows;
+    }
+
+    async function openHistory(id, name) {
+        if (!intHistoryOverlay) return;
+        intHistoryTitle.textContent = `Histórico — ${name}`;
+        intHistoryBody.innerHTML = '<p class="int-muted">Carregando…</p>';
+        intHistoryOverlay.classList.remove('hidden');
+        try {
+            const res = await apiFetch(`/api/integrations/${id}/runs?limit=50`);
+            const data = await res.json();
+            if (!res.ok) {
+                intHistoryBody.innerHTML = `<p class="int-error-inline">${escapeHTML(data.error || 'Falha ao carregar histórico.')}</p>`;
+                return;
+            }
+            renderRuns(data);
+        } catch (e) {
+            intHistoryBody.innerHTML = '<p class="int-error-inline">Erro de rede ao carregar histórico.</p>';
+        }
+    }
+
+    function closeHistory() {
+        if (intHistoryOverlay) intHistoryOverlay.classList.add('hidden');
+    }
+
     async function onDelete() {
         if (!intId.value) return;
         const ok = await _confirmModal(
@@ -2709,6 +2887,7 @@ document.addEventListener('DOMContentLoaded', () => {
         intNewBtn.addEventListener('click', openNewIntegration);
         intBackBtn.addEventListener('click', () => { intShowList(); loadIntegrations(); });
         intAuthType.addEventListener('change', () => renderAuthFields(intAuthType.value, {}));
+        if (intPagMode) intPagMode.addEventListener('change', () => renderPagFields(intPagMode.value, {}));
         intAddHeader.addEventListener('click', () => kvAddRow(intHeaders, '', ''));
         intAddQuery.addEventListener('click', () => kvAddRow(intQuery, '', ''));
         intProjectByField.addEventListener('change', updateProjectModeUI);
@@ -2722,6 +2901,13 @@ document.addEventListener('DOMContentLoaded', () => {
         intDeleteBtn.addEventListener('click', onDelete);
         if (intBulkProjectApply) intBulkProjectApply.addEventListener('click', applyBulkProject);
         if (intBulkWeekdayApply) intBulkWeekdayApply.addEventListener('click', applyBulkWeekday);
+
+        if (intHistoryClose) intHistoryClose.addEventListener('click', closeHistory);
+        if (intHistoryOverlay) {
+            intHistoryOverlay.addEventListener('click', (e) => {
+                if (e.target === intHistoryOverlay) closeHistory();
+            });
+        }
 
         // Navegação livre pelos números do stepper.
         intStepper.querySelectorAll('.int-step').forEach(s => {

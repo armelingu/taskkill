@@ -15,6 +15,7 @@ from database import get_db_connection, get_db_path, init_db
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import integrations
+import scheduler
 from integrations import IntegrationError
 
 # ---------------------------------------------------------------------------
@@ -655,6 +656,7 @@ def _integration_row_to_dict(row):
         cfg = json.loads(row['config_json'])
     except (ValueError, TypeError):
         cfg = {}
+    keys = row.keys()
     return {
         'id': row['id'],
         'name': row['name'],
@@ -663,6 +665,9 @@ def _integration_row_to_dict(row):
         'last_status': row['last_status'],
         'last_error': row['last_error'],
         'last_item_count': row['last_item_count'],
+        'schedule_enabled': bool(row['schedule_enabled']) if 'schedule_enabled' in keys else False,
+        'schedule_interval_minutes': (row['schedule_interval_minutes'] if 'schedule_interval_minutes' in keys else 0) or 0,
+        'next_run_at': row['next_run_at'] if 'next_run_at' in keys else None,
         'config': integrations.mask_config(cfg),
     }
 
@@ -686,12 +691,22 @@ def create_integration():
     if not isinstance(config, dict):
         return jsonify({"error": "Config inválida"}), 400
 
+    sched = data.get('schedule') or {}
+    sched_enabled = 1 if sched.get('enabled') else 0
+    interval = scheduler.clamp_interval(sched.get('interval_minutes'))
+    if sched_enabled and not interval:
+        return jsonify({"error": f"Intervalo mínimo é {scheduler.MIN_INTERVAL_MINUTES} minutos"}), 400
+    next_run = scheduler.compute_next_run(interval) if sched_enabled else None
+
     now = datetime.utcnow().isoformat()
     with get_db_connection() as conn:
         cursor = conn.execute(
-            "INSERT INTO integrations (name, enabled, config_json, last_status, created_at, updated_at) "
-            "VALUES (?, ?, ?, 'never', ?, ?)",
-            (name, 1 if data.get('enabled', True) else 0, json.dumps(config), now, now)
+            "INSERT INTO integrations "
+            "(name, enabled, config_json, last_status, created_at, updated_at, "
+            " schedule_enabled, schedule_interval_minutes, next_run_at) "
+            "VALUES (?, ?, ?, 'never', ?, ?, ?, ?, ?)",
+            (name, 1 if data.get('enabled', True) else 0, json.dumps(config), now, now,
+             sched_enabled, interval, next_run)
         )
         conn.commit()
         new_id = cursor.lastrowid
@@ -713,7 +728,10 @@ def get_integration(integration_id):
 def update_integration(integration_id):
     data = request.get_json(silent=True) or {}
     with get_db_connection() as conn:
-        row = conn.execute('SELECT config_json FROM integrations WHERE id = ?', (integration_id,)).fetchone()
+        row = conn.execute(
+            'SELECT config_json, schedule_interval_minutes FROM integrations WHERE id = ?',
+            (integration_id,)
+        ).fetchone()
         if not row:
             return jsonify({"error": "Não encontrada"}), 404
         try:
@@ -731,6 +749,19 @@ def update_integration(integration_id):
         if 'enabled' in data:
             fields.append('enabled = ?')
             params.append(1 if data.get('enabled') else 0)
+        if 'schedule' in data:
+            sched = data.get('schedule') or {}
+            sched_enabled = 1 if sched.get('enabled') else 0
+            interval = scheduler.clamp_interval(sched.get('interval_minutes'))
+            if sched_enabled and not interval:
+                return jsonify({"error": f"Intervalo mínimo é {scheduler.MIN_INTERVAL_MINUTES} minutos"}), 400
+            fields.append('schedule_enabled = ?')
+            params.append(sched_enabled)
+            fields.append('schedule_interval_minutes = ?')
+            params.append(interval)
+            fields.append('next_run_at = ?')
+            # Reagenda a partir de agora ao ligar/alterar; ao desligar, limpa.
+            params.append(scheduler.compute_next_run(interval) if sched_enabled else None)
         if 'config' in data:
             new_cfg = data.get('config') or {}
             if not isinstance(new_cfg, dict):
@@ -833,6 +864,21 @@ def run_integration_endpoint(integration_id):
     return jsonify(result)
 
 
+@api_bp.route('/integrations/<int:integration_id>/runs', methods=['GET'])
+@api_admin_required
+def integration_runs(integration_id):
+    """Histórico de execuções da integração (mais recentes primeiro)."""
+    with get_db_connection() as conn:
+        row = conn.execute('SELECT id FROM integrations WHERE id = ?', (integration_id,)).fetchone()
+    if not row:
+        return jsonify({"error": "Não encontrada"}), 404
+    try:
+        limit = int(request.args.get('limit', 50))
+    except (TypeError, ValueError):
+        limit = 50
+    return jsonify(integrations.list_runs(integration_id, limit=limit))
+
+
 @api_bp.route('/integrations/<int:integration_id>/import', methods=['POST'])
 @api_admin_required
 def import_integration_items(integration_id):
@@ -842,8 +888,10 @@ def import_integration_items(integration_id):
     if not isinstance(items, list):
         return jsonify({"error": "Envie a lista de itens a importar."}), 400
     on_update = data.get('on_update') or 'skip'
+    reimport_deleted = bool(data.get('reimport_deleted'))
     try:
-        result = integrations.commit_items(integration_id, items, on_update=on_update)
+        result = integrations.commit_items(integration_id, items, on_update=on_update,
+                                           reimport_deleted=reimport_deleted)
     except IntegrationError as exc:
         return jsonify({"error": str(exc)}), 400
     return jsonify(result)

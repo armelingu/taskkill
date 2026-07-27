@@ -261,8 +261,10 @@
                         <select class="auth-input" id="int-auth-type">
                             <option value="none">Não precisa (aberta)</option>
                             <option value="bearer">Sim — token de acesso</option>
-                            <option value="api_key">Sim — chave de API</option>
+                            <option value="api_key">Sim — chave de API (no cabeçalho)</option>
+                            <option value="query_key">Sim — chave/token na URL (query)</option>
                             <option value="basic">Sim — usuário e senha</option>
+                            <option value="oauth2">Sim — OAuth2 (client credentials)</option>
                         </select>
                         <div id="int-auth-fields" class="int-auth-fields"></div>
 
@@ -290,6 +292,19 @@
                             </div>
                         </details>
 
+                        <details class="int-advanced">
+                            <summary>Executar automaticamente (agendamento)</summary>
+                            <div class="int-advanced-body">
+                                <label class="int-checkbox">
+                                    <input type="checkbox" id="int-sched-enabled">
+                                    Rodar esta integração sozinha, de tempos em tempos
+                                </label>
+                                <label class="auth-label" for="int-sched-interval">A cada quantos minutos?</label>
+                                <input class="auth-input int-inline-select" id="int-sched-interval" type="number" min="5" step="5" value="60">
+                                <p class="int-step-help">Mínimo de 5 minutos. A execução automática usa as regras automáticas (sem os ajustes manuais da revisão).</p>
+                            </div>
+                        </details>
+
                         <div class="int-step-actions">
                             <button class="auth-btn int-inline-btn" id="int-fetch-btn" type="button">Buscar dados →</button>
                             <span id="int-fetch-status" class="int-inline-status"></span>
@@ -310,6 +325,21 @@
                         <details class="int-advanced">
                             <summary>Ver um exemplo do que veio da API</summary>
                             <pre id="int-sample" class="int-json-preview"></pre>
+                        </details>
+
+                        <details class="int-advanced">
+                            <summary>A API divide os resultados em páginas? (avançado)</summary>
+                            <div class="int-advanced-body">
+                                <p class="int-step-help">Se a API só devolve um pedaço dos itens por vez, configure aqui para buscar as próximas páginas automaticamente.</p>
+                                <label class="auth-label" for="int-pag-mode">Tipo de paginação</label>
+                                <select class="auth-input" id="int-pag-mode">
+                                    <option value="none">Sem paginação (uma requisição)</option>
+                                    <option value="page">Por número de página (ex: ?page=1,2,3…)</option>
+                                    <option value="offset">Por offset (ex: ?offset=0,50,100…)</option>
+                                    <option value="cursor">Por cursor / próximo (next)</option>
+                                </select>
+                                <div id="int-pag-fields" class="int-pag-fields"></div>
+                            </div>
                         </details>
 
                         <div class="int-step-actions">
@@ -353,7 +383,13 @@
                         <select class="auth-input" id="int-on-update">
                             <option value="skip">Ignorar (não duplicar)</option>
                             <option value="update_text">Atualizar o texto da tarefa</option>
+                            <option value="update_all">Atualizar texto, projeto e dia</option>
                         </select>
+
+                        <label class="int-checkbox">
+                            <input type="checkbox" id="int-reimport-deleted">
+                            Recriar tarefas que foram excluídas depois de importadas
+                        </label>
 
                         <div class="int-step-actions">
                             <button class="int-text-btn" data-goto="2" type="button">← Voltar</button>
@@ -473,6 +509,17 @@
                 <button id="logout-confirm-cancel" class="project-confirm-btn project-confirm-btn--cancel">Cancelar</button>
                 <button id="logout-confirm-ok" class="project-confirm-btn project-confirm-btn--danger">Sair</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Modal de histórico de execuções da integração -->
+    <div id="int-history-overlay" class="project-confirm-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="int-history-title">
+        <div class="int-history-modal">
+            <header class="int-history-head">
+                <h3 id="int-history-title" class="project-confirm-title">Histórico de execuções</h3>
+                <button id="int-history-close" class="int-text-btn" type="button" aria-label="Fechar">Fechar</button>
+            </header>
+            <div id="int-history-body" class="int-history-body"></div>
         </div>
     </div>
 

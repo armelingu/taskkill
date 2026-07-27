@@ -38,6 +38,7 @@ taskkill/
 ├── database.py                # Schema, migrações e bootstrap do banco SQLite
 ├── routes.py                  # Blueprints REST (tasks, projects, auth, perfil, backup, integrações)
 ├── integrations.py            # Núcleo das integrações externas (REST/JSON -> tasks)
+├── scheduler.py               # Agendador in-process das integrações (thread daemon)
 ├── serve.py                   # Servidor WSGI local (waitress)
 ├── requirements.txt
 ├── .env.example
@@ -140,18 +141,28 @@ Módulo genérico para importar itens de uma API REST/JSON como tarefas, configu
 
 **Fluxo (wizard):**
 
-1. **Conexão** — nome, base URL, path, método (GET/POST), headers, query params e autenticação (nenhuma, API key em header, Bearer token ou Basic).
-2. **Payload** — botão "Testar conexão" busca a resposta e sugere os caminhos de array (`items_path`) e os campos disponíveis.
-3. **Mapeamento** — campo de ID único (deduplicação), projeto de destino (fixo ou vindo de um campo) e o texto da tarefa via template seguro `{{ campo }}`.
-4. **Preview & executar** — "Gerar preview" mostra (dry-run) as tarefas que seriam criadas; "Executar agora" importa de fato.
+1. **Conexão** — nome, URL da API, autenticação e (avançado) método/headers/query, paginação e agendamento.
+2. **Itens** — "Buscar dados" busca a resposta e sugere onde está a lista (`items_path`) e os campos disponíveis.
+3. **Tarefa** — campo de ID único (deduplicação), projeto de destino (fixo ou vindo de um campo), texto via template seguro `{{ campo }}` e política de atualização.
+4. **Revisar** — prévia interativa: escolha por linha o dia da semana e o projeto (ou em massa), marque o que importar e importe de fato.
 
-O botão **Editar JSON** expõe a mesma configuração declarativa para importar/exportar/editar diretamente.
+O bloco **Editar como JSON** expõe a mesma configuração declarativa para importar/exportar/editar diretamente.
 
-**Modelo de dados:** `integrations` (config + status da última execução) e `integration_items` (deduplicação por `external_id` e vínculo com a task criada).
+**Autenticação suportada:** nenhuma, Bearer token, API key em header, chave/token na query, Basic (usuário/senha) e OAuth2 *client credentials* (busca o `access_token` num token endpoint e o usa como Bearer).
 
-**Segurança:** endpoints restritos a admin + CSRF; guarda de SSRF (bloqueia por padrão IPs privados/loopback/metadata de cloud — há um toggle "permitir rede interna"); timeout de 10s e limite de 5 MB na resposta; segredos mascarados nas respostas da API e preservados em atualizações. O mapeamento usa apenas templates `{{ campo }}` — nunca executa código arbitrário.
+**Paginação:** sem paginação (padrão), por número de página, por offset ou por cursor/`next` (segue um token ou URL na resposta). Teto de segurança de páginas por execução.
 
-**Fora do MVP (próximas fases):** agendamento automático (polling), fontes SQL e webhooks, criptografia dos segredos em repouso e mapeamento de `due_date`.
+**Atualização / deduplicação:** dedup por `external_id`. Se um item já foi importado, é possível ignorar, atualizar só o texto, ou atualizar texto + projeto + dia. Um `content_hash` evita updates desnecessários e há a opção de recriar tarefas que foram excluídas depois de importadas.
+
+**Agendamento automático:** cada integração pode rodar sozinha a cada N minutos (mínimo 5). Uma thread daemon in-process reserva execuções vencidas com um *compare-and-set* atômico em `next_run_at` (seguro no deploy single-worker; sem duplicidade mesmo com múltiplos processos). Controle por `TASKKILL_SCHEDULER` (0 desliga) e `TASKKILL_SCHEDULER_TICK` (segundos entre varreduras).
+
+**Histórico:** cada execução (manual, revisão interativa ou agendada) é registrada em `integration_runs` com contagens e erro; visível pelo botão **Histórico** no card da integração.
+
+**Modelo de dados:** `integrations` (config + status + agendamento), `integration_items` (dedup por `external_id`, `content_hash` e vínculo com a task) e `integration_runs` (log de execuções).
+
+**Segurança:** endpoints restritos a admin + CSRF; guarda de SSRF (bloqueia por padrão IPs privados/loopback/metadata de cloud, inclusive no token endpoint do OAuth2 — há um toggle "permitir rede interna"); timeout de 10s e limite de 5 MB na resposta; segredos mascarados nas respostas da API e preservados em atualizações. O mapeamento usa apenas templates `{{ campo }}` — nunca executa código arbitrário.
+
+**Fora do escopo (próximas fases):** fontes SQL e webhooks, e criptografia dos segredos em repouso.
 
 ## Segurança
 

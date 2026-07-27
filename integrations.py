@@ -13,6 +13,7 @@ Segurança:
 """
 
 import copy
+import hashlib
 import ipaddress
 import json
 import re
@@ -40,7 +41,7 @@ ALLOWED_DUE_DAYS = {'', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'}
 ALLOWED_METHODS = {'GET', 'POST'}
 SECRET_MASK = '••••••••'
 # Campos considerados segredo dentro de connection.auth
-SECRET_FIELDS = ('token', 'value', 'password')
+SECRET_FIELDS = ('token', 'value', 'password', 'client_secret')
 
 _TEMPLATE_RE = re.compile(r'\{\{\s*([\w.\[\]]+)\s*\}\}')
 
@@ -131,8 +132,42 @@ def _assert_url_allowed(url, allow_private=False):
 
 
 # ── Requisição HTTP ────────────────────────────────────────────────
-def _build_auth_and_headers(connection):
+def _fetch_oauth2_token(auth, allow_private):
+    """OAuth2 client_credentials: busca um access_token no token endpoint."""
+    token_url = (auth.get('token_url') or '').strip()
+    if not token_url:
+        raise IntegrationError('OAuth2: informe a URL do token.')
+    _assert_url_allowed(token_url, allow_private=allow_private)
+
+    data = {
+        'grant_type': 'client_credentials',
+        'client_id': auth.get('client_id') or '',
+        'client_secret': auth.get('client_secret') or '',
+    }
+    scope = (auth.get('scope') or '').strip()
+    if scope:
+        data['scope'] = scope
+
+    try:
+        with httpx.Client(timeout=FETCH_TIMEOUT_SECS, follow_redirects=False) as client:
+            resp = client.post(token_url, data=data)
+    except httpx.RequestError as exc:
+        raise IntegrationError(f'OAuth2: falha ao obter token ({exc.__class__.__name__}).')
+    if resp.status_code >= 400:
+        raise IntegrationError(f'OAuth2: token endpoint respondeu HTTP {resp.status_code}.')
+    try:
+        token = resp.json().get('access_token')
+    except (ValueError, json.JSONDecodeError):
+        raise IntegrationError('OAuth2: a resposta do token não é JSON válido.')
+    if not token:
+        raise IntegrationError('OAuth2: access_token ausente na resposta.')
+    return token
+
+
+def _build_auth(connection, allow_private):
+    """Monta headers/auth/params conforme o tipo de autenticação configurado."""
     headers = dict(connection.get('headers') or {})
+    params = {}
     auth = connection.get('auth') or {'type': 'none'}
     atype = (auth.get('type') or 'none').lower()
     httpx_auth = None
@@ -148,20 +183,36 @@ def _build_auth_and_headers(connection):
             headers[header_name] = value
     elif atype == 'basic':
         httpx_auth = (auth.get('username') or '', auth.get('password') or '')
+    elif atype == 'query_key':
+        name = (auth.get('param') or '').strip()
+        value = auth.get('value') or ''
+        if name and value:
+            params[name] = value
+    elif atype == 'oauth2':
+        token = _fetch_oauth2_token(auth, allow_private)
+        headers['Authorization'] = f'Bearer {token}'
 
-    return headers, httpx_auth
+    return headers, httpx_auth, params
 
 
-def fetch_payload(connection, allow_private=None):
-    """Faz a requisição e devolve o JSON parseado (dict/list)."""
+def fetch_payload(connection, allow_private=None, extra_query=None, override_url=None):
+    """
+    Faz a requisição e devolve o JSON parseado (dict/list).
+
+    - extra_query: dict mesclado sobre connection.query (paginação por página/offset).
+    - override_url: usa esta URL absoluta no lugar da montada (paginação por cursor/next).
+    """
     connection = connection or {}
-    base_url = (connection.get('base_url') or '').strip().rstrip('/')
-    path = (connection.get('path') or '').strip()
-    if not base_url:
-        raise IntegrationError('base_url é obrigatório.')
-    if path and not path.startswith('/'):
-        path = '/' + path
-    url = base_url + path
+    if override_url:
+        url = str(override_url)
+    else:
+        base_url = (connection.get('base_url') or '').strip().rstrip('/')
+        path = (connection.get('path') or '').strip()
+        if not base_url:
+            raise IntegrationError('base_url é obrigatório.')
+        if path and not path.startswith('/'):
+            path = '/' + path
+        url = base_url + path
 
     method = (connection.get('method') or 'GET').upper()
     if method not in ALLOWED_METHODS:
@@ -171,8 +222,11 @@ def fetch_payload(connection, allow_private=None):
         allow_private = bool(connection.get('allow_private'))
     _assert_url_allowed(url, allow_private=allow_private)
 
-    headers, httpx_auth = _build_auth_and_headers(connection)
-    params = connection.get('query') or {}
+    headers, httpx_auth, auth_params = _build_auth(connection, allow_private)
+    params = dict(connection.get('query') or {})
+    params.update(auth_params)
+    if extra_query:
+        params.update(extra_query)
     body = connection.get('body')
 
     req_kwargs = {'params': params, 'headers': headers}
@@ -213,6 +267,95 @@ def extract_items(payload, items_path):
     if isinstance(data, dict):
         return [data]
     return []
+
+
+MAX_PAGES_CAP = 50
+
+
+def _gather_items(connection, items_path, pagination):
+    """
+    Coleta itens de uma ou mais páginas, conforme a configuração de paginação.
+
+    pagination.mode:
+      - 'none'   : uma única requisição.
+      - 'page'   : incrementa um parâmetro de página (param), começando em 'start'.
+      - 'offset' : incrementa um parâmetro de offset (param) em passos de 'size'.
+      - 'cursor' : segue um token/URL encontrado em 'next_path' na resposta.
+    Campos comuns: param, size_param, size, start, max_pages, next_path.
+    """
+    pagination = pagination or {}
+    mode = (pagination.get('mode') or 'none').lower()
+
+    if mode == 'none' or not mode:
+        payload = fetch_payload(connection)
+        return extract_items(payload, items_path)
+
+    param = (pagination.get('param') or '').strip()
+    size_param = (pagination.get('size_param') or '').strip()
+    try:
+        size = int(pagination.get('size') or 0)
+    except (TypeError, ValueError):
+        size = 0
+    try:
+        start = int(pagination.get('start') or (1 if mode == 'page' else 0))
+    except (TypeError, ValueError):
+        start = 1 if mode == 'page' else 0
+    try:
+        max_pages = int(pagination.get('max_pages') or 10)
+    except (TypeError, ValueError):
+        max_pages = 10
+    max_pages = max(1, min(max_pages, MAX_PAGES_CAP))
+    next_path = (pagination.get('next_path') or '').strip()
+
+    collected = []
+    override_url = None
+    cursor_token = None
+
+    for i in range(max_pages):
+        extra = {}
+        if mode == 'page':
+            if not param:
+                raise IntegrationError('Paginação por página exige o nome do parâmetro.')
+            extra[param] = start + i
+            if size_param and size:
+                extra[size_param] = size
+        elif mode == 'offset':
+            if not param:
+                raise IntegrationError('Paginação por offset exige o nome do parâmetro.')
+            extra[param] = start + i * (size if size else 1)
+            if size_param and size:
+                extra[size_param] = size
+        elif mode == 'cursor':
+            if i > 0 and cursor_token and not override_url and param:
+                extra[param] = cursor_token
+        else:
+            raise IntegrationError(f'Modo de paginação inválido: {mode}')
+
+        payload = fetch_payload(connection, extra_query=extra or None, override_url=override_url)
+        page_items = extract_items(payload, items_path)
+        if not page_items:
+            break
+        collected.extend(page_items)
+        if len(collected) >= MAX_ITEMS_PER_RUN:
+            collected = collected[:MAX_ITEMS_PER_RUN]
+            break
+
+        if mode == 'cursor':
+            nxt = resolve_path(payload, next_path) if next_path else None
+            if not nxt:
+                break
+            nxt = str(nxt).strip()
+            if nxt.lower().startswith(('http://', 'https://')):
+                override_url = nxt
+                cursor_token = None
+            else:
+                override_url = None
+                cursor_token = nxt
+        elif size and len(page_items) < size:
+            # Página incompleta em page/offset => última página.
+            break
+
+    return collected
 
 
 def detect_array_paths(payload, max_depth=4):
@@ -305,9 +448,10 @@ def run_config(config, dry_run=True, integration_id=None, conn=None):
     items_path = config.get('items_path') or ''
     mapping = config.get('mapping') or {}
     on_update = (config.get('on_update') or 'skip').lower()
+    reimport_deleted = bool(config.get('reimport_deleted'))
+    pagination = config.get('pagination') or {}
 
-    payload = fetch_payload(connection)
-    items = extract_items(payload, items_path)
+    items = _gather_items(connection, items_path, pagination)
     if len(items) > MAX_ITEMS_PER_RUN:
         items = items[:MAX_ITEMS_PER_RUN]
 
@@ -341,7 +485,8 @@ def run_config(config, dry_run=True, integration_id=None, conn=None):
             skipped += 1
             continue
         created_i, updated_i, skipped_i = _upsert_task(
-            conn, integration_id, ext, project, text, due, on_update, today_str, now_iso
+            conn, integration_id, ext, project, text, due, on_update, today_str, now_iso,
+            reimport_deleted=reimport_deleted
         )
         created += created_i
         updated += updated_i
@@ -350,28 +495,14 @@ def run_config(config, dry_run=True, integration_id=None, conn=None):
     return {'total_items': len(items), 'created': created, 'updated': updated, 'skipped': skipped}
 
 
-def _upsert_task(conn, integration_id, ext, project, text, due, on_update, today_str, now_iso):
-    """Cria ou atualiza uma task a partir de um item já resolvido. Retorna (created, updated, skipped)."""
-    if due not in ALLOWED_DUE_DAYS:
-        due = ''
+def _content_hash(project, text, due):
+    """Hash estável do conteúdo relevante da task (para detectar mudanças)."""
+    raw = f'{project}\x1f{text}\x1f{due}'
+    return hashlib.sha1(raw.encode('utf-8')).hexdigest()
 
-    # Garante o projeto na tabela (para aparecer no sidebar).
-    conn.execute('INSERT OR IGNORE INTO projects (name) VALUES (?)', (project,))
 
-    existing = conn.execute(
-        'SELECT id, task_id FROM integration_items '
-        'WHERE integration_id = ? AND external_id = ?',
-        (integration_id, ext)
-    ).fetchone()
-
-    if existing:
-        if on_update == 'update_text' and existing['task_id']:
-            conn.execute('UPDATE tasks SET text = ? WHERE id = ?', (text, existing['task_id']))
-            conn.execute('UPDATE integration_items SET updated_at = ? WHERE id = ?',
-                         (now_iso, existing['id']))
-            return (0, 1, 0)
-        return (0, 0, 1)
-
+def _create_task_and_link(conn, integration_id, ext, project, text, due, today_str, now_iso, link_id=None):
+    """Cria a task e cria (ou re-vincula) a linha em integration_items."""
     row = conn.execute(
         'SELECT COALESCE(MAX(position), -1) AS max_pos FROM tasks '
         'WHERE project = ? AND deleted = 0',
@@ -385,15 +516,105 @@ def _upsert_task(conn, integration_id, ext, project, text, due, on_update, today
         (project, text, today_str, due, new_pos)
     )
     task_id = cur.lastrowid
+    chash = _content_hash(project, text, due)
+    if link_id is not None:
+        conn.execute(
+            'UPDATE integration_items SET task_id = ?, content_hash = ?, updated_at = ? WHERE id = ?',
+            (task_id, chash, now_iso, link_id)
+        )
+    else:
+        conn.execute(
+            'INSERT INTO integration_items '
+            '(integration_id, external_id, task_id, content_hash, created_at, updated_at) '
+            'VALUES (?, ?, ?, ?, ?, ?)',
+            (integration_id, ext, task_id, chash, now_iso, now_iso)
+        )
+    return task_id
+
+
+def _upsert_task(conn, integration_id, ext, project, text, due, on_update, today_str, now_iso,
+                 reimport_deleted=False):
+    """
+    Cria ou atualiza uma task a partir de um item já resolvido.
+    Retorna (created, updated, skipped).
+
+    on_update:
+      - 'skip'        : itens já importados são ignorados.
+      - 'update_text' : atualiza apenas o texto.
+      - 'update_all'  : atualiza texto, projeto e dia (due).
+    reimport_deleted: se a task vinculada foi excluída, recria uma nova.
+    """
+    if due not in ALLOWED_DUE_DAYS:
+        due = ''
+
+    # Garante o projeto na tabela (para aparecer no sidebar).
+    conn.execute('INSERT OR IGNORE INTO projects (name) VALUES (?)', (project,))
+
+    existing = conn.execute(
+        'SELECT id, task_id, content_hash FROM integration_items '
+        'WHERE integration_id = ? AND external_id = ?',
+        (integration_id, ext)
+    ).fetchone()
+
+    if not existing:
+        _create_task_and_link(conn, integration_id, ext, project, text, due, today_str, now_iso)
+        return (1, 0, 0)
+
+    # Estado da task vinculada (pode ter sido excluída ou apagada de vez).
+    task_row = None
+    if existing['task_id']:
+        task_row = conn.execute(
+            'SELECT id, deleted FROM tasks WHERE id = ?', (existing['task_id'],)
+        ).fetchone()
+    task_gone = (task_row is None) or bool(task_row['deleted'])
+
+    if task_gone:
+        if reimport_deleted:
+            _create_task_and_link(conn, integration_id, ext, project, text, due,
+                                  today_str, now_iso, link_id=existing['id'])
+            return (1, 0, 0)
+        return (0, 0, 1)
+
+    if on_update not in ('update_text', 'update_all'):
+        return (0, 0, 1)
+
+    new_hash = _content_hash(project, text, due)
+    if existing['content_hash'] == new_hash:
+        return (0, 0, 1)  # nada mudou
+
+    if on_update == 'update_text':
+        conn.execute('UPDATE tasks SET text = ? WHERE id = ?', (text, existing['task_id']))
+    else:  # update_all
+        conn.execute(
+            'UPDATE tasks SET text = ?, project = ?, due_date = ? WHERE id = ?',
+            (text, project, due, existing['task_id'])
+        )
+    conn.execute('UPDATE integration_items SET content_hash = ?, updated_at = ? WHERE id = ?',
+                 (new_hash, now_iso, existing['id']))
+    return (0, 1, 0)
+
+
+def _record_run(conn, integration_id, started_at, trigger, status, result=None, error=None):
+    """Grava uma linha no histórico de execuções (integration_runs)."""
+    result = result or {}
     conn.execute(
-        'INSERT INTO integration_items (integration_id, external_id, task_id, created_at, updated_at) '
-        'VALUES (?, ?, ?, ?, ?)',
-        (integration_id, ext, task_id, now_iso, now_iso)
+        'INSERT INTO integration_runs '
+        '(integration_id, started_at, finished_at, trigger, status, '
+        ' total_items, created, updated, skipped, error) '
+        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        (
+            int(integration_id), started_at, datetime.utcnow().isoformat(),
+            trigger, status,
+            int(result.get('total_items', 0)),
+            int(result.get('created', 0)),
+            int(result.get('updated', 0)),
+            int(result.get('skipped', 0)),
+            error,
+        )
     )
-    return (1, 0, 0)
 
 
-def run_integration(integration_id, dry_run=False):
+def run_integration(integration_id, dry_run=False, trigger='manual'):
     """Carrega a integração salva e executa (preview ou importação real)."""
     with get_db_connection() as conn:
         row = conn.execute('SELECT * FROM integrations WHERE id = ?', (int(integration_id),)).fetchone()
@@ -407,6 +628,7 @@ def run_integration(integration_id, dry_run=False):
         if dry_run:
             return run_config(config, dry_run=True, integration_id=int(integration_id))
 
+        started_at = datetime.utcnow().isoformat()
         try:
             result = run_config(config, dry_run=False, integration_id=int(integration_id), conn=conn)
         except IntegrationError as exc:
@@ -414,6 +636,7 @@ def run_integration(integration_id, dry_run=False):
                 'UPDATE integrations SET last_run_at = ?, last_status = ?, last_error = ? WHERE id = ?',
                 (datetime.utcnow().isoformat(), 'error', str(exc), int(integration_id))
             )
+            _record_run(conn, integration_id, started_at, trigger, 'error', error=str(exc))
             conn.commit()
             raise
 
@@ -422,11 +645,12 @@ def run_integration(integration_id, dry_run=False):
             'last_item_count = ? WHERE id = ?',
             (datetime.utcnow().isoformat(), 'ok', result.get('created', 0), int(integration_id))
         )
+        _record_run(conn, integration_id, started_at, trigger, 'ok', result=result)
         conn.commit()
         return result
 
 
-def commit_items(integration_id, items, on_update='skip'):
+def commit_items(integration_id, items, on_update='skip', reimport_deleted=False):
     """
     Importação interativa: cria/atualiza tasks a partir de uma lista explícita
     de itens já editados/selecionados pelo usuário na prévia.
@@ -436,6 +660,7 @@ def commit_items(integration_id, items, on_update='skip'):
     """
     integration_id = int(integration_id)
     on_update = (on_update or 'skip').lower()
+    reimport_deleted = bool(reimport_deleted)
     items = items or []
     if len(items) > MAX_ITEMS_PER_RUN:
         items = items[:MAX_ITEMS_PER_RUN]
@@ -447,7 +672,7 @@ def commit_items(integration_id, items, on_update='skip'):
 
         created = updated = skipped = 0
         today_str = date.today().strftime('%d/%m/%Y')
-        now_iso = datetime.utcnow().isoformat()
+        started_at = now_iso = datetime.utcnow().isoformat()
 
         for it in items:
             it = it or {}
@@ -459,19 +684,41 @@ def commit_items(integration_id, items, on_update='skip'):
                 skipped += 1
                 continue
             created_i, updated_i, skipped_i = _upsert_task(
-                conn, integration_id, ext, project, text, due, on_update, today_str, now_iso
+                conn, integration_id, ext, project, text, due, on_update, today_str, now_iso,
+                reimport_deleted=reimport_deleted
             )
             created += created_i
             updated += updated_i
             skipped += skipped_i
 
+        result = {
+            'total_items': len(items),
+            'created': created,
+            'updated': updated,
+            'skipped': skipped,
+        }
         conn.execute(
             'UPDATE integrations SET last_run_at = ?, last_status = ?, last_error = NULL, '
             'last_item_count = ? WHERE id = ?',
             (datetime.utcnow().isoformat(), 'ok', created, integration_id)
         )
+        _record_run(conn, integration_id, started_at, 'import', 'ok', result=result)
         conn.commit()
-        return {'created': created, 'updated': updated, 'skipped': skipped}
+        return result
+
+
+def list_runs(integration_id, limit=50):
+    """Retorna o histórico de execuções (mais recentes primeiro)."""
+    limit = max(1, min(int(limit or 50), 200))
+    with get_db_connection() as conn:
+        rows = conn.execute(
+            'SELECT id, started_at, finished_at, trigger, status, '
+            '       total_items, created, updated, skipped, error '
+            'FROM integration_runs WHERE integration_id = ? '
+            'ORDER BY id DESC LIMIT ?',
+            (int(integration_id), limit)
+        ).fetchall()
+    return [dict(r) for r in rows]
 
 
 # ── Mascaramento / merge de segredos ───────────────────────────────

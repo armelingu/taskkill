@@ -102,6 +102,13 @@ init_db()
 app.register_blueprint(main_bp)
 app.register_blueprint(api_bp)
 
+# Agendador de integrações (thread daemon). Em modo debug com reloader, só
+# inicia no processo filho (WERKZEUG_RUN_MAIN) para não rodar em duplicidade.
+from scheduler import start_scheduler  # noqa: E402
+_debug_mode = os.environ.get('TASKKILL_DEBUG', '').strip() == '1'
+if not (_debug_mode and os.environ.get('WERKZEUG_RUN_MAIN') != 'true'):
+    start_scheduler()
+
 # Quando rodar atrás de proxy (Caddy/Nginx), isso corrige request.is_secure e host/proto.
 if os.environ.get('TASKKILL_BEHIND_PROXY', '').strip() == '1':
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)

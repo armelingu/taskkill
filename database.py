@@ -208,4 +208,43 @@ def init_db():
             'ON integration_items(integration_id)'
         )
 
+        # Coluna de dedup por conteúdo (adicionada depois; migração idempotente)
+        try:
+            cursor.execute('ALTER TABLE integration_items ADD COLUMN content_hash TEXT')
+        except sqlite3.OperationalError:
+            pass
+
+        # Histórico de execuções por integração (log de cada rodada)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS integration_runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                integration_id INTEGER NOT NULL,
+                started_at TEXT,
+                finished_at TEXT,
+                trigger TEXT NOT NULL DEFAULT 'manual',
+                status TEXT NOT NULL DEFAULT 'ok',
+                total_items INTEGER NOT NULL DEFAULT 0,
+                created INTEGER NOT NULL DEFAULT 0,
+                updated INTEGER NOT NULL DEFAULT 0,
+                skipped INTEGER NOT NULL DEFAULT 0,
+                error TEXT,
+                FOREIGN KEY (integration_id) REFERENCES integrations(id) ON DELETE CASCADE
+            )
+        ''')
+        cursor.execute(
+            'CREATE INDEX IF NOT EXISTS idx_integration_runs_integration '
+            'ON integration_runs(integration_id, id DESC)'
+        )
+
+        # Agendamento automático: colunas na tabela integrations (migração idempotente)
+        for _col, _ddl in (
+            ('schedule_enabled', 'ALTER TABLE integrations ADD COLUMN schedule_enabled INTEGER NOT NULL DEFAULT 0'),
+            ('schedule_interval_minutes', 'ALTER TABLE integrations ADD COLUMN schedule_interval_minutes INTEGER NOT NULL DEFAULT 0'),
+            ('next_run_at', 'ALTER TABLE integrations ADD COLUMN next_run_at TEXT'),
+        ):
+            try:
+                cursor.execute(_ddl)
+            except sqlite3.OperationalError:
+                pass
+
         conn.commit()
