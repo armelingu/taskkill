@@ -13,8 +13,11 @@ from functools import wraps
 
 from flask import Blueprint, render_template, request, jsonify, send_file, session, redirect, url_for, abort, Response
 
-from database import get_db_connection, get_db_path, init_db
-from werkzeug.security import check_password_hash, generate_password_hash
+from database import (
+    get_db_connection, get_db_path, init_db,
+    hash_password, password_needs_rehash,
+)
+from werkzeug.security import check_password_hash
 
 import integrations
 import scheduler
@@ -23,8 +26,9 @@ from integrations import IntegrationError
 # Hash "dummy" usado para igualar o tempo de resposta do login quando o usuário
 # não existe (ou a senha excede o limite). Sem isso, o "caminho de usuário
 # inexistente" é mais rápido porque não roda check_password_hash, permitindo
-# enumeração de usuários por timing. Calculado uma única vez no import.
-_DUMMY_PASSWORD_HASH = generate_password_hash('taskkill-timing-equalizer')
+# enumeração de usuários por timing. Calculado uma única vez no import, usando
+# o mesmo método de hash das senhas reais para o tempo bater.
+_DUMMY_PASSWORD_HASH = hash_password('taskkill-timing-equalizer')
 
 # Logger de eventos de autenticação (login, falhas, lockouts, logout). Facilita
 # auditoria e detecção de ataques em andamento. A config de handler/nível fica
@@ -78,6 +82,11 @@ _login_lock = threading.Lock()
 # Tamanho máximo de senha aceito antes de hashear. Evita DoS de CPU (pbkdf2
 # processando um payload enorme). Nenhuma senha legítima chega perto disso.
 MAX_PASSWORD_LEN = int(os.environ.get('TASKKILL_MAX_PASSWORD_LEN', '256'))
+
+# Expiração ABSOLUTA da sessão (independente de atividade). O lifetime deslizante
+# (PERMANENT_SESSION_LIFETIME em app.py) renova a cada request; este teto garante
+# que um cookie roubado não valha para sempre. Default: 7 dias.
+_SESSION_ABSOLUTE_SECS = int(os.environ.get('TASKKILL_SESSION_ABSOLUTE_SECONDS', str(7 * 24 * 3600)))
 
 
 def _get_client_ip() -> str:
@@ -211,6 +220,15 @@ def _current_user():
     # dispositivos", a versão no banco muda e os cookies antigos deixam de valer.
     if int(row['session_version']) != int(session.get('sv', 0)):
         return None
+    # Expiração absoluta: mesmo com atividade contínua, a sessão morre após o
+    # teto desde o login. Sessões legadas (sem login_at) não são forçadas a sair.
+    login_at = session.get('login_at')
+    if login_at is not None:
+        try:
+            if (datetime.utcnow().timestamp() - float(login_at)) > _SESSION_ABSOLUTE_SECS:
+                return None
+        except (TypeError, ValueError):
+            return None
     data = dict(row)
     data['has_avatar'] = bool(row['avatar_mime'])
     return data
@@ -340,6 +358,18 @@ def login():
         _reset_user_attempts(uname_key)
         _log_auth('login_success', username=username, ip=ip)
 
+        # Rehash-on-login: se o hash armazenado usa um método antigo, regrava com
+        # o método atual (ex.: migração pbkdf2 -> scrypt) de forma transparente.
+        if password_needs_rehash(row['password_hash']):
+            try:
+                with get_db_connection() as conn:
+                    conn.execute('UPDATE users SET password_hash = ? WHERE id = ?',
+                                 (hash_password(password), int(row['id'])))
+                    conn.commit()
+                _log_auth('password_rehash', username=username, ip=ip)
+            except Exception:
+                pass  # falha no rehash não deve impedir o login
+
         now_iso = datetime.utcnow().isoformat()
         with get_db_connection() as conn:
             prev = conn.execute('SELECT last_login_at, session_version FROM users WHERE id = ?',
@@ -355,6 +385,7 @@ def login():
         session['is_admin'] = int(row['is_admin'])
         session['sv']       = session_version  # versão de sessão (logout global)
         session['prev_login'] = prev_login     # acesso anterior (para exibir no perfil)
+        session['login_at'] = int(datetime.utcnow().timestamp())  # p/ expiração absoluta
         _ensure_csrf_token()                  # gera novo CSRF token na sessão limpa
         return redirect(url_for('main.index'))
 
@@ -455,7 +486,7 @@ def update_password():
         if not row or not check_password_hash(row['password_hash'], current_pw[:MAX_PASSWORD_LEN]):
             return jsonify({"error": "Senha atual incorreta."}), 400
         conn.execute('UPDATE users SET password_hash = ? WHERE id = ?',
-                     (generate_password_hash(new_pw.strip()), int(user['id'])))
+                     (hash_password(new_pw.strip()), int(user['id'])))
         conn.commit()
     return jsonify({"message": "Senha atualizada com sucesso."})
 

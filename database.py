@@ -5,6 +5,40 @@ from datetime import datetime
 
 from werkzeug.security import generate_password_hash
 
+
+# ---------------------------------------------------------------------------
+# Hashing de senha (centralizado)
+# ---------------------------------------------------------------------------
+# Preferimos scrypt (mais resistente a ataque de hardware que o pbkdf2) e caímos
+# para pbkdf2:sha256 se o ambiente não suportar scrypt (ex.: OpenSSL sem suporte).
+# Centralizar aqui permite rehash-on-login: ao logar, se o hash usar um método
+# antigo, ele é regravado com o método atual de forma transparente.
+def _resolve_pwhash_method() -> str:
+    method = os.environ.get('TASKKILL_PWHASH_METHOD', 'scrypt')
+    try:
+        generate_password_hash('probe', method=method)
+        return method
+    except Exception:
+        return 'pbkdf2:sha256'
+
+
+PWHASH_METHOD = _resolve_pwhash_method()
+
+
+def hash_password(password: str) -> str:
+    """Gera o hash da senha usando o método atual (scrypt por padrão)."""
+    return generate_password_hash(password, method=PWHASH_METHOD)
+
+
+def password_needs_rehash(hashed: str) -> bool:
+    """
+    True se o hash armazenado não usa o método atual (ex.: pbkdf2 antigo quando
+    o padrão agora é scrypt). Usado para migrar o hash no próximo login válido.
+    """
+    prefix = PWHASH_METHOD.split(':', 1)[0] + ':'
+    return not (hashed or '').startswith(prefix)
+
+
 def _ensure_dir(path: str) -> None:
     os.makedirs(path, exist_ok=True)
 
@@ -143,7 +177,7 @@ def init_db():
                     f"Comprimento atual: {length}."
                 )
 
-            pw_hash = generate_password_hash(admin_pass.strip())
+            pw_hash = hash_password(admin_pass.strip())
             cursor.execute(
                 "INSERT INTO users (username, password_hash, is_admin, created_at) VALUES (?, ?, 1, ?)",
                 (admin_user, pw_hash, datetime.utcnow().isoformat())
