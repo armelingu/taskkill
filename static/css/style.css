@@ -591,6 +591,24 @@ body {
     max-width: 360px;
 }
 
+/* Conta e Segurança: conteúdo centralizado dentro do card */
+#perfil-tab-conta,
+#perfil-tab-seguranca {
+    text-align: center;
+}
+
+#perfil-tab-conta .perfil-form,
+#perfil-tab-seguranca .perfil-form {
+    margin-left: auto;
+    margin-right: auto;
+    text-align: left;
+}
+
+#perfil-tab-seguranca .perfil-hint-text {
+    margin-left: auto;
+    margin-right: auto;
+}
+
 .perfil-sistema-list {
     display: flex;
     flex-direction: column;
