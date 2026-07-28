@@ -87,7 +87,10 @@
                         <img class="sidebar-avatar-img {% if not (user and user.has_avatar) %}hidden{% endif %}" id="sidebar-avatar-img"
                              {% if user and user.has_avatar %}src="{{ url_for('api.get_avatar') }}"{% endif %} alt="">
                     </div>
-                    <span class="sidebar-username" id="sidebar-username-label">{{ user.username if user else '' }}</span>
+                    <span class="sidebar-user-meta">
+                        <span class="sidebar-username" id="sidebar-username-label">{{ user.username if user else '' }}</span>
+                        <span class="sidebar-user-role">{% if user and user.is_admin %}Administrador{% else %}Usuário{% endif %}</span>
+                    </span>
                 </button>
                 <form method="POST" action="/logout" id="logout-form">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
