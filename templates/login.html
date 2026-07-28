@@ -86,34 +86,6 @@
     <p class="auth-foot">Acesso restrito · use suas credenciais</p>
   </main>
 
-  <script>
-    (function () {
-      const btn = document.getElementById('toggle-pw');
-      const inp = document.getElementById('password');
-      const eyeShow = document.getElementById('eye-show');
-      const eyeHide = document.getElementById('eye-hide');
-      if (btn && inp) {
-        btn.addEventListener('click', () => {
-          const shown = inp.type === 'text';
-          inp.type = shown ? 'password' : 'text';
-          eyeShow.style.display = shown ? '' : 'none';
-          eyeHide.style.display = shown ? 'none' : '';
-          btn.setAttribute('aria-label', shown ? 'Mostrar senha' : 'Ocultar senha');
-        });
-      }
-
-      // Estado de carregando no botão ao enviar
-      const form = document.querySelector('.auth-form');
-      const submit = document.getElementById('login-submit');
-      if (form && submit) {
-        form.addEventListener('submit', () => {
-          submit.classList.add('is-loading');
-          submit.setAttribute('aria-busy', 'true');
-          // desabilita após o envio ser disparado (não bloqueia o POST)
-          setTimeout(() => { submit.disabled = true; }, 0);
-        });
-      }
-    })();
-  </script>
+  <script src="{{ asset('js/login.js') }}"></script>
 </body>
 </html>
