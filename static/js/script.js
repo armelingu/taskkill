@@ -643,8 +643,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const navPerfilBtn   = document.getElementById('nav-perfil');
     const perfilView     = document.getElementById('perfil-view');
     const perfilAlert    = document.getElementById('perfil-inline-alert');
-    const perfilNavBtns  = document.querySelectorAll('[data-perfil-tab]');
-    const perfilPanels   = document.querySelectorAll('[id^="perfil-tab-"]');
 
     function showPerfilAlert(msg, isError) {
         if (!perfilAlert) return;
@@ -652,11 +650,6 @@ document.addEventListener('DOMContentLoaded', () => {
         perfilAlert.className = 'perfil-alert auth-alert ' + (isError ? 'auth-alert-error' : 'auth-alert-ok');
         perfilAlert.classList.remove('hidden');
         setTimeout(() => perfilAlert.classList.add('hidden'), 5000);
-    }
-
-    function activatePerfilTab(tabId) {
-        perfilPanels.forEach(p => p.classList.toggle('hidden', p.id !== 'perfil-tab-' + tabId));
-        perfilNavBtns.forEach(b => b.classList.toggle('perfil-nav-item--active', b.dataset.perfilTab === tabId));
     }
 
     // Formata ISO → "27 jul 2026 20:14"
@@ -720,12 +713,7 @@ document.addEventListener('DOMContentLoaded', () => {
             perfilView.classList.remove('hidden');
             // Remove active dos itens do sidebar
             document.querySelectorAll('.skeleton-item').forEach(s => s.classList.remove('active'));
-            activatePerfilTab('conta');
             loadProfileMeta();
-        });
-
-        perfilNavBtns.forEach(btn => {
-            btn.addEventListener('click', () => activatePerfilTab(btn.dataset.perfilTab));
         });
 
         // Avatar: upload e remoção
