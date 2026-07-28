@@ -86,12 +86,14 @@
                         <span class="sidebar-avatar-initials" id="sidebar-avatar-initials">{{ user.username[0].upper() if user else '?' }}</span>
                         <img class="sidebar-avatar-img {% if not (user and user.has_avatar) %}hidden{% endif %}" id="sidebar-avatar-img"
                              {% if user and user.has_avatar %}src="{{ url_for('api.get_avatar') }}"{% endif %} alt="">
+                        <span class="sidebar-presence" aria-hidden="true"></span>
                     </div>
                     <span class="sidebar-user-meta">
                         <span class="sidebar-username" id="sidebar-username-label">{{ user.username if user else '' }}</span>
                         <span class="sidebar-user-role">{% if user and user.is_admin %}Administrador{% else %}Usuário{% endif %}</span>
                     </span>
                 </button>
+                <span class="sidebar-footer-sep" aria-hidden="true"></span>
                 <form method="POST" action="/logout" id="logout-form">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <button type="button" id="sidebar-logout-trigger" class="sidebar-logout-btn" title="Sair" aria-label="Sair">
