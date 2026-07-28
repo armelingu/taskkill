@@ -1,5 +1,7 @@
+import hmac
 import io
 import json
+import logging
 import os
 import shutil
 import sqlite3
@@ -24,13 +26,53 @@ from integrations import IntegrationError
 # enumeração de usuários por timing. Calculado uma única vez no import.
 _DUMMY_PASSWORD_HASH = generate_password_hash('taskkill-timing-equalizer')
 
+# Logger de eventos de autenticação (login, falhas, lockouts, logout). Facilita
+# auditoria e detecção de ataques em andamento. A config de handler/nível fica
+# em app.py (logging.basicConfig).
+auth_logger = logging.getLogger('taskkill.auth')
+
+
+def _csrf_ok(expected, got) -> bool:
+    """
+    Compara tokens CSRF em tempo constante (evita canal de timing sobre o token).
+    Retorna False se qualquer um for vazio/ausente.
+    """
+    if not expected or not got:
+        return False
+    return hmac.compare_digest(str(expected), str(got))
+
+
+def _log_auth(event: str, *, username: str = '', ip: str = '', detail: str = '') -> None:
+    """Registra um evento de autenticação de forma consistente."""
+    # Nunca logamos senha. Username é útil para auditoria da conta admin.
+    parts = [f'event={event}']
+    if username:
+        parts.append(f'user={username!r}')
+    if ip:
+        parts.append(f'ip={ip}')
+    if detail:
+        parts.append(detail)
+    msg = ' '.join(parts)
+    if event in ('login_success', 'logout', 'logout_all'):
+        auth_logger.info(msg)
+    else:
+        auth_logger.warning(msg)
+
 # ---------------------------------------------------------------------------
-# Rate-limit de login (in-memory, por IP)
+# Rate-limit de login (in-memory)
 # ---------------------------------------------------------------------------
-_LOGIN_MAX_ATTEMPTS  = int(os.environ.get('LOGIN_MAX_ATTEMPTS', '5'))
-_LOGIN_LOCKOUT_SECS  = int(os.environ.get('LOGIN_LOCKOUT_SECONDS', '900'))  # 15 min
-_LOGIN_MAX_TRACKED_IPS = int(os.environ.get('LOGIN_MAX_TRACKED_IPS', '10000'))
-_login_attempts: dict = {}   # { ip: {'count': int, 'locked_until': datetime | None} }
+# Dois eixos de proteção:
+#   - por IP:       barra brute force de uma mesma origem.
+#   - por username: barra brute force DISTRIBUÍDO (muitos IPs) contra uma conta.
+# Ambos usam lockout com backoff exponencial (cada novo bloqueio dura mais,
+# até um teto) para desencorajar tentativas persistentes sem prender threads.
+_LOGIN_MAX_ATTEMPTS   = int(os.environ.get('LOGIN_MAX_ATTEMPTS', '5'))
+_USER_MAX_ATTEMPTS    = int(os.environ.get('LOGIN_USER_MAX_ATTEMPTS', '10'))
+_LOGIN_LOCKOUT_SECS   = int(os.environ.get('LOGIN_LOCKOUT_SECONDS', '900'))          # base: 15 min
+_LOGIN_LOCKOUT_MAX    = int(os.environ.get('LOGIN_LOCKOUT_MAX_SECONDS', str(6 * 3600)))  # teto: 6h
+_LOGIN_MAX_TRACKED    = int(os.environ.get('LOGIN_MAX_TRACKED_IPS', '10000'))
+_login_attempts: dict = {}   # por IP:       { ip: {'count','locked_until','strikes'} }
+_user_attempts: dict = {}    # por username: { user: {'count','locked_until','strikes'} }
 _login_lock = threading.Lock()
 
 # Tamanho máximo de senha aceito antes de hashear. Evita DoS de CPU (pbkdf2
@@ -50,54 +92,83 @@ def _get_client_ip() -> str:
     return request.remote_addr or 'unknown'
 
 
-def _is_ip_locked(ip: str) -> tuple[bool, int]:
-    """Retorna (bloqueado, segundos_restantes)."""
+def _prune_locked(store: dict, now: datetime) -> None:
+    """
+    Remove entradas sem bloqueio ativo quando o dicionário cresce demais.
+    Defesa em profundidade contra crescimento de memória. Chamar com o lock.
+    """
+    if len(store) < _LOGIN_MAX_TRACKED:
+        return
+    stale = [
+        k for k, e in store.items()
+        if not (e.get('locked_until') and now < e['locked_until'])
+    ]
+    for k in stale:
+        store.pop(k, None)
+
+
+def _is_locked(store: dict, key: str) -> tuple[bool, int]:
+    """Retorna (bloqueado, segundos_restantes) para uma chave do store."""
     with _login_lock:
-        entry = _login_attempts.get(ip)
+        entry = store.get(key)
         if not entry:
             return False, 0
         locked_until = entry.get('locked_until')
         if locked_until and datetime.utcnow() < locked_until:
-            remaining = int((locked_until - datetime.utcnow()).total_seconds())
-            return True, remaining
+            return True, int((locked_until - datetime.utcnow()).total_seconds())
         return False, 0
 
 
-def _prune_login_attempts_locked(now: datetime) -> None:
+def _record_failed(store: dict, key: str, max_attempts: int) -> int:
     """
-    Remove entradas sem bloqueio ativo quando o dicionário cresce demais.
-    Defesa em profundidade contra crescimento ilimitado de memória. Deve ser
-    chamado com _login_lock adquirido.
+    Registra tentativa falha para uma chave. Ao atingir o limite, aplica lockout
+    com backoff exponencial (base * 2^(strikes-1), limitado por _LOGIN_LOCKOUT_MAX)
+    e zera o contador. Retorna a contagem atual (0 se acabou de bloquear).
     """
-    if len(_login_attempts) < _LOGIN_MAX_TRACKED_IPS:
-        return
-    stale = [
-        k for k, e in _login_attempts.items()
-        if not (e.get('locked_until') and now < e['locked_until'])
-    ]
-    for k in stale:
-        _login_attempts.pop(k, None)
-
-
-def _record_failed_login(ip: str) -> int:
-    """Registra tentativa falha. Retorna contagem atual."""
     with _login_lock:
         now = datetime.utcnow()
-        _prune_login_attempts_locked(now)
-        entry = _login_attempts.setdefault(ip, {'count': 0, 'locked_until': None})
-        # Reseta o lock expirado antes de incrementar
+        _prune_locked(store, now)
+        entry = store.setdefault(key, {'count': 0, 'locked_until': None, 'strikes': 0})
         if entry.get('locked_until') and now >= entry['locked_until']:
             entry['count'] = 0
             entry['locked_until'] = None
         entry['count'] += 1
-        if entry['count'] >= _LOGIN_MAX_ATTEMPTS:
-            entry['locked_until'] = now + timedelta(seconds=_LOGIN_LOCKOUT_SECS)
+        if entry['count'] >= max_attempts:
+            entry['strikes'] = int(entry.get('strikes', 0)) + 1
+            secs = min(_LOGIN_LOCKOUT_SECS * (2 ** (entry['strikes'] - 1)), _LOGIN_LOCKOUT_MAX)
+            entry['locked_until'] = now + timedelta(seconds=secs)
+            entry['count'] = 0
         return int(entry['count'])
 
 
-def _reset_login_attempts(ip: str) -> None:
+def _reset_attempts(store: dict, key: str) -> None:
     with _login_lock:
-        _login_attempts.pop(ip, None)
+        store.pop(key, None)
+
+
+# Wrappers legíveis para cada eixo
+def _is_ip_locked(ip: str) -> tuple[bool, int]:
+    return _is_locked(_login_attempts, ip)
+
+
+def _is_user_locked(username: str) -> tuple[bool, int]:
+    return _is_locked(_user_attempts, username)
+
+
+def _record_failed_login(ip: str) -> int:
+    return _record_failed(_login_attempts, ip, _LOGIN_MAX_ATTEMPTS)
+
+
+def _record_failed_user(username: str) -> int:
+    return _record_failed(_user_attempts, username, _USER_MAX_ATTEMPTS)
+
+
+def _reset_login_attempts(ip: str) -> None:
+    _reset_attempts(_login_attempts, ip)
+
+
+def _reset_user_attempts(username: str) -> None:
+    _reset_attempts(_user_attempts, username)
 
 # Blueprints permitem "encapsular" as rotas e injetá-las no arquivo principal.
 main_bp = Blueprint('main', __name__)
@@ -175,7 +246,7 @@ def require_auth_and_csrf():
     if request.method in ('POST', 'PUT', 'DELETE'):
         expected = session.get('csrf_token')
         got = request.headers.get('X-CSRF-Token')
-        if not expected or got != expected:
+        if not _csrf_ok(expected, got):
             return jsonify({"error": "CSRF token inválido"}), 403
 
 
@@ -208,21 +279,32 @@ def login():
     ip   = _get_client_ip()
 
     if request.method == 'POST':
-        # Rate-limit: verifica bloqueio antes de qualquer processamento
+        # Rate-limit por IP: verifica bloqueio antes de qualquer processamento
         locked, remaining = _is_ip_locked(ip)
         if locked:
             mins = (remaining // 60) + 1
+            _log_auth('lockout_ip_block', ip=ip, detail=f'remaining_s={remaining}')
             error = f'Muitas tentativas. Tente novamente em {mins} minuto(s).'
             return render_template('login.html', error=error, csrf_token=csrf), 429
 
         form_csrf = request.form.get('csrf_token')
-        if not form_csrf or form_csrf != csrf:
+        if not _csrf_ok(csrf, form_csrf):
+            _log_auth('csrf_fail', ip=ip, detail='route=login')
             return render_template('login.html', error='Sessão expirada. Recarregue e tente novamente.', csrf_token=csrf), 400
 
         username = (request.form.get('username') or '').strip()
         password = (request.form.get('password') or '')
         if not username or not password:
             return render_template('login.html', error='Usuário e senha são obrigatórios.', csrf_token=csrf), 400
+
+        # Rate-limit por conta: barra brute force distribuído (muitos IPs)
+        uname_key = username.lower()
+        u_locked, u_remaining = _is_user_locked(uname_key)
+        if u_locked:
+            mins = (u_remaining // 60) + 1
+            _log_auth('lockout_user_block', username=username, ip=ip, detail=f'remaining_s={u_remaining}')
+            error = f'Muitas tentativas para esta conta. Tente novamente em {mins} minuto(s).'
+            return render_template('login.html', error=error, csrf_token=csrf), 429
 
         with get_db_connection() as conn:
             row = conn.execute('SELECT id, username, password_hash, is_admin FROM users WHERE username = ?', (username,)).fetchone()
@@ -237,16 +319,26 @@ def login():
             valid = False
 
         if not valid:
-            count = _record_failed_login(ip)
-            remaining_attempts = max(0, _LOGIN_MAX_ATTEMPTS - count)
-            if remaining_attempts == 0:
-                error = f'Muitas tentativas. Conta bloqueada por {_LOGIN_LOCKOUT_SECS // 60} minuto(s).'
-            else:
-                error = f'Credenciais inválidas. Tentativas restantes: {remaining_attempts}.'
+            ip_count = _record_failed_login(ip)
+            _record_failed_user(uname_key)
+            _log_auth('login_fail', username=username, ip=ip)
+            # Se qualquer eixo acabou de bloquear, comunica o bloqueio (429)
+            ip_locked_now, ip_rem = _is_ip_locked(ip)
+            user_locked_now, user_rem = _is_user_locked(uname_key)
+            if ip_locked_now or user_locked_now:
+                rem = max(ip_rem, user_rem)
+                mins = (rem // 60) + 1
+                _log_auth('lockout_triggered', username=username, ip=ip, detail=f'lock_s={rem}')
+                error = f'Muitas tentativas. Conta bloqueada. Tente novamente em {mins} minuto(s).'
+                return render_template('login.html', error=error, csrf_token=csrf), 429
+            remaining_attempts = max(0, _LOGIN_MAX_ATTEMPTS - ip_count)
+            error = f'Credenciais inválidas. Tentativas restantes: {remaining_attempts}.'
             return render_template('login.html', error=error, csrf_token=csrf), 401
 
-        # Login bem-sucedido: reseta contador e regenera sessão (previne session fixation)
+        # Login bem-sucedido: reseta contadores e regenera sessão (previne session fixation)
         _reset_login_attempts(ip)
+        _reset_user_attempts(uname_key)
+        _log_auth('login_success', username=username, ip=ip)
 
         now_iso = datetime.utcnow().isoformat()
         with get_db_connection() as conn:
@@ -273,8 +365,10 @@ def login():
 def logout():
     csrf = session.get('csrf_token')
     form_csrf = request.form.get('csrf_token')
-    if not csrf or not form_csrf or form_csrf != csrf:
+    if not _csrf_ok(csrf, form_csrf):
         abort(403)
+    user = _current_user()
+    _log_auth('logout', username=(user or {}).get('username', ''), ip=_get_client_ip())
     session.clear()
     return redirect(url_for('main.login'))
 
@@ -406,6 +500,7 @@ def logout_all_devices():
         conn.commit()
     # Mantém a sessão atual válida atualizando a versão no cookie.
     session['sv'] = int(new_sv)
+    _log_auth('logout_all', username=user.get('username', ''), ip=_get_client_ip())
     return jsonify({"message": "As outras sessões foram encerradas."})
 
 

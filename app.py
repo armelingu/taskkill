@@ -1,3 +1,4 @@
+import logging
 import os
 import secrets
 import sys
@@ -7,6 +8,14 @@ from flask import Flask, request
 from werkzeug.middleware.proxy_fix import ProxyFix
 from database import init_db
 from routes import main_bp, api_bp
+
+# Logging básico: garante que eventos de autenticação (taskkill.auth) e demais
+# logs apareçam no stdout/stderr (capturados pelo gunicorn/waitress/Docker).
+# basicConfig só instala handler se ainda não houver um configurado.
+logging.basicConfig(
+    level=os.environ.get('TASKKILL_LOG_LEVEL', 'INFO').upper(),
+    format='%(asctime)s %(levelname)s %(name)s %(message)s',
+)
 
 def _load_dotenv_if_present() -> None:
     """
@@ -86,14 +95,26 @@ if cookie_secure_env is None:
     # Default seguro e pragmático:
     # - VPS atrás de proxy/HTTPS: true
     # - uso local (HTTP): false
-    cookie_secure = os.environ.get('TASKKILL_BEHIND_PROXY', '').strip() == '1'
+    cookie_secure = _behind_proxy
 else:
     cookie_secure = cookie_secure_env.strip() == '1'
+
+# Aviso de misconfig: rodar atrás de proxy (HTTPS) mas com cookie não-secure faz
+# o cookie de sessão trafegar sem a flag Secure — risco de sequestro em HTTP.
+if _behind_proxy and not cookie_secure:
+    print(
+        "[Taskkill][AVISO] TASKKILL_BEHIND_PROXY=1 porém o cookie de sessão não é "
+        "Secure. Defina TASKKILL_COOKIE_SECURE=1 para produção HTTPS.",
+        file=sys.stderr,
+    )
+
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_SECURE'] = cookie_secure
-# Cookie com nome discreto (não revela a tecnologia)
-app.config['SESSION_COOKIE_NAME'] = 'tk_s'
+# Cookie com nome discreto (não revela a tecnologia). Em produção HTTPS usa o
+# prefixo __Host- (o navegador só devolve o cookie via HTTPS, mesmo host e path
+# raiz — blinda contra fixação via subdomínio/host).
+app.config['SESSION_COOKIE_NAME'] = '__Host-tk_s' if cookie_secure else 'tk_s'
 # Sessão permanente com expiração por inatividade (8h por padrão, configurável)
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(
     seconds=int(os.environ.get('TASKKILL_SESSION_LIFETIME_SECONDS', str(8 * 3600)))
