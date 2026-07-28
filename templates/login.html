@@ -32,7 +32,14 @@
       </div>
 
       {% if error %}
-        <div class="auth-alert auth-alert-error" role="alert">{{ error }}</div>
+        <div class="auth-alert auth-alert-error auth-alert--icon" role="alert">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/>
+            <line x1="12" y1="8" x2="12" y2="13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <circle cx="12" cy="16.5" r="1.1" fill="currentColor"/>
+          </svg>
+          <span>{{ error }}</span>
+        </div>
       {% endif %}
 
       <form method="POST" action="/login" class="auth-form" novalidate>
@@ -69,7 +76,10 @@
           </button>
         </div>
 
-        <button class="auth-btn" type="submit">Entrar</button>
+        <button class="auth-btn" type="submit" id="login-submit">
+          <span class="auth-btn-label">Entrar</span>
+          <span class="auth-spinner" aria-hidden="true"></span>
+        </button>
       </form>
     </div>
 
@@ -82,14 +92,27 @@
       const inp = document.getElementById('password');
       const eyeShow = document.getElementById('eye-show');
       const eyeHide = document.getElementById('eye-hide');
-      if (!btn || !inp) return;
-      btn.addEventListener('click', () => {
-        const shown = inp.type === 'text';
-        inp.type = shown ? 'password' : 'text';
-        eyeShow.style.display = shown ? '' : 'none';
-        eyeHide.style.display = shown ? 'none' : '';
-        btn.setAttribute('aria-label', shown ? 'Mostrar senha' : 'Ocultar senha');
-      });
+      if (btn && inp) {
+        btn.addEventListener('click', () => {
+          const shown = inp.type === 'text';
+          inp.type = shown ? 'password' : 'text';
+          eyeShow.style.display = shown ? '' : 'none';
+          eyeHide.style.display = shown ? 'none' : '';
+          btn.setAttribute('aria-label', shown ? 'Mostrar senha' : 'Ocultar senha');
+        });
+      }
+
+      // Estado de carregando no botão ao enviar
+      const form = document.querySelector('.auth-form');
+      const submit = document.getElementById('login-submit');
+      if (form && submit) {
+        form.addEventListener('submit', () => {
+          submit.classList.add('is-loading');
+          submit.setAttribute('aria-busy', 'true');
+          // desabilita após o envio ser disparado (não bloqueia o POST)
+          setTimeout(() => { submit.disabled = true; }, 0);
+        });
+      }
     })();
   </script>
 </body>
