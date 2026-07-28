@@ -4,7 +4,7 @@ import secrets
 import sys
 from datetime import timedelta
 
-from flask import Flask, request
+from flask import Flask, request, jsonify, render_template
 from werkzeug.middleware.proxy_fix import ProxyFix
 from database import init_db
 from routes import main_bp, api_bp
@@ -199,6 +199,44 @@ def add_security_headers(response):
     # Esconde a tecnologia do servidor por motivos de segurança
     response.headers['Server'] = 'Taskkill-Core'
     return response
+
+
+# ===================================================================
+# PÁGINAS DE ERRO CUSTOMIZADAS
+# ===================================================================
+# As respostas padrão do Werkzeug ("The requested URL was not found...")
+# revelam que o backend é Flask/Python, facilitando fingerprinting. Aqui
+# devolvemos páginas próprias (HTML branded para o app; JSON limpo para a API).
+def _wants_json() -> bool:
+    return request.path.startswith('/api/')
+
+
+def _error_response(code: int, message: str):
+    if _wants_json():
+        return jsonify({"error": message}), code
+    return render_template('error.html', code=code, message=message), code
+
+
+@app.errorhandler(403)
+def _err_403(e):
+    return _error_response(403, 'Acesso negado.')
+
+
+@app.errorhandler(404)
+def _err_404(e):
+    return _error_response(404, 'Página não encontrada.')
+
+
+@app.errorhandler(405)
+def _err_405(e):
+    return _error_response(405, 'Método não permitido.')
+
+
+@app.errorhandler(500)
+def _err_500(e):
+    # Nunca expõe stack trace/detalhes ao cliente (debug fica desligado em prod).
+    return _error_response(500, 'Ocorreu um erro interno. Tente novamente.')
+
 
 if __name__ == '__main__':
     # Modo dev local (não use em distribuição/mercado).

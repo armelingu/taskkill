@@ -303,7 +303,7 @@ def login():
             mins = (remaining // 60) + 1
             _log_auth('lockout_ip_block', ip=ip, detail=f'remaining_s={remaining}')
             error = f'Muitas tentativas. Tente novamente em {mins} minuto(s).'
-            return render_template('login.html', error=error, csrf_token=csrf), 429
+            return render_template('login.html', error=error, csrf_token=csrf), 429, {'Retry-After': str(max(1, remaining))}
 
         form_csrf = request.form.get('csrf_token')
         if not _csrf_ok(csrf, form_csrf):
@@ -322,7 +322,7 @@ def login():
             mins = (u_remaining // 60) + 1
             _log_auth('lockout_user_block', username=username, ip=ip, detail=f'remaining_s={u_remaining}')
             error = f'Muitas tentativas para esta conta. Tente novamente em {mins} minuto(s).'
-            return render_template('login.html', error=error, csrf_token=csrf), 429
+            return render_template('login.html', error=error, csrf_token=csrf), 429, {'Retry-After': str(max(1, u_remaining))}
 
         with get_db_connection() as conn:
             row = conn.execute('SELECT id, username, password_hash, is_admin FROM users WHERE username = ?', (username,)).fetchone()
@@ -348,7 +348,7 @@ def login():
                 mins = (rem // 60) + 1
                 _log_auth('lockout_triggered', username=username, ip=ip, detail=f'lock_s={rem}')
                 error = f'Muitas tentativas. Conta bloqueada. Tente novamente em {mins} minuto(s).'
-                return render_template('login.html', error=error, csrf_token=csrf), 429
+                return render_template('login.html', error=error, csrf_token=csrf), 429, {'Retry-After': str(max(1, rem))}
             remaining_attempts = max(0, _LOGIN_MAX_ATTEMPTS - ip_count)
             error = f'Credenciais inválidas. Tentativas restantes: {remaining_attempts}.'
             return render_template('login.html', error=error, csrf_token=csrf), 401

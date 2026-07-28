@@ -289,6 +289,14 @@ body {
     box-shadow: 0 14px 26px -12px rgba(15, 23, 42, 0.6);
 }
 
+/* Variante link (páginas de erro): mesmo visual do botão, como <a> de bloco */
+.auth-btn--link {
+    display: block;
+    margin-top: 18px;
+    text-align: center;
+    text-decoration: none;
+}
+
 /* Estado de carregando (login) */
 .auth-btn {
     position: relative;
