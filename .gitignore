@@ -9,6 +9,10 @@ taskkill.db
 *.db-wal
 *.db-shm
 
+# Backups de banco
+backups/
+*.db.bak-*
+
 # Docker
 .env
 
