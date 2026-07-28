@@ -18,17 +18,36 @@ import integrations
 import scheduler
 from integrations import IntegrationError
 
+# Hash "dummy" usado para igualar o tempo de resposta do login quando o usuário
+# não existe (ou a senha excede o limite). Sem isso, o "caminho de usuário
+# inexistente" é mais rápido porque não roda check_password_hash, permitindo
+# enumeração de usuários por timing. Calculado uma única vez no import.
+_DUMMY_PASSWORD_HASH = generate_password_hash('taskkill-timing-equalizer')
+
 # ---------------------------------------------------------------------------
 # Rate-limit de login (in-memory, por IP)
 # ---------------------------------------------------------------------------
 _LOGIN_MAX_ATTEMPTS  = int(os.environ.get('LOGIN_MAX_ATTEMPTS', '5'))
 _LOGIN_LOCKOUT_SECS  = int(os.environ.get('LOGIN_LOCKOUT_SECONDS', '900'))  # 15 min
+_LOGIN_MAX_TRACKED_IPS = int(os.environ.get('LOGIN_MAX_TRACKED_IPS', '10000'))
 _login_attempts: dict = {}   # { ip: {'count': int, 'locked_until': datetime | None} }
 _login_lock = threading.Lock()
 
+# Tamanho máximo de senha aceito antes de hashear. Evita DoS de CPU (pbkdf2
+# processando um payload enorme). Nenhuma senha legítima chega perto disso.
+MAX_PASSWORD_LEN = int(os.environ.get('TASKKILL_MAX_PASSWORD_LEN', '256'))
+
 
 def _get_client_ip() -> str:
-    return request.headers.get('X-Forwarded-For', request.remote_addr or '').split(',')[0].strip()
+    """
+    IP do cliente para o rate-limit.
+
+    Usa `request.remote_addr`, que é a única fonte confiável: em produção o
+    ProxyFix (app.py) já normaliza a partir do proxy confiável (Caddy); sem
+    proxy, é o IP real do socket. NÃO lemos X-Forwarded-For cru aqui — o cliente
+    pode forjar esse header e trocar de "IP" a cada request, burlando o lockout.
+    """
+    return request.remote_addr or 'unknown'
 
 
 def _is_ip_locked(ip: str) -> tuple[bool, int]:
@@ -44,17 +63,35 @@ def _is_ip_locked(ip: str) -> tuple[bool, int]:
         return False, 0
 
 
+def _prune_login_attempts_locked(now: datetime) -> None:
+    """
+    Remove entradas sem bloqueio ativo quando o dicionário cresce demais.
+    Defesa em profundidade contra crescimento ilimitado de memória. Deve ser
+    chamado com _login_lock adquirido.
+    """
+    if len(_login_attempts) < _LOGIN_MAX_TRACKED_IPS:
+        return
+    stale = [
+        k for k, e in _login_attempts.items()
+        if not (e.get('locked_until') and now < e['locked_until'])
+    ]
+    for k in stale:
+        _login_attempts.pop(k, None)
+
+
 def _record_failed_login(ip: str) -> int:
     """Registra tentativa falha. Retorna contagem atual."""
     with _login_lock:
+        now = datetime.utcnow()
+        _prune_login_attempts_locked(now)
         entry = _login_attempts.setdefault(ip, {'count': 0, 'locked_until': None})
         # Reseta o lock expirado antes de incrementar
-        if entry.get('locked_until') and datetime.utcnow() >= entry['locked_until']:
+        if entry.get('locked_until') and now >= entry['locked_until']:
             entry['count'] = 0
             entry['locked_until'] = None
         entry['count'] += 1
         if entry['count'] >= _LOGIN_MAX_ATTEMPTS:
-            entry['locked_until'] = datetime.utcnow() + timedelta(seconds=_LOGIN_LOCKOUT_SECS)
+            entry['locked_until'] = now + timedelta(seconds=_LOGIN_LOCKOUT_SECS)
         return int(entry['count'])
 
 
@@ -189,14 +226,24 @@ def login():
 
         with get_db_connection() as conn:
             row = conn.execute('SELECT id, username, password_hash, is_admin FROM users WHERE username = ?', (username,)).fetchone()
-            if not row or not check_password_hash(row['password_hash'], password):
-                count = _record_failed_login(ip)
-                remaining_attempts = max(0, _LOGIN_MAX_ATTEMPTS - count)
-                if remaining_attempts == 0:
-                    error = f'Muitas tentativas. Conta bloqueada por {_LOGIN_LOCKOUT_SECS // 60} minuto(s).'
-                else:
-                    error = f'Credenciais inválidas. Tentativas restantes: {remaining_attempts}.'
-                return render_template('login.html', error=error, csrf_token=csrf), 401
+
+        # Verificação em tempo (quase) constante: sempre executa um hash, exista
+        # o usuário ou não. Senhas acima do limite não são hasheadas (anti-DoS),
+        # mas ainda rodam o hash dummy para não vazar timing.
+        if row and len(password) <= MAX_PASSWORD_LEN:
+            valid = check_password_hash(row['password_hash'], password)
+        else:
+            check_password_hash(_DUMMY_PASSWORD_HASH, password[:MAX_PASSWORD_LEN])
+            valid = False
+
+        if not valid:
+            count = _record_failed_login(ip)
+            remaining_attempts = max(0, _LOGIN_MAX_ATTEMPTS - count)
+            if remaining_attempts == 0:
+                error = f'Muitas tentativas. Conta bloqueada por {_LOGIN_LOCKOUT_SECS // 60} minuto(s).'
+            else:
+                error = f'Credenciais inválidas. Tentativas restantes: {remaining_attempts}.'
+            return render_template('login.html', error=error, csrf_token=csrf), 401
 
         # Login bem-sucedido: reseta contador e regenera sessão (previne session fixation)
         _reset_login_attempts(ip)
@@ -285,7 +332,7 @@ def update_username():
         return jsonify({"error": "Nome de usuário muito longo (máx. 60 caracteres)."}), 400
     with get_db_connection() as conn:
         row = conn.execute('SELECT password_hash FROM users WHERE id = ?', (int(user['id']),)).fetchone()
-        if not row or not check_password_hash(row['password_hash'], password):
+        if not row or not check_password_hash(row['password_hash'], password[:MAX_PASSWORD_LEN]):
             return jsonify({"error": "Senha incorreta."}), 400
         exists = conn.execute('SELECT id FROM users WHERE username = ? AND id != ?',
                               (new_username, int(user['id']))).fetchone()
@@ -305,11 +352,13 @@ def update_password():
     confirm_pw = data.get('confirm_password') or ''
     if len(new_pw.strip()) < 10:
         return jsonify({"error": "A nova senha precisa ter pelo menos 10 caracteres."}), 400
+    if len(new_pw) > MAX_PASSWORD_LEN:
+        return jsonify({"error": f"A senha é muito longa (máx. {MAX_PASSWORD_LEN} caracteres)."}), 400
     if new_pw != confirm_pw:
         return jsonify({"error": "A confirmação da senha não confere."}), 400
     with get_db_connection() as conn:
         row = conn.execute('SELECT password_hash FROM users WHERE id = ?', (int(user['id']),)).fetchone()
-        if not row or not check_password_hash(row['password_hash'], current_pw):
+        if not row or not check_password_hash(row['password_hash'], current_pw[:MAX_PASSWORD_LEN]):
             return jsonify({"error": "Senha atual incorreta."}), 400
         conn.execute('UPDATE users SET password_hash = ? WHERE id = ?',
                      (generate_password_hash(new_pw.strip()), int(user['id'])))

@@ -48,7 +48,27 @@ app = Flask(
     static_url_path="/static",
 )
 
-app.config['SECRET_KEY'] = os.environ.get('TASKKILL_SECRET_KEY') or secrets.token_urlsafe(32)
+# SECRET_KEY: precisa ser ESTÁVEL e persistente. Se cada boot gerar uma chave
+# nova, todas as sessões são invalidadas ao reiniciar (e, em multi-worker, cada
+# processo assinaria com uma chave diferente). Por isso, em produção (atrás de
+# proxy) a variável é obrigatória — falha cedo com mensagem clara. No uso local
+# aceitamos uma chave efêmera, mas avisamos.
+_secret_key = os.environ.get('TASKKILL_SECRET_KEY')
+_behind_proxy = os.environ.get('TASKKILL_BEHIND_PROXY', '').strip() == '1'
+if not _secret_key:
+    if _behind_proxy:
+        raise RuntimeError(
+            "TASKKILL_SECRET_KEY é obrigatória em produção (TASKKILL_BEHIND_PROXY=1). "
+            "Defina uma chave estável e secreta (ex.: python -c \"import secrets; "
+            "print(secrets.token_hex(32))\") antes de subir o app."
+        )
+    _secret_key = secrets.token_urlsafe(32)
+    print(
+        "[Taskkill][AVISO] TASKKILL_SECRET_KEY não definida — usando chave efêmera. "
+        "As sessões serão perdidas a cada reinício. Defina a variável para uso persistente.",
+        file=sys.stderr,
+    )
+app.config['SECRET_KEY'] = _secret_key
 
 # Recarrega templates do disco a cada render (sem isso, o Jinja mantém a versão
 # compilada em memória e mudanças no HTML só aparecem após reiniciar o servidor).
