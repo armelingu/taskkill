@@ -654,9 +654,25 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => perfilAlert.classList.add('hidden'), 5000);
     }
 
+    const perfilContent = document.querySelector('.perfil-content');
+
     function activatePerfilTab(tabId) {
         perfilPanels.forEach(p => p.classList.toggle('hidden', p.id !== 'perfil-tab-' + tabId));
         perfilNavBtns.forEach(b => b.classList.toggle('perfil-nav-item--active', b.dataset.perfilTab === tabId));
+    }
+
+    // Fixa a altura do painel na maior das abas, evitando "pulos" ao trocar
+    function equalizePerfilHeight() {
+        if (!perfilContent || !perfilPanels.length) return;
+        const active = Array.from(perfilPanels).find(p => !p.classList.contains('hidden')) || perfilPanels[0];
+        perfilContent.style.minHeight = '';
+        let max = 0;
+        perfilPanels.forEach(p => {
+            perfilPanels.forEach(x => x.classList.toggle('hidden', x !== p));
+            max = Math.max(max, perfilContent.offsetHeight);
+        });
+        perfilPanels.forEach(x => x.classList.toggle('hidden', x !== active));
+        perfilContent.style.minHeight = max + 'px';
     }
 
     // Formata ISO → "27 jul 2026 20:14"
@@ -709,6 +725,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             applyAvatarState(!!d.has_avatar);
         } catch { /* silencioso */ }
+        finally { requestAnimationFrame(equalizePerfilHeight); }
     }
 
     if (navPerfilBtn && perfilView) {
@@ -721,11 +738,20 @@ document.addEventListener('DOMContentLoaded', () => {
             // Remove active dos itens do sidebar
             document.querySelectorAll('.skeleton-item').forEach(s => s.classList.remove('active'));
             activatePerfilTab('conta');
+            requestAnimationFrame(equalizePerfilHeight);
             loadProfileMeta();
         });
 
         perfilNavBtns.forEach(btn => {
             btn.addEventListener('click', () => activatePerfilTab(btn.dataset.perfilTab));
+        });
+
+        // Recalcula a altura fixa quando a largura muda (quebra de texto)
+        let perfilResizeRaf = 0;
+        window.addEventListener('resize', () => {
+            if (perfilView.classList.contains('hidden')) return;
+            cancelAnimationFrame(perfilResizeRaf);
+            perfilResizeRaf = requestAnimationFrame(equalizePerfilHeight);
         });
 
         // Avatar: upload e remoção
