@@ -107,6 +107,108 @@ body {
     text-align: center;
 }
 
+/* ── Login: animação de fundo (tarefas sendo concluídas) ── */
+.auth-bg {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0.6;
+}
+
+.auth-wrap {
+    position: relative;
+    z-index: 1;
+}
+
+.auth-task {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    opacity: 0;
+    animation: taskFloat var(--dur, 7s) ease-in-out var(--d, 0s) infinite;
+    will-change: opacity, transform;
+}
+
+.auth-task-box {
+    position: relative;
+    width: 16px;
+    height: 16px;
+    border-radius: 5px;
+    border: 2px solid #cbd5e1;
+    background: transparent;
+    flex-shrink: 0;
+    animation: taskBox var(--dur, 7s) ease-in-out var(--d, 0s) infinite;
+}
+
+.auth-task-check {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    color: #ffffff;
+    opacity: 0;
+    transform: scale(0.4);
+    animation: taskCheck var(--dur, 7s) ease-in-out var(--d, 0s) infinite;
+}
+
+.auth-task-line {
+    position: relative;
+    height: 8px;
+    border-radius: 999px;
+    background: #e2e8f0;
+    animation: taskLine var(--dur, 7s) ease-in-out var(--d, 0s) infinite;
+}
+
+.auth-task-line::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 2px;
+    right: 2px;
+    height: 2px;
+    margin-top: -1px;
+    background: #94a3b8;
+    border-radius: 2px;
+    transform: scaleX(0);
+    transform-origin: left center;
+    animation: taskStrike var(--dur, 7s) ease-in-out var(--d, 0s) infinite;
+}
+
+@keyframes taskFloat {
+    0%   { opacity: 0; transform: translateY(10px); }
+    10%  { opacity: 1; transform: translateY(0); }
+    75%  { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translateY(-10px); }
+}
+
+@keyframes taskBox {
+    0%, 40%   { background: transparent; border-color: #cbd5e1; }
+    50%, 100% { background: #22c55e; border-color: #22c55e; }
+}
+
+@keyframes taskCheck {
+    0%, 42%   { opacity: 0; transform: scale(0.4); }
+    52%       { opacity: 1; transform: scale(1); }
+    100%      { opacity: 1; transform: scale(1); }
+}
+
+@keyframes taskLine {
+    0%, 40%   { background: #e2e8f0; }
+    50%, 100% { background: #eef2f7; }
+}
+
+@keyframes taskStrike {
+    0%, 42%   { transform: scaleX(0); }
+    52%, 100% { transform: scaleX(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .auth-bg { display: none; }
+}
+
 .auth-form {
     display: flex;
     flex-direction: column;
