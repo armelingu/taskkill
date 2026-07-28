@@ -340,53 +340,67 @@ body {
     color: #0f172a;
 }
 
-/* ── Perfil: conta (coluna única, estilo Configurações) ─────────── */
+/* ── Perfil: inline (dentro do main-content) ─────────── */
 
 .perfil-inline-view {
     height: 100%;
     overflow-y: auto;
-    padding: 48px 40px 64px;
+    padding: 40px 40px;
 }
 
-.perfil-account {
-    max-width: 560px;
+.perfil-inline-wrap {
+    max-width: 760px;
     margin: 0 auto;
     display: flex;
     flex-direction: column;
-    gap: 18px;
+    gap: 20px;
 }
 
-/* Cabeçalho compacto centralizado */
-.pf-head {
+/* Painel unificado: navegação + conteúdo numa mesma superfície */
+.perfil-inline-body {
     display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    margin-bottom: 6px;
+    align-items: stretch;
+    background: #fff;
+    border: 1px solid rgba(15, 23, 42, 0.07);
+    border-radius: 16px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px -14px rgba(15, 23, 42, 0.18);
+    overflow: hidden;
 }
 
-.pf-head-avatar {
+/* ── Perfil: hero (avatar + identidade + metadados) ─────── */
+.perfil-hero {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    background: #fff;
+    border: 1px solid rgba(15, 23, 42, 0.07);
+    border-radius: 16px;
+    padding: 20px 24px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px -14px rgba(15, 23, 42, 0.18);
+}
+
+.perfil-hero-avatar {
     position: relative;
-    width: 84px;
-    height: 84px;
+    width: 64px;
+    height: 64px;
     border-radius: 50%;
     background: #0f172a;
     color: #fff;
     display: flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
     overflow: hidden;
-    margin-bottom: 14px;
 }
 
-.pf-head-initials {
-    font-size: 2rem;
+.perfil-hero-initials {
+    font-size: 1.5rem;
     font-weight: 700;
     letter-spacing: -0.02em;
     user-select: none;
 }
 
-.pf-head-img {
+.perfil-hero-img {
     position: absolute;
     inset: 0;
     width: 100%;
@@ -394,12 +408,12 @@ body {
     object-fit: cover;
 }
 
-.pf-head-cam {
+.perfil-hero-cam {
     position: absolute;
-    right: 2px;
-    bottom: 2px;
-    width: 28px;
-    height: 28px;
+    right: -2px;
+    bottom: -2px;
+    width: 26px;
+    height: 26px;
     border-radius: 50%;
     background: #fff;
     color: #0f172a;
@@ -408,177 +422,181 @@ body {
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.18);
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.15);
     transition: background 0.15s, color 0.15s;
     padding: 0;
 }
 
-.pf-head-cam:hover {
+.perfil-hero-cam:hover {
     background: #0f172a;
     color: #fff;
 }
 
-.pf-head-name {
-    font-size: 1.35rem;
+.perfil-hero-id {
+    flex: 1;
+    min-width: 0;
+}
+
+.perfil-hero-name {
+    font-size: 1.15rem;
     font-weight: 700;
     color: var(--text-title);
-    letter-spacing: -0.02em;
-    line-height: 1.2;
+    letter-spacing: -0.01em;
+    margin-bottom: 6px;
     word-break: break-word;
 }
 
-.pf-head-role {
+.perfil-hero-role {
     display: inline-block;
-    font-size: 0.68rem;
+    font-size: 0.72rem;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.04em;
     color: #475569;
-    background: #eef2f7;
+    background: #f1f5f9;
     border-radius: 999px;
-    padding: 3px 11px;
-    margin-top: 8px;
+    padding: 3px 10px;
+    margin-bottom: 10px;
 }
 
-.pf-head-meta {
+.perfil-hero-meta {
     display: flex;
     flex-wrap: wrap;
-    justify-content: center;
     align-items: center;
-    gap: 7px;
-    font-size: 0.78rem;
+    gap: 6px;
+    font-size: 0.8rem;
     font-weight: 500;
     color: var(--text-muted);
-    margin-top: 12px;
 }
 
-.pf-head-meta b {
+.perfil-hero-meta b {
     font-weight: 700;
-    color: #334155;
+    color: var(--text-title);
 }
 
-.pf-head-dot {
-    opacity: 0.45;
+.perfil-hero-dot {
+    opacity: 0.5;
 }
 
-.pf-head-remove {
-    margin-top: 10px;
+.perfil-hero-remove {
+    flex-shrink: 0;
+    align-self: flex-start;
+}
+
+/* ── Perfil: blocos auxiliares (Segurança) ─────── */
+.perfil-divider {
+    height: 1px;
+    background: #f1f5f9;
+    margin: 24px 0 20px;
+}
+
+.perfil-subtitle {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--text-title);
+    margin-bottom: 6px;
+}
+
+.perfil-hint-text {
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    line-height: 1.5;
+    margin-bottom: 14px;
+    max-width: 420px;
+}
+
+.perfil-btn-secondary {
+    background: #fff;
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    width: auto;
+    align-self: flex-start;
+}
+
+.perfil-btn-secondary:hover {
+    background: #fef2f2;
+}
+
+.perfil-sidebar {
+    width: 184px;
+    flex-shrink: 0;
+    background: #fafbfc;
+    border-right: 1px solid #eef1f5;
+    padding: 16px 12px;
+}
+
+.perfil-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.perfil-nav-item {
+    text-align: left;
+    padding: 9px 12px;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #64748b;
     background: none;
     border: none;
     cursor: pointer;
     font-family: inherit;
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: #ef4444;
-    padding: 4px 8px;
-    border-radius: 6px;
-    transition: background 0.15s;
+    transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+    width: 100%;
 }
 
-.pf-head-remove:hover {
-    background: #fef2f2;
+.perfil-nav-item:hover {
+    background: #eef2f7;
+    color: #0f172a;
+}
+
+.perfil-nav-item--active {
+    background: #fff;
+    color: #0f172a;
+    font-weight: 700;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.09);
+}
+
+.perfil-content {
+    flex: 1;
+    min-width: 0;
+    padding: 24px 26px;
 }
 
 .perfil-alert {
-    margin-bottom: 4px;
+    margin-bottom: 16px;
 }
 
-/* Card de seção */
-.pf-card {
-    background: #fff;
-    border: 1px solid rgba(15, 23, 42, 0.07);
-    border-radius: 16px;
-    padding: 22px 24px;
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
-}
-
-.pf-card-head {
-    margin-bottom: 18px;
-}
-
-.pf-card-title {
+.perfil-panel-title {
     font-size: 1rem;
     font-weight: 700;
     color: var(--text-title);
     letter-spacing: -0.01em;
+    margin-bottom: 20px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid #f1f5f9;
 }
 
-.pf-card-sub {
-    font-size: 0.82rem;
-    font-weight: 500;
-    color: var(--text-muted);
-    margin-top: 3px;
-}
-
-/* Formulário dentro do card (largura total) */
-.pf-form {
+.perfil-form {
     display: flex;
     flex-direction: column;
     gap: 10px;
+    max-width: 400px;
 }
 
-.pf-form .auth-btn {
-    align-self: flex-end;
-    min-width: 190px;
-}
-
-/* Bloco de sessões (Segurança) */
-.pf-divider {
-    height: 1px;
-    background: #f1f5f9;
-    margin: 22px 0;
-}
-
-.pf-inrow {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-}
-
-.pf-inrow-label {
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: var(--text-title);
-    margin-bottom: 3px;
-}
-
-.pf-inrow-desc {
-    font-size: 0.8rem;
-    font-weight: 500;
-    color: var(--text-muted);
-    line-height: 1.45;
-    max-width: 330px;
-}
-
-.pf-btn-danger {
-    flex-shrink: 0;
-    background: #fff;
-    color: #ef4444;
-    border: 1px solid rgba(239, 68, 68, 0.4);
-    border-radius: 10px;
-    padding: 9px 16px;
-    font-size: 0.85rem;
-    font-weight: 700;
-    font-family: inherit;
-    cursor: pointer;
-    white-space: nowrap;
-    transition: background 0.15s;
-}
-
-.pf-btn-danger:hover {
-    background: #fef2f2;
-}
-
-.pf-btn-danger:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-@media (max-width: 620px) {
-    .perfil-inline-view { padding: 28px 16px 48px; }
-    .pf-inrow { flex-direction: column; align-items: stretch; }
-    .pf-form .auth-btn { align-self: stretch; }
+@media (max-width: 720px) {
+    .perfil-inline-view { padding: 24px 16px; }
+    .perfil-hero { flex-wrap: wrap; }
+    .perfil-inline-body { flex-direction: column; }
+    .perfil-sidebar {
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid #eef1f5;
+    }
+    .perfil-nav { flex-direction: row; flex-wrap: wrap; gap: 4px; }
+    .perfil-content { padding: 20px 18px; }
 }
 
 .perfil-sistema-list {
