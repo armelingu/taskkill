@@ -96,18 +96,48 @@ def render_template(tpl, item):
 
 
 # ── Guarda de SSRF ─────────────────────────────────────────────────
-def _is_blocked_ip(ip_str):
+# Endereços de metadata de cloud: AWS/GCP/Azure usam 169.254.169.254; o
+# endpoint de credenciais de tarefa do AWS ECS usa 169.254.170.2; o IMDS via
+# IPv6 usa fd00:ec2::254. SÃO SEMPRE BLOQUEADOS, mesmo com allow_private —
+# nenhuma integração legítima precisa acessá-los, e são o alvo clássico de SSRF.
+_METADATA_IPS = {
+    ipaddress.ip_address('169.254.169.254'),
+    ipaddress.ip_address('169.254.170.2'),
+    ipaddress.ip_address('fd00:ec2::254'),
+}
+
+
+def _ip_blocked(ip_str, allow_private):
+    """
+    Decide se um IP deve ser bloqueado.
+
+    - SEMPRE bloqueia (mesmo com allow_private=True): metadata de cloud,
+      link-local, multicast e unspecified — não são alvos legítimos.
+    - Com allow_private=False, bloqueia também privado/loopback/reservado.
+    """
     try:
         ip = ipaddress.ip_address(ip_str)
     except ValueError:
         return True  # não parseável como IP -> bloqueia por precaução
-    return (
-        ip.is_private or ip.is_loopback or ip.is_link_local or
-        ip.is_multicast or ip.is_reserved or ip.is_unspecified
-    )
+    if ip in _METADATA_IPS or ip.is_link_local or ip.is_multicast or ip.is_unspecified:
+        return True
+    if allow_private:
+        return False
+    return ip.is_private or ip.is_loopback or ip.is_reserved
 
 
-def _assert_url_allowed(url, allow_private=False):
+def _resolve_target(url, allow_private):
+    """
+    Valida a URL e resolve o host UMA única vez, retornando um IP já aprovado
+    para conectar.
+
+    Fixar o IP aqui elimina a janela TOCTOU / DNS-rebinding: a conexão real
+    (feita por _request_pinned) usa exatamente este IP validado, e não uma
+    segunda resolução DNS independente do httpx que poderia devolver um IP
+    interno diferente.
+
+    Retorna (scheme, host, port, connect_ip).
+    """
     parts = httpx.URL(url)
     scheme = parts.scheme
     if scheme not in ('http', 'https'):
@@ -115,20 +145,63 @@ def _assert_url_allowed(url, allow_private=False):
     host = parts.host
     if not host:
         raise IntegrationError('URL inválida: host ausente.')
-    if allow_private:
-        return
     port = parts.port or (443 if scheme == 'https' else 80)
+
+    # Host já é um IP literal? valida direto, sem DNS.
     try:
-        infos = socket.getaddrinfo(host, port, proto=socket.IPPROTO_TCP)
-    except socket.gaierror:
+        ipaddress.ip_address(host)
+        candidates = [host]
+    except ValueError:
+        try:
+            infos = socket.getaddrinfo(host, port, proto=socket.IPPROTO_TCP)
+        except socket.gaierror:
+            raise IntegrationError(f'Não foi possível resolver o host: {host}')
+        candidates = [info[4][0] for info in infos]
+
+    if not candidates:
         raise IntegrationError(f'Não foi possível resolver o host: {host}')
-    for info in infos:
-        ip_str = info[4][0]
-        if _is_blocked_ip(ip_str):
+
+    # Todos os IPs resolvidos precisam passar: se QUALQUER um for bloqueado,
+    # recusa (evita host com mix de IP público e interno).
+    for ip_str in candidates:
+        if _ip_blocked(ip_str, allow_private):
             raise IntegrationError(
-                'Destino bloqueado (endereço interno/privado). '
+                'Destino bloqueado (endereço interno/privado ou metadata de cloud). '
                 'Marque "permitir rede interna" se isso for intencional.'
             )
+    return scheme, host, port, candidates[0]
+
+
+def _request_pinned(method, url, *, allow_private, **req_kwargs):
+    """
+    Executa uma requisição HTTP conectando ao IP já validado (anti-SSRF),
+    preservando o Host header e o SNI/validação de certificado do hostname
+    original. `follow_redirects=False` impede que um 3xx desvie para alvo interno.
+    """
+    scheme, host, port, connect_ip = _resolve_target(url, allow_private)
+    conn_url = httpx.URL(url).copy_with(host=connect_ip)
+
+    auth = req_kwargs.pop('auth', None)
+    headers = dict(req_kwargs.pop('headers', None) or {})
+    # Preserva o Host original (com porta só se não for a padrão). IPv6 entre [].
+    if ':' in host and not host.startswith('['):
+        host_header = f'[{host}]' if port in (80, 443) else f'[{host}]:{port}'
+    else:
+        host_header = host if port in (80, 443) else f'{host}:{port}'
+    headers['Host'] = host_header
+
+    # SNI e verificação de certificado usam o hostname real, não o IP conectado.
+    extensions = {'sni_hostname': host} if scheme == 'https' else {}
+
+    try:
+        with httpx.Client(timeout=FETCH_TIMEOUT_SECS, follow_redirects=False) as client:
+            request = client.build_request(method, conn_url, headers=headers,
+                                           extensions=extensions, **req_kwargs)
+            if auth is not None:
+                return client.send(request, auth=auth)
+            return client.send(request)
+    except httpx.RequestError as exc:
+        raise IntegrationError(f'Falha na requisição: {exc.__class__.__name__}')
 
 
 # ── Requisição HTTP ────────────────────────────────────────────────
@@ -137,7 +210,6 @@ def _fetch_oauth2_token(auth, allow_private):
     token_url = (auth.get('token_url') or '').strip()
     if not token_url:
         raise IntegrationError('OAuth2: informe a URL do token.')
-    _assert_url_allowed(token_url, allow_private=allow_private)
 
     data = {
         'grant_type': 'client_credentials',
@@ -149,10 +221,9 @@ def _fetch_oauth2_token(auth, allow_private):
         data['scope'] = scope
 
     try:
-        with httpx.Client(timeout=FETCH_TIMEOUT_SECS, follow_redirects=False) as client:
-            resp = client.post(token_url, data=data)
-    except httpx.RequestError as exc:
-        raise IntegrationError(f'OAuth2: falha ao obter token ({exc.__class__.__name__}).')
+        resp = _request_pinned('POST', token_url, allow_private=allow_private, data=data)
+    except IntegrationError as exc:
+        raise IntegrationError(f'OAuth2: {exc}')
     if resp.status_code >= 400:
         raise IntegrationError(f'OAuth2: token endpoint respondeu HTTP {resp.status_code}.')
     try:
@@ -220,7 +291,6 @@ def fetch_payload(connection, allow_private=None, extra_query=None, override_url
 
     if allow_private is None:
         allow_private = bool(connection.get('allow_private'))
-    _assert_url_allowed(url, allow_private=allow_private)
 
     headers, httpx_auth, auth_params = _build_auth(connection, allow_private)
     params = dict(connection.get('query') or {})
@@ -238,12 +308,9 @@ def fetch_payload(connection, allow_private=None, extra_query=None, override_url
         else:
             req_kwargs['content'] = str(body)
 
-    try:
-        # follow_redirects=False evita que um redirect leve a um alvo interno.
-        with httpx.Client(timeout=FETCH_TIMEOUT_SECS, follow_redirects=False) as client:
-            resp = client.request(method, url, **req_kwargs)
-    except httpx.RequestError as exc:
-        raise IntegrationError(f'Falha na requisição: {exc.__class__.__name__}')
+    # Conecta no IP validado (anti-SSRF/TOCTOU). Isso cobre também a paginação
+    # por cursor (override_url vindo da resposta externa), que passa por aqui.
+    resp = _request_pinned(method, url, allow_private=allow_private, **req_kwargs)
 
     if resp.status_code >= 400:
         raise IntegrationError(f'A API respondeu com status HTTP {resp.status_code}.')
