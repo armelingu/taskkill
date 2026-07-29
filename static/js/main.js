@@ -8,6 +8,7 @@ import { apiFetch } from './modules/api.js';
 import { showToast, confirmModal } from './modules/ui.js';
 import { intRenderTemplate } from './modules/templates.js';
 import { buildGraphModel } from './modules/graph-model.js';
+import { state } from './modules/state.js';
 import { openIntegrations, hideIntegrationsView } from './modules/integrations.js';
 import './modules/profile.js';  // auto-inicializa o perfil inline
 
@@ -293,7 +294,7 @@ document.addEventListener('DOMContentLoaded', () => {
             .map(el => el.getAttribute('data-day')).filter(Boolean);
         const projects = Array.from(document.querySelectorAll('.project-nav'))
             .map(el => normText(el.textContent)).filter(Boolean);
-        graph.model = buildGraphModel(days, projects, tasksData);
+        graph.model = buildGraphModel(days, projects, state.tasksData);
         graph.running = true;
         cancelAnimationFrame(graph.raf);
         graph.raf = requestAnimationFrame(graphStep);
@@ -316,11 +317,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 node.type === 'project' ? 'Projeto' : 'Tag';
             let detail = '';
             if (node.type === 'project') {
-                const tc = (tasksData[node.key] || []).filter(t => !t.deleted).length;
+                const tc = (state.tasksData[node.key] || []).filter(t => !t.deleted).length;
                 detail = `<br><span class="gt-meta">${tc} task${tc !== 1 ? 's' : ''}</span>`;
             } else if (node.type === 'day') {
                 let cnt = 0;
-                for (const tasks of Object.values(tasksData))
+                for (const tasks of Object.values(state.tasksData))
                     cnt += tasks.filter(t => !t.deleted && String(t.due_date || '').trim() === node.key).length;
                 detail = `<br><span class="gt-meta">${cnt} task${cnt !== 1 ? 's' : ''} agendada${cnt !== 1 ? 's' : ''}</span>`;
             } else {
@@ -471,9 +472,9 @@ document.addEventListener('DOMContentLoaded', () => {
         skeletonItems.forEach(sib => sib.classList.remove('active'));
 
         document.body.classList.remove('graph-mode');
-        currentTag = tag;
-        currentCategory = null;
-        currentWeekDay = null;
+        state.currentTag = tag;
+        state.currentCategory = null;
+        state.currentWeekDay = null;
 
         if (emptyState) emptyState.classList.add('hidden');
         if (dashboardView) dashboardView.classList.add('hidden');
@@ -587,11 +588,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Estado das demandas (será cacheado pela API)
-    let tasksData = {};
-    let currentCategory = null;
-    let currentWeekDay = null; // Se estiver vendo os dias da semana
-    let currentTag = null; // Se estiver vendo tarefas por #tag (vindo do grafo)
+    // Estado compartilhado vive em ./modules/state.js (objeto `state`).
 
     // ── Projetos dinâmicos ─────────────────────────────────────────────
 
@@ -616,11 +613,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (perfilView) perfilView.classList.add('hidden');
 
             document.body.classList.remove('graph-mode');
-            currentCategory = normText(item.textContent);
-            currentWeekDay = null;
-            currentTag = null;
+            state.currentCategory = normText(item.textContent);
+            state.currentWeekDay = null;
+            state.currentTag = null;
 
-            if (!tasksData[currentCategory]) tasksData[currentCategory] = [];
+            if (!state.tasksData[state.currentCategory]) state.tasksData[state.currentCategory] = [];
 
             if (emptyState)    emptyState.classList.add('hidden');
             if (dashboardView) dashboardView.classList.add('hidden');
@@ -634,7 +631,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             document.querySelector('.task-input-container').style.display = 'flex';
-            if (projectTitle) projectTitle.textContent = currentCategory;
+            if (projectTitle) projectTitle.textContent = state.currentCategory;
             renderTasks();
         });
 
@@ -650,10 +647,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const numId = parseInt(taskId, 10);
             let movedTask = null;
-            for (const proj in tasksData) {
-                const idx = tasksData[proj].findIndex(t => t.id === numId);
+            for (const proj in state.tasksData) {
+                const idx = state.tasksData[proj].findIndex(t => t.id === numId);
                 if (idx !== -1) {
-                    [movedTask] = tasksData[proj].splice(idx, 1);
+                    [movedTask] = state.tasksData[proj].splice(idx, 1);
                     break;
                 }
             }
@@ -661,8 +658,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             movedTask.project = newProject;
             movedTask.originalProject = newProject;
-            if (!tasksData[newProject]) tasksData[newProject] = [];
-            tasksData[newProject].push(movedTask);
+            if (!state.tasksData[newProject]) state.tasksData[newProject] = [];
+            state.tasksData[newProject].push(movedTask);
 
             apiFetch(`/api/tasks/${numId}`, {
                 method: 'PUT',
@@ -670,7 +667,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ project: newProject }),
             }).then(r => { if (!r.ok) console.error('Falha ao mover tarefa'); });
 
-            if (currentCategory) renderTasks();
+            if (state.currentCategory) renderTasks();
         });
 
         // Botão lixeira — excluir projeto
@@ -686,10 +683,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const res = await apiFetch(`/api/projects/${encodeURIComponent(name)}`, { method: 'DELETE' });
                 if (res.ok) {
-                    delete tasksData[name];
+                    delete state.tasksData[name];
                     wrapper.remove();
-                    if (currentCategory === name) {
-                        currentCategory = null;
+                    if (state.currentCategory === name) {
+                        state.currentCategory = null;
                         if (projectView) projectView.classList.add('hidden');
                         if (emptyState)  emptyState.classList.remove('hidden');
                     }
@@ -761,7 +758,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (res.ok) {
                     input.remove();
-                    if (!tasksData[name]) tasksData[name] = [];
+                    if (!state.tasksData[name]) state.tasksData[name] = [];
 
                     const wrapper = _makeProjectWrapper(name);
                     list.appendChild(wrapper);
@@ -800,9 +797,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             if (tasksRes.ok) {
-                tasksData = await tasksRes.json();
+                state.tasksData = await tasksRes.json();
                 // Se o usuário já estiver em alguma visão, re-renderiza com os dados carregados
-                if (currentCategory || currentWeekDay || currentTag) {
+                if (state.currentCategory || state.currentWeekDay || state.currentTag) {
                     renderTasks();
                 } else if (dashboardView && !dashboardView.classList.contains('hidden')) {
                     renderDashboard();
@@ -851,9 +848,9 @@ document.addEventListener('DOMContentLoaded', () => {
             // Se for o Dashboard
             if (item.id === 'nav-dashboard') {
                 document.body.classList.remove('graph-mode');
-                currentCategory = null; 
-                currentWeekDay = null;
-                currentTag = null;
+                state.currentCategory = null; 
+                state.currentWeekDay = null;
+                state.currentTag = null;
                 if (emptyState) emptyState.classList.add('hidden');
                 if (projectView) projectView.classList.add('hidden');
                 if (graphView) graphView.classList.add('hidden');
@@ -874,9 +871,9 @@ document.addEventListener('DOMContentLoaded', () => {
             // Se for o Gráfico
             if (item.id === 'nav-graph') {
                 document.body.classList.add('graph-mode');
-                currentCategory = null;
-                currentWeekDay = null;
-                currentTag = null;
+                state.currentCategory = null;
+                state.currentWeekDay = null;
+                state.currentTag = null;
                 if (emptyState) emptyState.classList.add('hidden');
                 if (projectView) projectView.classList.add('hidden');
                 if (dashboardView) dashboardView.classList.add('hidden');
@@ -893,9 +890,9 @@ document.addEventListener('DOMContentLoaded', () => {
             // Se for as Integrações (admin)
             if (item.id === 'nav-integrations') {
                 document.body.classList.remove('graph-mode');
-                currentCategory = null;
-                currentWeekDay = null;
-                currentTag = null;
+                state.currentCategory = null;
+                state.currentWeekDay = null;
+                state.currentTag = null;
                 if (emptyState)    emptyState.classList.add('hidden');
                 if (projectView)   projectView.classList.add('hidden');
                 if (dashboardView) dashboardView.classList.add('hidden');
@@ -909,9 +906,9 @@ document.addEventListener('DOMContentLoaded', () => {
             // Se for a visão da Semana
             if (item.classList.contains('week-nav')) {
                 document.body.classList.remove('graph-mode');
-                currentCategory = null;
-                currentWeekDay = item.getAttribute('data-day');
-                currentTag = null;
+                state.currentCategory = null;
+                state.currentWeekDay = item.getAttribute('data-day');
+                state.currentTag = null;
                 
                 if (emptyState) emptyState.classList.add('hidden');
                 if (dashboardView) dashboardView.classList.add('hidden');
@@ -924,7 +921,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     projectView.style.animation = null;
                 }
                 
-                if (projectTitle) projectTitle.textContent = currentWeekDay;
+                if (projectTitle) projectTitle.textContent = state.currentWeekDay;
                 
                 // Na visão da semana não criamos tarefas novas diretamente (pois falta o projeto), 
                 // então escondemos o input
@@ -936,13 +933,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Se for um Projeto Genérico
             document.body.classList.remove('graph-mode');
-            currentCategory = normText(item.textContent);
-            currentWeekDay = null;
-            currentTag = null;
+            state.currentCategory = normText(item.textContent);
+            state.currentWeekDay = null;
+            state.currentTag = null;
             
             // Inicializa a lista dessa categoria se ainda não existir
-            if (!tasksData[currentCategory]) {
-                tasksData[currentCategory] = [];
+            if (!state.tasksData[state.currentCategory]) {
+                state.tasksData[state.currentCategory] = [];
             }
 
             // Mostra o painel do Projeto
@@ -961,7 +958,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.querySelector('.task-input-container').style.display = 'flex';
 
             // Atualiza o Título e Renderiza a Lista
-            if (projectTitle) projectTitle.textContent = currentCategory;
+            if (projectTitle) projectTitle.textContent = state.currentCategory;
             renderTasks();
         });
 
@@ -990,8 +987,8 @@ document.addEventListener('DOMContentLoaded', () => {
             let targetTask = null;
 
             // Encontra a tarefa no estado e de onde ela veio
-            Object.keys(tasksData).forEach(proj => {
-                const found = tasksData[proj].find(t => t.id.toString() === droppedTaskId);
+            Object.keys(state.tasksData).forEach(proj => {
+                const found = state.tasksData[proj].find(t => t.id.toString() === droppedTaskId);
                 if (found) {
                     targetTask = found;
                     sourceProject = proj;
@@ -1021,12 +1018,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (sourceProject === newProject) return; // Mesmo lugar
 
                 // Tira de um array local e bota no outro
-                const taskIndex = tasksData[sourceProject].findIndex(t => t.id === targetTask.id);
-                tasksData[sourceProject].splice(taskIndex, 1);
+                const taskIndex = state.tasksData[sourceProject].findIndex(t => t.id === targetTask.id);
+                state.tasksData[sourceProject].splice(taskIndex, 1);
 
-                if (!tasksData[newProject]) tasksData[newProject] = [];
+                if (!state.tasksData[newProject]) state.tasksData[newProject] = [];
                 targetTask.project = newProject;
-                tasksData[newProject].push(targetTask);
+                state.tasksData[newProject].push(targetTask);
 
                 apiFetch(`/api/tasks/${targetTask.id}`, {
                     method: 'PUT',
@@ -1047,7 +1044,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (taskList) {
         taskList.addEventListener('dragover', e => {
             // Não permite reordenar na visão de semana (mistura projetos e quebra consistência de ranking)
-            if (currentWeekDay) return;
+            if (state.currentWeekDay) return;
             e.preventDefault(); // Necessário para permitir soltar na lista
             const afterElement = getDragAfterElement(taskList, e.clientY);
             const draggable = document.querySelector('.dragging');
@@ -1062,7 +1059,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         taskList.addEventListener('dragend', () => {
              // Não reordena na visão da semana e só faz sentido reordenar dentro de um projeto
-             if (currentWeekDay || !currentCategory) return;
+             if (state.currentWeekDay || !state.currentCategory) return;
              // Quando soltar após misturar as visões, captura todas as LIs e a nova ordem
              const sortedLiIds = Array.from(taskList.querySelectorAll('.task-item')).map(li => li.getAttribute('data-id'));
              
@@ -1072,7 +1069,7 @@ document.addEventListener('DOMContentLoaded', () => {
              
              // Atualiza memória RAM (arrays) para se alinhar com a tela se estiver num projeto
              // Ordena o array atual baseado na nova ordem de IDs visualizadas
-             tasksData[currentCategory].sort((a, b) => {
+             state.tasksData[state.currentCategory].sort((a, b) => {
                  return sortedLiIds.indexOf(a.id.toString()) - sortedLiIds.indexOf(b.id.toString());
              });
 
@@ -1112,7 +1109,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         projectItems.forEach(item => {
             const projectName = normText(item.textContent);
-            const tasks = (tasksData[projectName] || []).filter(t => !t.deleted); 
+            const tasks = (state.tasksData[projectName] || []).filter(t => !t.deleted); 
             
             const total = tasks.length;
             const completed = tasks.filter(t => t.completed).length;
@@ -1161,19 +1158,19 @@ document.addEventListener('DOMContentLoaded', () => {
         taskInput.addEventListener('keypress', async (e) => {
             if (e.key === 'Enter') {
                 const text = taskInput.value.trim();
-                if (text && currentCategory !== null) {
+                if (text && state.currentCategory !== null) {
                     
                     try {
                         // Manda para o Backend (API)
                         const response = await apiFetch('/api/tasks', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ project: currentCategory, text: text })
+                            body: JSON.stringify({ project: state.currentCategory, text: text })
                         });
                         
                         if (response.ok) {
                             const newTask = await response.json(); // Vem com o ID do banco
-                            tasksData[currentCategory].push(newTask);
+                            state.tasksData[state.currentCategory].push(newTask);
                             taskInput.value = '';
                             renderTasks();
                             showToast("Tarefa salva");
@@ -1195,19 +1192,19 @@ document.addEventListener('DOMContentLoaded', () => {
         let isWeekView = false;
         let isTagView = false;
         
-        if (currentWeekDay) {
+        if (state.currentWeekDay) {
             isWeekView = true;
-            Object.keys(tasksData).forEach(proj => {
-                tasksData[proj].forEach(t => {
-                    if (t.due_date === currentWeekDay && !t.deleted) {
+            Object.keys(state.tasksData).forEach(proj => {
+                state.tasksData[proj].forEach(t => {
+                    if (t.due_date === state.currentWeekDay && !t.deleted) {
                         t.originalProject = proj; // Grava o nome pra exibição
                         tasks.push(t);
                     }
                 });
             });
-        } else if (currentTag) {
+        } else if (state.currentTag) {
             isTagView = true;
-            const wanted = String(currentTag || '').toLowerCase();
+            const wanted = String(state.currentTag || '').toLowerCase();
             const tagRe = /(^|\s)#([\w\u00C0-\u00FF]+)/g;
 
             const hasWanted = (text) => {
@@ -1220,16 +1217,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 return false;
             };
 
-            Object.keys(tasksData).forEach(proj => {
-                tasksData[proj].forEach(t => {
+            Object.keys(state.tasksData).forEach(proj => {
+                state.tasksData[proj].forEach(t => {
                     if (t.deleted) return;
                     if (!hasWanted(t.text)) return;
                     t.originalProject = proj;
                     tasks.push(t);
                 });
             });
-        } else if (currentCategory) {
-            tasks = (tasksData[currentCategory] || []).filter(t => !t.deleted);
+        } else if (state.currentCategory) {
+            tasks = (state.tasksData[state.currentCategory] || []).filter(t => !t.deleted);
         } else {
             return;
         }
@@ -1336,8 +1333,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Apagar
             deleteBtn.addEventListener('click', () => {
-                const proj = task.originalProject || currentCategory;
-                const projTasks = tasksData[proj];
+                const proj = task.originalProject || state.currentCategory;
+                const projTasks = state.tasksData[proj];
                 const realIndex = projTasks.findIndex(t => t.id === task.id);
                 if (realIndex > -1) projTasks.splice(realIndex, 1);
                 
@@ -1464,7 +1461,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Aperta "N" para focar e criar nova tarefa
-        if (e.key.toLowerCase() === 'n' && currentCategory) {
+        if (e.key.toLowerCase() === 'n' && state.currentCategory) {
             e.preventDefault(); // Evita escrever de fato algo
             if (taskInput) {
                 taskInput.focus();
