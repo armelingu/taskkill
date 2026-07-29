@@ -44,7 +44,10 @@ taskkill/
 ├── .env.example
 ├── static/
 │   ├── css/style.css
-│   ├── js/script.js
+│   ├── js/
+│   │   ├── main.js            # Entry ES module (bootstrap + navegação)
+│   │   ├── login.js
+│   │   └── modules/           # Módulos de feature (tasks, projects, graph, integrations…)
 │   └── favicon.svg
 ├── templates/
 │   ├── index.html

@@ -1,7 +1,6 @@
-# NOTA: o serviço de sincronização de chamados (chamados_sync) foi removido
-# deste compose porque o módulo de Integrações externas ainda não foi
-# implementado (scripts/sync_chamados.py não existe). Ele retornará junto
-# com o módulo de Integrações.
+# NOTA: o antigo serviço de sincronização de chamados (chamados_sync / MySQL)
+# foi substituído pelo módulo genérico de Integrações externas (REST/JSON),
+# configurado pela própria UI. Não há mais serviço/side-car dedicado.
 
 services:
   app:
