@@ -505,7 +505,37 @@
 
             <!-- Tela Inicial Padrão -->
             <div id="empty-state" class="empty-state">
-                <p>Selecione um projeto no menu para visualizar.</p>
+
+                <!-- Primeiro uso: nenhum projeto ainda -->
+                <div id="onboarding" class="onboarding hidden">
+                    <div class="onboarding-logo">
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <rect x="3" y="3" width="7" height="7" rx="2" fill="currentColor" />
+                            <rect x="14" y="3" width="7" height="7" rx="2" fill="currentColor" opacity="0.7" />
+                            <rect x="3" y="14" width="7" height="7" rx="2" fill="currentColor" opacity="0.7" />
+                            <rect x="14" y="14" width="7" height="7" rx="2" fill="currentColor" opacity="0.3" />
+                        </svg>
+                    </div>
+                    <h1 class="onboarding-title">Bem-vindo ao Taskkill</h1>
+                    <p class="onboarding-subtitle">
+                        Organize seu trabalho por projetos e planeje a semana.
+                        Crie seu primeiro projeto para começar.
+                    </p>
+                    <button id="onboarding-create" class="onboarding-cta" type="button">
+                        Criar meu primeiro projeto
+                    </button>
+                    <div class="onboarding-templates">
+                        <span class="onboarding-templates-label">Ou comece com um exemplo:</span>
+                        <div class="onboarding-chips">
+                            <button class="tpl-chip" type="button" data-tpl="Trabalho">Trabalho</button>
+                            <button class="tpl-chip" type="button" data-tpl="Estudos">Estudos</button>
+                            <button class="tpl-chip" type="button" data-tpl="Pessoal">Pessoal</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Já existem projetos, mas nenhum selecionado -->
+                <p id="empty-hint" class="empty-hint">Selecione um projeto no menu para visualizar.</p>
             </div>
 
         </main>

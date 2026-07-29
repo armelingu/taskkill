@@ -196,15 +196,11 @@ def init_db():
             )
         ''')
 
-        # Seed: migra os projetos hardcoded para o banco (idempotente)
-        _default_projects = [
-            'Protheus', 'Salesforce', 'Vitreum',
-            'SW Engineering', 'Saas', 'Pessoal',
-        ]
-        for _p in _default_projects:
-            cursor.execute("INSERT OR IGNORE INTO projects (name) VALUES (?)", (_p,))
+        # Sem projetos-semente: instalações novas começam vazias (o onboarding
+        # no primeiro uso guia a criação do primeiro projeto). Bancos existentes
+        # mantêm os projetos que já possuem.
 
-        # Seed adicional: projetos que existam em tasks mas ainda não estejam na tabela
+        # Migração: garante que projetos já usados em tasks apareçam na tabela.
         cursor.execute(
             "SELECT DISTINCT project FROM tasks WHERE deleted = 0 AND project IS NOT NULL AND project != ''"
         )

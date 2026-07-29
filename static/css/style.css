@@ -1310,10 +1310,18 @@ body.graph-mode .main-content {
     font-size: 1.15rem;
     font-weight: 500;
     gap: 16px;
+    padding: 24px;
 }
 
-/* Ícone de prancheta minimalista criado em CSS para o Empty State */
-.empty-state::before {
+/* Dica "selecione um projeto" — com ícone de prancheta minimalista em CSS */
+.empty-hint {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+}
+
+.empty-hint::before {
     content: '';
     display: block;
     width: 48px;
@@ -1321,6 +1329,117 @@ body.graph-mode .main-content {
     border: 2px dashed #cbd5e1;
     border-radius: 8px;
     opacity: 0.5;
+}
+
+/* ---------------------------------------------------
+   Onboarding (primeiro uso — nenhum projeto ainda)
+   --------------------------------------------------- */
+.onboarding {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    max-width: 460px;
+    animation: onboarding-in 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes onboarding-in {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.onboarding-logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 72px;
+    height: 72px;
+    border-radius: 20px;
+    color: #fff;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    box-shadow: 0 12px 30px -8px rgba(99, 102, 241, 0.5);
+    margin-bottom: 24px;
+}
+
+.onboarding-title {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0 0 10px;
+    letter-spacing: -0.02em;
+}
+
+.onboarding-subtitle {
+    font-size: 1rem;
+    font-weight: 400;
+    line-height: 1.6;
+    color: #64748b;
+    margin: 0 0 28px;
+}
+
+.onboarding-cta {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 24px;
+    border: none;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: #fff;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.2s ease;
+    box-shadow: 0 8px 20px -6px rgba(99, 102, 241, 0.5);
+}
+
+.onboarding-cta:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 26px -6px rgba(99, 102, 241, 0.6);
+}
+
+.onboarding-cta:active {
+    transform: translateY(0);
+}
+
+.onboarding-templates {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    margin-top: 32px;
+}
+
+.onboarding-templates-label {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #94a3b8;
+}
+
+.onboarding-chips {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+}
+
+.tpl-chip {
+    padding: 7px 16px;
+    border: 1px solid #e2e8f0;
+    border-radius: 999px;
+    background: #fff;
+    color: #475569;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.tpl-chip:hover {
+    border-color: #a5b4fc;
+    color: #4f46e5;
+    background: #eef2ff;
+    transform: translateY(-1px);
 }
 
 /* --------------- 

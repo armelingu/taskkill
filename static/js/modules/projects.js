@@ -118,6 +118,8 @@ function _attachProjectItemEvents(wrapper) {
                     if (projectView) projectView.classList.add('hidden');
                     if (emptyState)  emptyState.classList.remove('hidden');
                 }
+                // Se não sobrou nenhum projeto, volta ao onboarding.
+                refreshEmptyState();
             } else {
                 alert('Erro ao excluir o projeto.');
             }
@@ -154,6 +156,53 @@ export function renderSidebarProjects(names) {
         list.appendChild(wrapper);
         _attachProjectItemEvents(wrapper);
     });
+    refreshEmptyState();
+}
+
+// Alterna, na tela vazia, entre o onboarding (nenhum projeto ainda) e a dica
+// "selecione um projeto" — decidido pela contagem atual de itens no sidebar.
+function refreshEmptyState() {
+    const list = document.getElementById('project-list');
+    const count = list ? list.querySelectorAll('.project-nav').length : 0;
+    const onboarding = document.getElementById('onboarding');
+    const hint = document.getElementById('empty-hint');
+    if (count === 0) {
+        onboarding && onboarding.classList.remove('hidden');
+        hint && hint.classList.add('hidden');
+    } else {
+        onboarding && onboarding.classList.add('hidden');
+        hint && hint.classList.remove('hidden');
+    }
+}
+
+// Cria (ou reaproveita) um projeto pelo nome e abre — usado pelos chips de
+// exemplo do onboarding. 409 (já existe) é tratado como sucesso silencioso.
+async function createAndOpenProject(name) {
+    const list = document.getElementById('project-list');
+    if (!list) return;
+
+    const res = await apiFetch('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+    });
+    if (!res.ok && res.status !== 409) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || 'Erro ao criar projeto.');
+        return;
+    }
+
+    if (!state.tasksData[name]) state.tasksData[name] = [];
+
+    let item = Array.from(list.querySelectorAll('.project-nav'))
+        .find(el => normText(el.textContent) === name);
+    if (!item) {
+        const wrapper = _makeProjectWrapper(name);
+        list.appendChild(wrapper);
+        _attachProjectItemEvents(wrapper);
+        item = wrapper.querySelector('.project-nav');
+    }
+    item.click();
 }
 
 // Botão + para criar novo projeto inline
@@ -208,3 +257,15 @@ if (btnAddProject) {
         input.addEventListener('blur', () => setTimeout(() => input.remove(), 150));
     });
 }
+
+// ── Onboarding (primeiro uso) ──────────────────────────────────────
+// CTA principal reaproveita o fluxo do "+" (abre o input inline no sidebar).
+const onboardingCreate = document.getElementById('onboarding-create');
+if (onboardingCreate && btnAddProject) {
+    onboardingCreate.addEventListener('click', () => btnAddProject.click());
+}
+
+// Chips de exemplo: criam e abrem um projeto pronto (removível como outro qualquer).
+document.querySelectorAll('.tpl-chip').forEach(chip => {
+    chip.addEventListener('click', () => createAndOpenProject(chip.dataset.tpl));
+});

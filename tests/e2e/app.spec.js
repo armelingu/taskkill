@@ -20,24 +20,37 @@ async function login(page) {
     ]);
 }
 
+// NB: os testes compartilham o mesmo servidor/banco (workers=1, DB temporário
+// zerado no start). A ordem importa: o teste de onboarding roda primeiro, com o
+// banco vazio; os chips/criação semeiam projetos para os testes seguintes.
 test.describe('Fluxos principais do app', () => {
     let errors;
 
     test.beforeEach(async ({ page }) => {
         errors = attachErrorGuard(page);
         await login(page);
-        // Sidebar populada pelo JS (projetos padrão semeados no init_db).
-        await expect(page.locator('.project-nav').first()).toBeVisible();
+        await expect(page.locator('.brand-name')).toHaveText('Taskkill');
     });
 
     test.afterEach(async () => {
         expect(errors, `erros de runtime: ${errors.join(' | ')}`).toEqual([]);
     });
 
-    test('login carrega o app com projetos padrão', async ({ page }) => {
-        const count = await page.locator('.project-nav').count();
-        expect(count).toBeGreaterThanOrEqual(6);
-        await expect(page.locator('.brand-name')).toHaveText('Taskkill');
+    test('primeiro uso: onboarding aparece sem projetos', async ({ page }) => {
+        // Banco novo => sem seeds => onboarding visível, dica oculta, sidebar vazia.
+        await expect(page.locator('#onboarding')).toBeVisible();
+        await expect(page.locator('#empty-hint')).toBeHidden();
+        await expect(page.locator('.project-nav')).toHaveCount(0);
+        await expect(page.locator('#onboarding-create')).toBeVisible();
+    });
+
+    test('onboarding: chip de exemplo cria e abre o projeto', async ({ page }) => {
+        await page.click('.tpl-chip[data-tpl="Trabalho"]');
+        const projNav = page.locator('.project-nav', { hasText: 'Trabalho' });
+        await expect(projNav).toBeVisible();
+        await expect(page.locator('#project-title')).toHaveText('Trabalho');
+        // Com projeto criado, o onboarding some quando voltamos ao estado vazio.
+        await expect(page.locator('#onboarding')).toBeHidden();
     });
 
     test('cria projeto, cria tarefa e marca como concluída', async ({ page }) => {
