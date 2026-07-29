@@ -50,3 +50,36 @@ jobs:
 
       - name: Testes de lógica pura (node --test)
         run: node --test tests/js/*.test.mjs
+
+  e2e:
+    name: Testes E2E (Playwright)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configurar Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Instalar dependências do app
+        run: pip install -r requirements.txt
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Instalar dev deps (Playwright)
+        run: npm install
+
+      - name: Instalar navegador (Chromium)
+        run: npx playwright install --with-deps chromium
+
+      - name: Rodar E2E
+        env:
+          TASKKILL_PY: python
+        run: npx playwright test

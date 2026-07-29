@@ -26,7 +26,8 @@ export default defineConfig({
     ],
     webServer: {
         // Sobe o app real (waitress) num banco temporário e limpo a cada corrida.
-        command: 'rm -f /tmp/taskkill-e2e.db && .venv/bin/python serve.py',
+        // Local usa o venv; no CI (sem venv) defina TASKKILL_PY=python.
+        command: `rm -f /tmp/taskkill-e2e.db && ${process.env.TASKKILL_PY || '.venv/bin/python'} serve.py`,
         url: BASE_URL,
         reuseExistingServer: !process.env.CI,
         timeout: 30_000,
