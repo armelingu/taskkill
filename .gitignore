@@ -20,6 +20,11 @@ backups/
 node_modules/
 package-lock.json
 
+# Playwright (artefatos de teste)
+test-results/
+playwright-report/
+.playwright/
+
 # Build
 dist/
 build/
