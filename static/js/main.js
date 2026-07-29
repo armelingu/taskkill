@@ -1,7 +1,13 @@
 /**
- * O JavaScript puro aqui adiciona interatividade e lógica de estado simples
- * focando na funcionalidade e em manutenabilidade com manipulação direta do DOM.
+ * Ponto de entrada do app (ES module). A orquestração de DOM/estado vive aqui;
+ * a lógica reutilizável e pura foi extraída para ./modules/* (testável).
  */
+
+import { escapeHTML, normText, pfFmtDate, downloadBlob } from './modules/util.js';
+import { apiFetch } from './modules/api.js';
+import { showToast, confirmModal } from './modules/ui.js';
+import { intRenderTemplate } from './modules/templates.js';
+import { buildGraphModel } from './modules/graph-model.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     // 1. Elementos da Interface
@@ -13,34 +19,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const taskInput = document.getElementById('new-task-input');
     const graphView = document.getElementById('graph-view');
     const graphCanvas = document.getElementById('graph-canvas');
-
-    // Função Universal de Sanitização (Antivírus do DOM contra XSS)
-    // Neutraliza qualquer tentativa de um usuário digitar um script perigoso.
-    function escapeHTML(str) {
-        if (!str) return '';
-        return str.replace(/[&<>'"]/g, 
-            tag => ({
-                '&': '&amp;',
-                '<': '&lt;',
-                '>': '&gt;',
-                "'": '&#39;',
-                '"': '&quot;'
-            }[tag] || tag)
-        );
-    }
-
-    // CSRF token por sessão (obrigatório no backend em /api para POST/PUT/DELETE)
-    function getCsrfToken() {
-        const meta = document.querySelector('meta[name="csrf-token"]');
-        return meta ? (meta.getAttribute('content') || '') : '';
-    }
-
-    async function apiFetch(path, opts = {}) {
-        const headers = Object.assign({}, opts.headers || {}, {
-            'X-CSRF-Token': getCsrfToken(),
-        });
-        return fetch(path, Object.assign({}, opts, { headers, credentials: 'same-origin' }));
-    }
 
     // ----------------------------------------------------
     // GRAFO (Obsidian-like): Dias <-> Projetos + Projetos <-> Projetos
@@ -59,138 +37,6 @@ document.addEventListener('DOMContentLoaded', () => {
         dimProgress: 0,   // 0 = sem dim; 1 = dim total — animado suavemente
         dimRaf: 0,        // RAF exclusivo para animação de fade
     };
-
-    function normText(s) {
-        return String(s || '').replace(/\s+/g, ' ').trim();
-    }
-
-    function buildGraphModel() {
-        const dayEls = Array.from(document.querySelectorAll('.week-nav'));
-        const days = dayEls.map(el => el.getAttribute('data-day')).filter(Boolean);
-
-        const projectEls = Array.from(document.querySelectorAll('.project-nav'));
-        const projects = projectEls.map(el => normText(el.textContent)).filter(Boolean);
-
-        const nodes = [];
-        const nodeById = new Map();
-
-        function addNode(type, key, label) {
-            const id = `${type}:${key}`;
-            if (nodeById.has(id)) return nodeById.get(id);
-            const n = {
-                id,
-                type,
-                key,
-                label,
-                x: (Math.random() - 0.5) * 520,
-                y: (Math.random() - 0.5) * 340,
-                vx: 0,
-                vy: 0,
-                r: type === 'day' ? 12 : (type === 'tag' ? 11 : 14)
-            };
-            nodeById.set(id, n);
-            nodes.push(n);
-            return n;
-        }
-
-        days.forEach(d => addNode('day', d, d));
-        projects.forEach(p => addNode('project', p, p));
-
-        const edges = [];
-
-        // Dia <-> Projeto (tarefas com due_date)
-        const counts = new Map(); // day||project -> count
-        for (const p of projects) {
-            const list = (tasksData[p] || []).filter(t => !t.deleted);
-            for (const t of list) {
-                const d = normText(t.due_date || '');
-                if (!d) continue;
-                const k = `${d}||${p}`;
-                counts.set(k, (counts.get(k) || 0) + 1);
-            }
-        }
-        for (const [k, c] of counts.entries()) {
-            const [day, proj] = k.split('||');
-            const a = addNode('day', day, day);
-            const b = addNode('project', proj, proj);
-            edges.push({ a: a.id, b: b.id, weight: Math.min(8, c), kind: 'schedule' });
-        }
-
-        // Tags (para relações Projeto <-> Tag e Projeto <-> Projeto)
-        const tagRe = /(^|\s)#([\w\u00C0-\u00FF]+)/g;
-        const tagsByProject = new Map(); // proj -> Set(tag)
-        const tagCountsByProject = new Map(); // proj -> Map(tag -> count)
-        const tagCountsGlobal = new Map(); // tag -> count
-        for (const p of projects) {
-            const set = new Set();
-            const counts = new Map();
-            const list = (tasksData[p] || []).filter(t => !t.deleted);
-            for (const t of list) {
-                const text = String(t.text || '');
-                let m;
-                while ((m = tagRe.exec(text)) !== null) {
-                    const tag = String(m[2] || '').toLowerCase();
-                    if (!tag) continue;
-                    set.add(tag);
-                    counts.set(tag, (counts.get(tag) || 0) + 1);
-                    tagCountsGlobal.set(tag, (tagCountsGlobal.get(tag) || 0) + 1);
-                }
-            }
-            tagsByProject.set(p, set);
-            tagCountsByProject.set(p, counts);
-        }
-
-        // Mantém o grafo minimalista: limita o número de tags na visão global
-        const topTags = Array.from(tagCountsGlobal.entries())
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 14)
-            .map(([t]) => t);
-        const topTagSet = new Set(topTags);
-
-        topTags.forEach(t => addNode('tag', t, `#${t}`));
-
-        for (const p of projects) {
-            const counts = tagCountsByProject.get(p);
-            if (!counts) continue;
-            for (const [t, c] of counts.entries()) {
-                if (!topTagSet.has(t)) continue;
-                edges.push({
-                    a: `project:${p}`,
-                    b: `tag:${t}`,
-                    weight: Math.min(8, c),
-                    kind: 'taglink'
-                });
-            }
-        }
-
-        // Projeto <-> Projeto (tags compartilhadas)
-        for (let i = 0; i < projects.length; i++) {
-            for (let j = i + 1; j < projects.length; j++) {
-                const p1 = projects[i];
-                const p2 = projects[j];
-                const s1 = tagsByProject.get(p1);
-                const s2 = tagsByProject.get(p2);
-                if (!s1 || !s2 || s1.size === 0 || s2.size === 0) continue;
-                let inter = 0;
-                for (const t of s1) if (s2.has(t)) inter++;
-                if (inter <= 0) continue;
-                edges.push({
-                    a: `project:${p1}`,
-                    b: `project:${p2}`,
-                    weight: Math.min(8, inter),
-                    kind: 'tags'
-                });
-            }
-        }
-
-        // Link nodes in edges
-        for (const e of edges) {
-            e.na = nodeById.get(e.a);
-            e.nb = nodeById.get(e.b);
-        }
-
-        return { nodes, edges };
-    }
 
     function graphResize() {
         if (!graphCanvas) return;
@@ -438,7 +284,11 @@ document.addEventListener('DOMContentLoaded', () => {
         graph.pan.x = rect.width * 0.5;
         graph.pan.y = rect.height * 0.52;
         graph.scale = 1;
-        graph.model = buildGraphModel();
+        const days = Array.from(document.querySelectorAll('.week-nav'))
+            .map(el => el.getAttribute('data-day')).filter(Boolean);
+        const projects = Array.from(document.querySelectorAll('.project-nav'))
+            .map(el => normText(el.textContent)).filter(Boolean);
+        graph.model = buildGraphModel(days, projects, tasksData);
         graph.running = true;
         cancelAnimationFrame(graph.raf);
         graph.raf = requestAnimationFrame(graphStep);
@@ -675,16 +525,6 @@ document.addEventListener('DOMContentLoaded', () => {
         perfilContent.style.minHeight = max + 'px';
     }
 
-    // Formata ISO → "27 jul 2026 20:14"
-    function pfFmtDate(iso) {
-        if (!iso) return '—';
-        const d = new Date(iso);
-        if (isNaN(d.getTime())) return '—';
-        const data = d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
-        const hora = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-        return `${data} · ${hora}`;
-    }
-
     // Sincroniza avatar (hero + sidebar) entre imagem e iniciais
     function applyAvatarState(hasAvatar) {
         const heroImg  = document.getElementById('perfil-avatar-img');
@@ -908,17 +748,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnRestore = document.getElementById('btn-restore');
     const restoreFile = document.getElementById('restore-file');
 
-    function downloadBlob(blob, filename) {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename || 'taskkill-backup.db';
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-    }
-
     if (btnBackup) {
         btnBackup.addEventListener('click', async () => {
             try {
@@ -974,31 +803,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Função Exclusiva para Notificações (Toast) Silenciosas
-    function showToast(message) {
-        const container = document.getElementById('toast-container');
-        if (!container) return;
-
-        const toast = document.createElement('div');
-        toast.className = 'toast';
-        toast.textContent = message;
-
-        container.appendChild(toast);
-
-        // Dispara reflow pra ativar o CSS transition e depois adiciona 'show'
-        requestAnimationFrame(() => {
-            toast.classList.add('show');
-        });
-
-        // Some e apaga o DOM depois de 3 segundos
-        setTimeout(() => {
-            toast.classList.remove('show');
-            setTimeout(() => {
-                toast.remove();
-            }, 300); // Tempo da transição CSS
-        }, 3000);
-    }
-
     // Estado das demandas (será cacheado pela API)
     let tasksData = {};
     let currentCategory = null;
@@ -1014,41 +818,6 @@ document.addEventListener('DOMContentLoaded', () => {
         <path d="M10 11v6M14 11v6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
         <path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>`;
-
-    // Modal customizado de confirmação
-    function _confirmModal(title, body) {
-        return new Promise(resolve => {
-            const overlay  = document.getElementById('project-confirm-overlay');
-            const titleEl  = document.getElementById('project-confirm-title');
-            const bodyEl   = document.getElementById('project-confirm-body');
-            const btnOk    = document.getElementById('project-confirm-ok');
-            const btnCancel= document.getElementById('project-confirm-cancel');
-            if (!overlay) { resolve(window.confirm(title)); return; }
-
-            titleEl.textContent = title;
-            bodyEl.textContent  = body;
-            overlay.classList.remove('hidden');
-            btnOk.focus();
-
-            const cleanup = (result) => {
-                overlay.classList.add('hidden');
-                btnOk.removeEventListener('click', onOk);
-                btnCancel.removeEventListener('click', onCancel);
-                overlay.removeEventListener('click', onOverlay);
-                document.removeEventListener('keydown', onKey);
-                resolve(result);
-            };
-            const onOk      = () => cleanup(true);
-            const onCancel  = () => cleanup(false);
-            const onOverlay = (e) => { if (e.target === overlay) cleanup(false); };
-            const onKey     = (e) => { if (e.key === 'Escape') cleanup(false); };
-
-            btnOk.addEventListener('click', onOk);
-            btnCancel.addEventListener('click', onCancel);
-            overlay.addEventListener('click', onOverlay);
-            document.addEventListener('keydown', onKey);
-        });
-    }
 
     function _attachProjectItemEvents(wrapper) {
         const item     = wrapper.querySelector('.project-nav');
@@ -1125,7 +894,7 @@ document.addEventListener('DOMContentLoaded', () => {
             btnDel.addEventListener('click', async e => {
                 e.stopPropagation();
                 const name = normText(item.textContent);
-                const ok = await _confirmModal(
+                const ok = await confirmModal(
                     `Excluir "${name}"?`,
                     'Todas as tarefas do projeto serão arquivadas e não aparecerão mais na lista.'
                 );
@@ -1610,7 +1379,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             tasksData[currentCategory].push(newTask);
                             taskInput.value = '';
                             renderTasks();
-                            showToast("Tarefa enviada para a nuvem");
+                            showToast("Tarefa salva");
                         }
                     } catch (err) {
                         console.error("Erro ao criar task:", err);
@@ -1978,39 +1747,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const TITLE_HINT_FIELDS = ['title', 'subject', 'name', 'nome', 'titulo', 'assunto',
         'summary', 'resumo', 'text', 'texto', 'description', 'descricao'];
-
-    // ── Helpers de template (espelham o backend p/ prévia ao vivo) ──
-    function intResolvePath(obj, path) {
-        if (path === null || path === undefined || path === '') return obj;
-        let cur = obj;
-        const parts = String(path).replace(/\[/g, '.').replace(/\]/g, '').split('.');
-        for (let p of parts) {
-            p = p.trim();
-            if (p === '') continue;
-            if (cur && typeof cur === 'object' && !Array.isArray(cur)) {
-                if (!(p in cur)) return null;
-                cur = cur[p];
-            } else if (Array.isArray(cur)) {
-                const i = parseInt(p, 10);
-                if (isNaN(i) || i < 0 || i >= cur.length) return null;
-                cur = cur[i];
-            } else {
-                return null;
-            }
-        }
-        return cur;
-    }
-
-    function intRenderTemplate(tpl, item) {
-        if (!tpl) return '';
-        return String(tpl).replace(/\{\{\s*([\w.\[\]]+)\s*\}\}/g, (m, g) => {
-            const v = intResolvePath(item, g);
-            if (v === null || v === undefined) return '';
-            if (typeof v === 'boolean') return v ? 'true' : 'false';
-            if (typeof v === 'object') return JSON.stringify(v);
-            return String(v);
-        });
-    }
 
     function updateTitlePreview() {
         if (!intTitlePreview) return;
@@ -3091,7 +2827,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function onDelete() {
         if (!intId.value) return;
-        const ok = await _confirmModal(
+        const ok = await confirmModal(
             'Excluir integração?',
             'A configuração será removida. As tarefas já criadas permanecem.'
         );

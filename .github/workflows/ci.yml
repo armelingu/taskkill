@@ -25,7 +25,7 @@ jobs:
           cache: "pip"
 
       - name: Instalar dependências
-        run: pip install -r requirements.txt ruff
+        run: pip install -r requirements-dev.txt ruff
 
       - name: Verificar sintaxe dos módulos principais
         run: python -m py_compile app.py database.py routes.py
@@ -36,3 +36,17 @@ jobs:
             --select E,F,W \
             --ignore E501 \
             --exclude .venv
+
+      - name: Testes de backend (pytest)
+        env:
+          TASKKILL_SECRET_KEY: ci-secret-key
+          TASKKILL_ADMIN_PASSWORD: ci-admin-pass-123
+        run: pytest
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Testes de lógica pura (node --test)
+        run: node --test tests/js/*.test.mjs

@@ -121,6 +121,11 @@ app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(
 )
 app.config['SESSION_REFRESH_EACH_REQUEST'] = True
 
+# Módulos ES são importados por caminho relativo (sem ?v=<mtime> nos sub-imports).
+# Com max-age=0 o navegador revalida via ETag/Last-Modified (304 quando não muda),
+# evitando servir um módulo velho após deploy. O entry (main.js) ainda usa asset().
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
+
 # Cache-busting de assets estáticos: gera /static/<arquivo>?v=<mtime>.
 # Assim, ao editar CSS/JS, a URL muda e o navegador baixa a versão nova
 # (evita o clássico "recarreguei e continua o JS antigo em cache").

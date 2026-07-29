@@ -16,6 +16,10 @@ backups/
 # Docker
 .env
 
+# Node (apenas dev/test — o app não usa build step)
+node_modules/
+package-lock.json
+
 # Build
 dist/
 build/

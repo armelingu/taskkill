@@ -46,7 +46,6 @@ def test_ip_lockout_after_max_attempts(client):
         statuses.append(r.status_code)
     # Em algum momento (<=5 tentativas) o IP é bloqueado -> 429 com Retry-After.
     assert 429 in statuses
-    idx = statuses.index(429)
     r = client.post('/login', data={
         'username': ADMIN_USER, 'password': 'errada', 'csrf_token': token,
     })
