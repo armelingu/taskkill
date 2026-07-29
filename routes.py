@@ -893,17 +893,24 @@ def restore_db():
         os.makedirs(os.path.dirname(dest_path), exist_ok=True)
 
         # Backup do banco atual antes de restaurar (rollback simples)
+        bak_path = None
         if os.path.exists(dest_path):
             bak_path = dest_path + f".bak-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
             try:
                 shutil.copy2(dest_path, bak_path)
             except OSError:
-                pass
+                bak_path = None
 
         shutil.copy2(tmp_path, dest_path)
 
         # Reaplica migrations/índices caso a versão do backup seja antiga
         init_db()
+
+        # Auditoria: restaurar o banco substitui TODOS os dados (inclusive users).
+        # É admin-only, mas registramos para rastrear uso indevido pós-comprometimento.
+        _user = _current_user() or {}
+        _log_auth('db_restore', username=_user.get('username', ''), ip=_get_client_ip(),
+                  detail=f'backup={os.path.basename(bak_path) if bak_path else "none"}')
         return jsonify({"success": True})
     finally:
         try:
