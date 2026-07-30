@@ -290,6 +290,45 @@ test.describe('Fluxos principais do app', () => {
         await expect(page.locator('.toast', { hasText: 'para hoje' })).toBeVisible();
     });
 
+    test('dependências: adicionar cria badge "bloqueada por" e remover limpa', async ({ page }) => {
+        const proj = `Dep-${Date.now()}`;
+        await page.click('#btn-add-project');
+        const pin = page.locator('.project-new-input');
+        await pin.fill(proj);
+        await pin.press('Enter');
+        await expect(page.locator('#project-title')).toHaveText(proj);
+
+        for (const t of ['Fundacao', 'Parede']) {
+            await page.fill('#new-task-input', t);
+            await page.press('#new-task-input', 'Enter');
+        }
+        const parede = page.locator('.task-item', { hasText: 'Parede' });
+        await expect(parede).toBeVisible();
+
+        // Abre o editor da "Parede" e adiciona dependência de "Fundacao".
+        await parede.hover();
+        await parede.locator('.edit-btn').click();
+        await parede.locator('.edit-task-dep-select').selectOption({ label: 'Fundacao' });
+
+        // Pré-requisito ainda em aberto => badge de bloqueio (soft) aparece.
+        await expect(page.locator('.task-item', { hasText: 'Parede' }).locator('.task-blocked-badge'))
+            .toHaveText('bloqueada por 1');
+
+        // O grafo renderiza sem erro (nós de tarefa + setas no canvas).
+        await page.click('#nav-graph');
+        await expect(page.locator('#graph-canvas')).toBeVisible();
+        await page.waitForTimeout(300);
+
+        // Volta ao projeto e remove a dependência pelo chip; o badge some.
+        await page.locator('.project-nav', { hasText: proj }).click();
+        const parede2 = page.locator('.task-item', { hasText: 'Parede' });
+        await parede2.hover();
+        await parede2.locator('.edit-btn').click();
+        await parede2.locator('.edit-dep-remove').click();
+        await expect(page.locator('.task-item', { hasText: 'Parede' }).locator('.task-blocked-badge'))
+            .toHaveCount(0);
+    });
+
     test('integrações: abre lista e o wizard', async ({ page }) => {
         await page.click('#nav-integrations');
         await expect(page.locator('#integrations-view')).toBeVisible();

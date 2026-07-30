@@ -26,6 +26,28 @@ const RECUR_LABELS = {
     monthly: 'Todo mês',
 };
 
+// Índice global id -> tarefa (varre todos os projetos). Usado por dependências.
+function allTasksById() {
+    const map = new Map();
+    for (const list of Object.values(state.tasksData || {})) {
+        for (const t of list) map.set(t.id, t);
+    }
+    return map;
+}
+
+// Quantas dependências (pré-requisitos) ainda estão abertas para esta tarefa.
+function openDepsCount(task, byId) {
+    const deps = Array.isArray(task.depends_on) ? task.depends_on : [];
+    if (!deps.length) return 0;
+    const idx = byId || allTasksById();
+    let open = 0;
+    for (const id of deps) {
+        const dt = idx.get(id);
+        if (dt && !dt.completed && !dt.deleted) open += 1;
+    }
+    return open;
+}
+
 // ── Visão por #tag (aberta a partir do grafo) ─────────────────────
 export function openTagView(tagKey) {
     const tag = String(tagKey || '').toLowerCase();
@@ -239,6 +261,8 @@ export function renderTasks() {
         return;
     }
 
+    const byIdIndex = allTasksById();  // índice global p/ dependências (1x por render)
+
     tasks.forEach((task, index) => {
         const li = document.createElement('li');
         li.className = `task-item ${task.completed ? 'completed' : ''}`;
@@ -278,6 +302,8 @@ export function renderTasks() {
         }
         const recur = task.recurrence && task.recurrence !== 'none' ? task.recurrence : '';
         const recurBadge = recur ? `<span class="task-recur-badge" title="Repete: ${escapeHTML(RECUR_LABELS[recur] || 'recorrente')}"><span class="task-recur-icon" aria-hidden="true">\u21bb</span>${escapeHTML(RECUR_LABELS[recur] || '')}</span>` : '';
+        const openDeps = openDepsCount(task, byIdIndex);
+        const blockedBadge = openDeps > 0 ? `<span class="task-blocked-badge" title="Depende de ${openDeps} tarefa(s) ainda em aberto">bloqueada por ${openDeps}</span>` : '';
         const isCrossView = isWeekView || isTagView;
         const projectBadge = isCrossView ? `<span class="task-project-badge">${escapeHTML(task.originalProject)}</span>` : '';
         
@@ -299,6 +325,7 @@ export function renderTasks() {
             <button class="task-checkbox" aria-label="Marcar como concluído"></button>
             ${projectBadge}
             <span class="task-text">${formattedText}</span>
+            ${blockedBadge}
             ${recurBadge}
             ${dueBadge}
             ${dateBadge}
@@ -433,19 +460,95 @@ export function renderTasks() {
             });
             editRec.value = task.recurrence && RECUR_LABELS[task.recurrence] ? task.recurrence : 'none';
 
+            // Gerenciador de dependências ("depende de" + chips das atuais).
+            const depWrap = document.createElement('span');
+            depWrap.className = 'edit-task-deps';
+            const idx = allTasksById();
+            const currentDeps = Array.isArray(task.depends_on) ? task.depends_on.slice() : [];
+            // Marca p/ cancelar o save automático quando a edição fecha via dep.
+            let editClosed = false;
+
+            const depSelect = document.createElement('select');
+            depSelect.className = 'edit-task-dep-select';
+            depSelect.title = 'Adicionar dependência';
+            depSelect.setAttribute('aria-label', 'Depende de');
+            const ph = document.createElement('option');
+            ph.value = ''; ph.textContent = 'depende de…'; ph.disabled = true; ph.selected = true;
+            depSelect.appendChild(ph);
+            for (const [id, t] of idx) {
+                if (id === task.id || t.deleted || currentDeps.includes(id)) continue;
+                const opt = document.createElement('option');
+                opt.value = String(id);
+                const tx = String(t.text || '');
+                opt.textContent = tx.length > 34 ? tx.slice(0, 33) + '…' : tx;
+                depSelect.appendChild(opt);
+            }
+            depWrap.appendChild(depSelect);
+
+            currentDeps.forEach((depId) => {
+                const dt = idx.get(depId);
+                const chip = document.createElement('span');
+                chip.className = 'edit-dep-chip';
+                const tx = dt ? String(dt.text || '') : `#${depId}`;
+                const lbl = document.createElement('span');
+                lbl.textContent = tx.length > 18 ? tx.slice(0, 17) + '…' : tx;
+                chip.appendChild(lbl);
+                const rm = document.createElement('button');
+                rm.type = 'button';
+                rm.className = 'edit-dep-remove';
+                rm.textContent = '×';
+                rm.title = 'Remover dependência';
+                rm.addEventListener('click', async () => {
+                    editClosed = true;
+                    try {
+                        await apiFetch(`/api/tasks/${task.id}/dependencies/${depId}`, { method: 'DELETE' });
+                        task.depends_on = (task.depends_on || []).filter((x) => x !== depId);
+                    } catch (err) { console.error('Erro ao remover dependência:', err); }
+                    renderTasks();
+                });
+                chip.appendChild(rm);
+                depWrap.appendChild(chip);
+            });
+
+            depSelect.addEventListener('change', async () => {
+                const depId = parseInt(depSelect.value, 10);
+                if (!depId) return;
+                editClosed = true;
+                try {
+                    const res = await apiFetch(`/api/tasks/${task.id}/dependencies`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ depends_on: depId }),
+                    });
+                    if (res.ok) {
+                        const dataR = await res.json();
+                        task.depends_on = dataR.depends_on || [];
+                        showToast('Dependência adicionada', { variant: 'success' });
+                    } else {
+                        const errR = await res.json().catch(() => ({}));
+                        showToast(errR.error || 'Não foi possível adicionar', { variant: 'error' });
+                    }
+                } catch (err) {
+                    showToast('Erro ao adicionar dependência', { variant: 'error' });
+                }
+                renderTasks();
+            });
+
             // Substitui visualmente textSpan pelos inputs
             li.insertBefore(editInput, textSpan);
             li.insertBefore(editDue, textSpan);
             li.insertBefore(editRec, textSpan);
+            li.insertBefore(depWrap, textSpan);
             textSpan.style.display = 'none';
 
-            // Esconde badges (data criada, prazo, recorrência) durante a edição.
-            li.querySelectorAll('.task-date, .task-recur-badge').forEach(b => { b.style.display = 'none'; });
+            // Esconde badges (data criada, prazo, recorrência, bloqueio) durante a edição.
+            li.querySelectorAll('.task-date, .task-recur-badge, .task-blocked-badge').forEach(b => { b.style.display = 'none'; });
 
             editInput.focus();
 
             // Lógica ao salvar a edição (perder foco ou apertar enter)
             const saveEdit = () => {
+                if (editClosed) return;
                 const newText = editInput.value.trim();
                 const newDue = editDue.value;
                 let payload = {};
@@ -487,7 +590,7 @@ export function renderTasks() {
                 clearTimeout(blurTimeout);
                 blurTimeout = setTimeout(() => {
                     const a = document.activeElement;
-                    if (a !== editInput && a !== editDue && a !== editRec) {
+                    if (a !== editInput && a !== editDue && a !== editRec && a !== depSelect) {
                         saveEdit();
                     }
                 }, 100);
@@ -496,6 +599,7 @@ export function renderTasks() {
             editInput.addEventListener('blur', handleBlur);
             editDue.addEventListener('blur', handleBlur);
             editRec.addEventListener('blur', handleBlur);
+            depSelect.addEventListener('blur', handleBlur);
             
             editInput.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') {

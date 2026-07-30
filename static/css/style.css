@@ -2391,6 +2391,81 @@ body.graph-mode .main-content {
     color-scheme: dark;
 }
 
+/* Badge de tarefa bloqueada por dependências abertas (soft, não trava). */
+.task-blocked-badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--graph-node-task-stroke, #d97706);
+    background: var(--graph-node-task-fill, #fef3c7);
+    padding: 2px 7px;
+    border-radius: 999px;
+    white-space: nowrap;
+}
+
+/* Gerenciador de dependências no editor inline. */
+.edit-task-deps {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-left: 8px;
+}
+
+.edit-task-dep-select {
+    padding: 4px 6px;
+    border: 1px solid var(--border-strong);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    background: var(--surface);
+    font-family: inherit;
+    font-size: 0.82rem;
+    outline: none;
+    max-width: 180px;
+}
+
+.edit-task-dep-select:focus {
+    border-color: var(--accent-blue);
+}
+
+[data-theme="dark"] .edit-task-dep-select {
+    color-scheme: dark;
+}
+
+.edit-dep-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.72rem;
+    color: var(--graph-node-task-stroke, #d97706);
+    background: var(--graph-node-task-fill, #fef3c7);
+    padding: 2px 4px 2px 8px;
+    border-radius: 999px;
+    max-width: 160px;
+}
+
+.edit-dep-chip > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.edit-dep-remove {
+    border: none;
+    background: transparent;
+    color: inherit;
+    font-size: 0.95rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 2px;
+    border-radius: 50%;
+}
+
+.edit-dep-remove:hover {
+    color: var(--danger, #dc2626);
+}
+
 .task-project-badge {
     font-size: 0.65rem;
     color: var(--text-inverse);
