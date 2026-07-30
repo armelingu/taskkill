@@ -2330,6 +2330,21 @@ body.graph-mode .main-content {
     font-weight: 700;
 }
 
+/* Lembretes: ênfase de prazo do dia e de tarefas atrasadas. */
+.task-due-today {
+    color: var(--accent-blue-strong);
+    background: var(--accent-blue-soft);
+    padding: 2px 8px;
+    border-radius: 999px;
+}
+
+.task-due-overdue {
+    color: var(--danger-text);
+    background: var(--danger-soft);
+    padding: 2px 8px;
+    border-radius: 999px;
+}
+
 /* Badge de recorrência (↻ + rótulo) na linha da tarefa. */
 .task-recur-badge {
     display: inline-flex;

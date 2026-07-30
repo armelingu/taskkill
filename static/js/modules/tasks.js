@@ -7,7 +7,7 @@
  */
 
 import { state } from './state.js';
-import { escapeHTML, formatBR, weekdayLong } from './util.js';
+import { escapeHTML, formatBR, weekdayLong, todayISO } from './util.js';
 import { parseQuickAdd } from './nlp.js';
 import { apiFetch } from './api.js';
 import { showToast } from './ui.js';
@@ -261,7 +261,21 @@ export function renderTasks() {
         // Layout de cada item
         // APLICAÇÃO DE SEGURANÇA MÁXIMA (escapeHTML) NO RENDER:
         const dateBadge = task.created_date ? `<span class="task-date">${escapeHTML(task.created_date)}</span>` : '';
-        const dueBadge = task.due_date && !isWeekView ? `<span class="task-date task-due-badge">${escapeHTML(formatBR(task.due_date) || task.due_date)}</span>` : '';
+        // Prazo com ênfase de lembrete: "Hoje" (hoje) ou destaque de atrasada.
+        let dueBadge = '';
+        if (task.due_date && !isWeekView) {
+            const iso = task.due_date;
+            let cls = 'task-due-badge';
+            let label = formatBR(iso) || iso;
+            let title = '';
+            if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+                const today = todayISO();
+                if (iso === today) { cls += ' task-due-today'; label = 'Hoje'; title = formatBR(iso); }
+                else if (iso < today) { cls += ' task-due-overdue'; title = 'Atrasada'; }
+            }
+            const titleAttr = title ? ` title="${escapeHTML(title)}"` : '';
+            dueBadge = `<span class="task-date ${cls}"${titleAttr}>${escapeHTML(label)}</span>`;
+        }
         const recur = task.recurrence && task.recurrence !== 'none' ? task.recurrence : '';
         const recurBadge = recur ? `<span class="task-recur-badge" title="Repete: ${escapeHTML(RECUR_LABELS[recur] || 'recorrente')}"><span class="task-recur-icon" aria-hidden="true">\u21bb</span>${escapeHTML(RECUR_LABELS[recur] || '')}</span>` : '';
         const isCrossView = isWeekView || isTagView;

@@ -271,6 +271,25 @@ test.describe('Fluxos principais do app', () => {
         await expect(page.locator('.task-item', { hasText: 'beber agua' }).locator('.task-recur-badge')).toBeVisible();
     });
 
+    test('lembretes: badge "Hoje" e resumo discreto ao abrir', async ({ page }) => {
+        const proj = `Lem-${Date.now()}`;
+        await page.click('#btn-add-project');
+        const pin = page.locator('.project-new-input');
+        await pin.fill(proj);
+        await pin.press('Enter');
+        await expect(page.locator('#project-title')).toHaveText(proj);
+
+        await page.fill('#new-task-input', 'hoje pagar conta');
+        await page.press('#new-task-input', 'Enter');
+
+        const item = page.locator('.task-item', { hasText: 'pagar conta' });
+        await expect(item.locator('.task-due-today')).toHaveText('Hoje');
+
+        // Ao recarregar, o resumo de lembretes aparece como toast discreto.
+        await page.reload();
+        await expect(page.locator('.toast', { hasText: 'para hoje' })).toBeVisible();
+    });
+
     test('integrações: abre lista e o wizard', async ({ page }) => {
         await page.click('#nav-integrations');
         await expect(page.locator('#integrations-view')).toBeVisible();

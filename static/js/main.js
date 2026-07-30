@@ -13,6 +13,7 @@ import { graphStart, graphStop } from './modules/graph.js';
 import { renderTasks } from './modules/tasks.js';
 import { renderSidebarProjects } from './modules/projects.js';
 import { openIntegrations, hideIntegrationsView } from './modules/integrations.js';
+import { showRemindersSummary } from './modules/reminders.js';
 import './modules/profile.js';  // auto-inicializa o perfil inline
 import './modules/theme.js';    // controle de tema (claro/escuro/sistema)
 import './modules/week.js';     // faixa da semana (datas reais) + navegação
@@ -124,7 +125,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // ── Dados iniciais ─────────────────────────────────────────────────
 
     // Conecta com o Backend logo ao abrir
-    async function fetchInitialData() {
+    async function fetchInitialData(isFirstLoad = false) {
         try {
             const [projRes, tasksRes] = await Promise.all([
                 apiFetch('/api/projects'),
@@ -146,12 +147,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else if (graphView && !graphView.classList.contains('hidden')) {
                     graphStart();
                 }
+
+                // Lembretes: resumo discreto de hoje/atrasadas (uma vez por abertura).
+                if (isFirstLoad) showRemindersSummary();
             }
         } catch (e) {
             console.error("Erro ao carregar banco de dados:", e);
         }
     }
-    fetchInitialData();
+    fetchInitialData(true);
 
     // Integrações (outro módulo) avisa que tarefas mudaram após import/execução.
     document.addEventListener('taskkill:tasks-changed', () => fetchInitialData());
