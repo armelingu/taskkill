@@ -6,6 +6,7 @@
 import { normText, downloadBlob } from './modules/util.js';
 import { apiFetch } from './modules/api.js';
 import { showToast } from './modules/ui.js';
+import { openModal } from './modules/focus.js';
 import { state } from './modules/state.js';
 import { renderDashboard } from './modules/dashboard.js';
 import { graphStart, graphStop } from './modules/graph.js';
@@ -34,26 +35,23 @@ document.addEventListener('DOMContentLoaded', () => {
     const logoutForm     = document.getElementById('logout-form');
 
     if (logoutTrigger && logoutOverlay) {
-        logoutTrigger.addEventListener('click', () => {
-            logoutOverlay.classList.remove('hidden');
-            logoutConfirm.focus();
-        });
+        let closeLogout = null;
 
-        logoutCancel.addEventListener('click', () => {
-            logoutOverlay.classList.add('hidden');
-        });
+        const openLogout = () => {
+            closeLogout = openModal(logoutOverlay, { initialFocus: logoutConfirm });
+        };
 
-        logoutConfirm.addEventListener('click', () => {
-            logoutForm.submit();
-        });
+        logoutTrigger.addEventListener('click', openLogout);
+        logoutCancel.addEventListener('click', () => { if (closeLogout) closeLogout(); });
+        logoutConfirm.addEventListener('click', () => logoutForm.submit());
 
         logoutOverlay.addEventListener('click', e => {
-            if (e.target === logoutOverlay) logoutOverlay.classList.add('hidden');
+            if (e.target === logoutOverlay && closeLogout) closeLogout();
         });
 
         document.addEventListener('keydown', e => {
-            if (e.key === 'Escape' && !logoutOverlay.classList.contains('hidden')) {
-                logoutOverlay.classList.add('hidden');
+            if (e.key === 'Escape' && !logoutOverlay.classList.contains('hidden') && closeLogout) {
+                closeLogout();
             }
         });
     }

@@ -9,6 +9,7 @@
 
 import { apiFetch } from './api.js';
 import { showToast, confirmModal } from './ui.js';
+import { openModal } from './focus.js';
 import { escapeHTML, normText } from './util.js';
 import { intRenderTemplate } from './templates.js';
 
@@ -1150,16 +1151,19 @@ async function loadHistory() {
     }
 }
 
+let closeHistoryModal = null;
+
 function openHistory(id, name) {
     if (!intHistoryOverlay) return;
     intHistoryCurrent = { id, name };
     intHistoryTitle.textContent = `Histórico — ${name}`;
-    intHistoryOverlay.classList.remove('hidden');
+    closeHistoryModal = openModal(intHistoryOverlay, { initialFocus: intHistoryClose });
     loadHistory();
 }
 
 function closeHistory() {
-    if (intHistoryOverlay) intHistoryOverlay.classList.add('hidden');
+    if (closeHistoryModal) closeHistoryModal();
+    closeHistoryModal = null;
     intHistoryCurrent = null;
 }
 
@@ -1210,6 +1214,11 @@ if (integrationsView) {
     if (intHistoryOverlay) {
         intHistoryOverlay.addEventListener('click', (e) => {
             if (e.target === intHistoryOverlay) closeHistory();
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !intHistoryOverlay.classList.contains('hidden')) {
+                closeHistory();
+            }
         });
     }
 

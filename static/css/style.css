@@ -68,6 +68,9 @@
     --skeleton-color: #e2e8f0;/* Tons elegantes de cinza slate */
     --skeleton-hover: #cbd5e1;
 
+    /* Foco (acessibilidade) — anel de :focus-visible via teclado */
+    --ring: rgba(59, 130, 246, 0.65);
+
     /* Superfícies invertidas (toast) e painel de código */
     --toast-bg: #1e293b;
     --toast-text: #ffffff;
@@ -147,6 +150,7 @@
     --hover: #1e293b;
     --skeleton-color: #1e293b;
     --skeleton-hover: #334155;
+    --ring: rgba(96, 165, 250, 0.75);
     /* text-subtle mais claro no dark para atingir AA (4.5:1) em cards/sidebar */
 
     /* Superfícies invertidas (toast) e painel de código */
@@ -197,6 +201,43 @@
     --graph-edge-schedule: #475569;
     --graph-edge-taglink: #60a5fa;
     --graph-label: #f1f5f9;
+}
+
+/* ===========================================================================
+   FOCO ACESSÍVEL — anel só quando a navegação é por teclado (:focus-visible).
+   Mouse/touch não disparam o anel (o navegador decide). Elementos com foco
+   próprio (inputs de edição inline) desativam abaixo.
+   =========================================================================== */
+:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: 6px;
+}
+/* Remove o anel padrão feio quando NÃO é focus-visible (ex.: clique no mouse). */
+:focus:not(:focus-visible) {
+    outline: none;
+}
+/* Inputs de texto/edição inline: o próprio componente sinaliza foco (borda). */
+.new-task-input:focus-visible,
+.edit-task-input:focus-visible,
+.edit-task-title:focus-visible,
+.subtask-input:focus-visible {
+    outline: none;
+}
+
+/* ===========================================================================
+   MOVIMENTO REDUZIDO — respeita a preferência do SO globalmente. Mantém a UI
+   funcional, apenas neutraliza animações/transições e o fundo animado do login.
+   =========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+        scroll-behavior: auto !important;
+    }
 }
 
 /* Ajustes do login no escuro (glass usa branco literal, fora do sistema de tokens) */

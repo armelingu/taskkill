@@ -3,6 +3,8 @@
  * confirmação. Dependem apenas do DOM já presente em index.html.
  */
 
+import { trapFocus } from './focus.js';
+
 // Notificação efêmera (some sozinha em ~3s).
 export function showToast(message) {
     const container = document.getElementById('toast-container');
@@ -39,15 +41,22 @@ export function confirmModal(title, body) {
 
         titleEl.textContent = title;
         bodyEl.textContent  = body;
+
+        const previouslyFocused = document.activeElement;
         overlay.classList.remove('hidden');
+        const releaseTrap = trapFocus(overlay);
         btnOk.focus();
 
         const cleanup = (result) => {
+            releaseTrap();
             overlay.classList.add('hidden');
             btnOk.removeEventListener('click', onOk);
             btnCancel.removeEventListener('click', onCancel);
             overlay.removeEventListener('click', onOverlay);
             document.removeEventListener('keydown', onKey);
+            if (previouslyFocused && typeof previouslyFocused.focus === 'function') {
+                previouslyFocused.focus();
+            }
             resolve(result);
         };
         const onOk      = () => cleanup(true);
