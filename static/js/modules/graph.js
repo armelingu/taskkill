@@ -90,12 +90,15 @@ function refreshGraphPalette() {
     _palette = {
         edgeSchedule: g('--graph-edge-schedule', '100,116,139'),
         edgeTaglink:  g('--graph-edge-taglink', '59,130,246'),
+        edgeDependency: g('--graph-edge-dependency', '217,119,6'),
         dayFill:      g('--graph-node-day-fill', '226,232,240'),
         tagFill:      g('--graph-node-tag-fill', '239,246,255'),
         projFill:     g('--graph-node-project-fill', '255,255,255'),
+        taskFill:     g('--graph-node-task-fill', '254,243,199'),
         dayStroke:    g('--graph-node-day-stroke', '100,116,139'),
         tagStroke:    g('--graph-node-tag-stroke', '59,130,246'),
         projStroke:   g('--graph-node-project-stroke', '59,130,246'),
+        taskStroke:   g('--graph-node-task-stroke', '217,119,6'),
         label:        g('--graph-label', '15,23,42'),
     };
     return _palette;
@@ -136,33 +139,52 @@ function graphDraw() {
         if (!e.na || !e.nb) continue;
         const a = worldToScreen(e.na.x, e.na.y);
         const b = worldToScreen(e.nb.x, e.nb.y);
-        const base = e.kind === 'schedule' ? pal.edgeSchedule : pal.edgeTaglink;
+        const base =
+            e.kind === 'schedule'   ? pal.edgeSchedule :
+            e.kind === 'dependency' ? pal.edgeDependency :
+            e.kind === 'taskproject' ? pal.taskStroke : pal.edgeTaglink;
 
         // alpha "normal" da aresta
         const alphaNormal = (
-            e.kind === 'schedule' ? 0.22 :
-            e.kind === 'taglink'  ? 0.14 : 0.16
+            e.kind === 'schedule'    ? 0.22 :
+            e.kind === 'dependency'  ? 0.34 :
+            e.kind === 'taskproject' ? 0.10 :
+            e.kind === 'taglink'     ? 0.14 : 0.16
         ) + Math.min(0.12, e.weight * 0.015);
 
+        const isConn = connectedEdgeSet && connectedEdgeSet.has(e);
         let edgeAlpha = alphaNormal;
         if (connectedEdgeSet) {
-            if (connectedEdgeSet.has(e)) {
-                // Aresta conectada: destaque suave
-                edgeAlpha = _lerp(alphaNormal, 0.60, dp);
-            } else {
-                // Aresta não conectada: fade elegante até 8%
-                edgeAlpha = _lerp(alphaNormal, 0.08, dp);
-            }
+            edgeAlpha = isConn ? _lerp(alphaNormal, 0.70, dp) : _lerp(alphaNormal, 0.08, dp);
         }
 
+        const lw = (e.kind === 'dependency' ? 1.6 : 1) + Math.min(2.0, e.weight * 0.22);
         ctx.strokeStyle = `rgba(${base},${edgeAlpha})`;
-        ctx.lineWidth = (connectedEdgeSet && connectedEdgeSet.has(e))
-            ? _lerp(1 + Math.min(2.0, e.weight * 0.22), 2.0, dp)
-            : 1 + Math.min(2.0, e.weight * 0.22);
+        ctx.lineWidth = isConn ? _lerp(lw, Math.max(lw, 2.2), dp) : lw;
         ctx.beginPath();
         ctx.moveTo(a.x, a.y);
         ctx.lineTo(b.x, b.y);
         ctx.stroke();
+
+        // Seta direcionada (pré-requisito -> dependente), recuada do nó destino.
+        if (e.directed) {
+            const dx = b.x - a.x;
+            const dy = b.y - a.y;
+            const len = Math.sqrt(dx * dx + dy * dy) || 1;
+            const ux = dx / len, uy = dy / len;
+            const gap = (e.nb.r + 4) * graph.scale;   // encosta na borda do nó destino
+            const tipX = b.x - ux * gap;
+            const tipY = b.y - uy * gap;
+            const size = 7 * Math.min(1.4, Math.max(0.7, graph.scale));
+            const ang = Math.atan2(uy, ux);
+            ctx.fillStyle = `rgba(${base},${Math.min(1, edgeAlpha + 0.25)})`;
+            ctx.beginPath();
+            ctx.moveTo(tipX, tipY);
+            ctx.lineTo(tipX - size * Math.cos(ang - 0.5), tipY - size * Math.sin(ang - 0.5));
+            ctx.lineTo(tipX - size * Math.cos(ang + 0.5), tipY - size * Math.sin(ang + 0.5));
+            ctx.closePath();
+            ctx.fill();
+        }
     }
 
     // ---- Nós + labels -------------------------------------------
@@ -176,13 +198,17 @@ function graphDraw() {
         const nodeOp = isDimmed ? _lerp(1, 0.18, dp) : 1;
 
         const fillBase  =
-            n.type === 'day' ? pal.dayFill :
-            n.type === 'tag' ? pal.tagFill : pal.projFill;
+            n.type === 'day'  ? pal.dayFill :
+            n.type === 'tag'  ? pal.tagFill :
+            n.type === 'task' ? pal.taskFill : pal.projFill;
         const strokeBase =
-            n.type === 'day' ? pal.dayStroke :
-            n.type === 'tag' ? pal.tagStroke : pal.projStroke;
+            n.type === 'day'  ? pal.dayStroke :
+            n.type === 'tag'  ? pal.tagStroke :
+            n.type === 'task' ? pal.taskStroke : pal.projStroke;
 
-        const fillA   = isDimmed ? _lerp(0.95, 0.25, dp) : 0.97;
+        // Tarefa concluída: um pouco mais apagada (mantém contexto sem pesar).
+        const doneFade = (n.type === 'task' && n.completed) ? 0.55 : 1;
+        const fillA   = (isDimmed ? _lerp(0.95, 0.25, dp) : 0.97) * doneFade;
         const strokeA = isDimmed
             ? _lerp(isHover ? 0.65 : (n.type === 'day' ? 0.55 : 0.60), 0.12, dp)
             : (isHover ? 0.80 : (n.type === 'day' ? 0.55 : 0.60));
@@ -332,9 +358,19 @@ function attachGraphEvents() {
         if (!tooltip || !node) return;
         const typeLabel =
             node.type === 'day'     ? 'Dia' :
-            node.type === 'project' ? 'Projeto' : 'Tag';
+            node.type === 'project' ? 'Projeto' :
+            node.type === 'task'    ? 'Tarefa' : 'Tag';
         let detail = '';
-        if (node.type === 'project') {
+        if (node.type === 'task') {
+            const edges = graph.model.edges || [];
+            const dependsOn = edges.filter(e => e.kind === 'dependency' && e.b === node.id).length;
+            const blocks = edges.filter(e => e.kind === 'dependency' && e.a === node.id).length;
+            const parts = [];
+            if (dependsOn) parts.push(`depende de ${dependsOn}`);
+            if (blocks) parts.push(`desbloqueia ${blocks}`);
+            const meta = parts.length ? parts.join(' · ') : 'sem dependências';
+            detail = `<br><span class="gt-meta">${meta}</span>`;
+        } else if (node.type === 'project') {
             const tc = (state.tasksData[node.key] || []).filter(t => !t.deleted).length;
             detail = `<br><span class="gt-meta">${tc} task${tc !== 1 ? 's' : ''}</span>`;
         } else if (node.type === 'day') {
@@ -448,6 +484,11 @@ function attachGraphEvents() {
                 } else if (node.type === 'project') {
                     const items = Array.from(document.querySelectorAll('.project-nav'));
                     const target = items.find(it => normText(it.textContent) === node.key);
+                    if (target) target.click();
+                } else if (node.type === 'task') {
+                    // Abre o projeto da tarefa (a lista mostra a tarefa e seus vínculos).
+                    const items = Array.from(document.querySelectorAll('.project-nav'));
+                    const target = items.find(it => normText(it.textContent) === node.projectKey);
                     if (target) target.click();
                 } else if (node.type === 'tag') {
                     openTagView(node.key);

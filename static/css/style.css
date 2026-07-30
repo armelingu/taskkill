@@ -92,11 +92,14 @@
     --graph-node-project-fill: #ffffff;
     --graph-node-day-fill: #e2e8f0;
     --graph-node-tag-fill: #eff6ff;
+    --graph-node-task-fill: #fef3c7;
     --graph-node-project-stroke: #3b82f6;
     --graph-node-day-stroke: #64748b;
     --graph-node-tag-stroke: #3b82f6;
+    --graph-node-task-stroke: #d97706;
     --graph-edge-schedule: #64748b;
     --graph-edge-taglink: #3b82f6;
+    --graph-edge-dependency: #d97706;
     --graph-label: #0f172a;
 }
 
@@ -195,11 +198,14 @@
     --graph-node-project-fill: #1e293b;
     --graph-node-day-fill: #334155;
     --graph-node-tag-fill: #16263f;
+    --graph-node-task-fill: #3a2e12;
     --graph-node-project-stroke: #60a5fa;
     --graph-node-day-stroke: #94a3b8;
     --graph-node-tag-stroke: #60a5fa;
+    --graph-node-task-stroke: #fbbf24;
     --graph-edge-schedule: #475569;
     --graph-edge-taglink: #60a5fa;
+    --graph-edge-dependency: #fbbf24;
     --graph-label: #f1f5f9;
 }
 

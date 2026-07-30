@@ -10,6 +10,9 @@
  *    ISO da tarefa, agregando todas as datas de um mesmo dia em ≤7 nós)
  *  - Projeto <-> Tag   (hashtags no texto das tarefas)
  *  - Projeto <-> Projeto (tags compartilhadas)
+ *  - Tarefa  -> Tarefa  (dependência real, direcionada: pré-requisito -> dependente);
+ *    só entram nós de tarefa que participam de alguma dependência (minimalismo),
+ *    e cada nó de tarefa se liga ao seu projeto.
  */
 
 import { normText, weekdayShort } from './util.js';
@@ -34,7 +37,7 @@ export function buildGraphModel(days, projects, tasksData) {
             y: (Math.random() - 0.5) * 340,
             vx: 0,
             vy: 0,
-            r: type === 'day' ? 12 : (type === 'tag' ? 11 : 14)
+            r: type === 'day' ? 12 : (type === 'tag' ? 11 : (type === 'task' ? 9 : 14))
         };
         nodeById.set(id, n);
         nodes.push(n);
@@ -130,6 +133,49 @@ export function buildGraphModel(days, projects, tasksData) {
                 kind: 'tags'
             });
         }
+    }
+
+    // Tarefa -> Tarefa (dependências reais, direcionadas). Só entram nós de
+    // tarefa que participam de alguma dependência (mantém o grafo enxuto).
+    const taskById = new Map();
+    for (const p of projects) {
+        for (const t of (tasksData[p] || [])) {
+            if (t.deleted) continue;
+            taskById.set(t.id, { task: t, project: p });
+        }
+    }
+    const participants = new Set();
+    const depPairs = [];  // [prereqId, dependentId]
+    for (const { task: t } of taskById.values()) {
+        const deps = Array.isArray(t.depends_on) ? t.depends_on : [];
+        for (const depId of deps) {
+            if (!taskById.has(depId)) continue;  // pré-requisito arquivado/ausente
+            participants.add(t.id);
+            participants.add(depId);
+            depPairs.push([depId, t.id]);
+        }
+    }
+    for (const id of participants) {
+        const entry = taskById.get(id);
+        const text = String(entry.task.text || '');
+        const label = text.length > 22 ? text.slice(0, 21) + '…' : text;
+        const node = addNode('task', String(id), label);
+        node.completed = !!entry.task.completed;
+        node.projectKey = entry.project;
+        // Liga a tarefa ao seu projeto (aresta leve) para agrupar visualmente.
+        const projId = `project:${entry.project}`;
+        if (nodeById.has(projId)) {
+            edges.push({ a: node.id, b: projId, weight: 1, kind: 'taskproject' });
+        }
+    }
+    for (const [prereqId, dependentId] of depPairs) {
+        edges.push({
+            a: `task:${prereqId}`,
+            b: `task:${dependentId}`,
+            weight: 2,
+            kind: 'dependency',
+            directed: true,
+        });
     }
 
     // Vincula os nós às arestas.

@@ -45,3 +45,52 @@ test('buildGraphModel conecta projetos por tag compartilhada', () => {
          (e.a === 'project:Proj2' && e.b === 'project:Proj1')));
     assert.ok(shared, 'Proj1 e Proj2 compartilham #infra');
 });
+
+// ── Dependências entre tarefas ─────────────────────────────────────
+const depData = {
+    Proj: [
+        { id: 1, text: 'Fundacao', due_date: '', deleted: false, depends_on: [] },
+        { id: 2, text: 'Parede', due_date: '', deleted: false, depends_on: [1] },
+        { id: 3, text: 'Telhado', due_date: '', deleted: false, depends_on: [2] },
+        { id: 4, text: 'Isolada', due_date: '', deleted: false, depends_on: [] },
+    ],
+};
+
+test('só participantes viram nós de tarefa (isoladas ficam de fora)', () => {
+    const { nodes } = buildGraphModel([], ['Proj'], depData);
+    const ids = new Set(nodes.map(n => n.id));
+    assert.ok(ids.has('task:1'));
+    assert.ok(ids.has('task:2'));
+    assert.ok(ids.has('task:3'));
+    assert.ok(!ids.has('task:4'), 'tarefa sem dependência não vira nó');
+});
+
+test('arestas de dependência são direcionadas (pré-requisito -> dependente)', () => {
+    const { edges } = buildGraphModel([], ['Proj'], depData);
+    const dep = edges.filter(e => e.kind === 'dependency');
+    assert.equal(dep.length, 2);
+    const e12 = dep.find(e => e.a === 'task:1' && e.b === 'task:2');
+    assert.ok(e12 && e12.directed === true, 'Fundacao -> Parede direcionada');
+    assert.ok(dep.find(e => e.a === 'task:2' && e.b === 'task:3'));
+});
+
+test('cada nó de tarefa se liga ao seu projeto', () => {
+    const { edges } = buildGraphModel([], ['Proj'], depData);
+    const tp = edges.filter(e => e.kind === 'taskproject');
+    assert.ok(tp.find(e => e.a === 'task:1' && e.b === 'project:Proj'));
+    assert.ok(tp.find(e => e.a === 'task:2' && e.b === 'project:Proj'));
+});
+
+test('pré-requisito deletado não gera nó nem aresta de dependência', () => {
+    const data = {
+        Proj: [
+            { id: 10, text: 'Prereq', due_date: '', deleted: true, depends_on: [] },
+            { id: 11, text: 'Dependente', due_date: '', deleted: false, depends_on: [10] },
+        ],
+    };
+    const { nodes, edges } = buildGraphModel([], ['Proj'], data);
+    const ids = new Set(nodes.map(n => n.id));
+    assert.ok(!ids.has('task:10'));
+    assert.ok(!ids.has('task:11'), 'sem pré-requisito válido, não participa');
+    assert.ok(!edges.some(e => e.kind === 'dependency'));
+});
