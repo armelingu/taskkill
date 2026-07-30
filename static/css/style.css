@@ -1299,6 +1299,100 @@ html {
     font-weight: 600; /* Levemente destacado, sem gritar */
 }
 
+/* ── Faixa da semana (datas reais) ──────────────────────────── */
+
+.week-controls {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.week-ctrl-btn {
+    border: none;
+    background: none;
+    cursor: pointer;
+    color: var(--text-subtle);
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1;
+    border-radius: 6px;
+    padding: 2px 6px;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.week-ctrl-btn:hover {
+    background-color: var(--hover);
+    color: var(--text-title);
+}
+
+.week-today-btn {
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 3px 7px;
+}
+
+.week-range {
+    padding: 0 12px;
+    margin-bottom: 8px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-subtle);
+}
+
+.week-strip {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+}
+
+/* Cada chip de dia reaproveita .skeleton-item (para herdar o clearing de
+   .active), mas com layout compacto em coluna dentro do grid. */
+.week-strip .skeleton-item.week-day {
+    min-height: 44px;
+    padding: 4px 0;
+    flex-direction: column;
+    justify-content: center;
+    gap: 1px;
+    text-align: center;
+}
+
+.week-day-name {
+    font-size: 0.6rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--text-subtle);
+}
+
+.week-day-num {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    transition: color 0.15s ease;
+}
+
+.week-strip .skeleton-item.week-day:hover .week-day-num,
+.week-strip .skeleton-item.week-day.active .week-day-num {
+    color: var(--text-title);
+}
+
+/* Dia de hoje: número em destaque + moldura sutil no acento. */
+.week-day.is-today {
+    box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.week-day.is-today .week-day-num {
+    color: var(--accent);
+    font-weight: 700;
+}
+
+/* Fim de semana levemente esmaecido para leitura rápida. */
+.week-day.is-weekend .week-day-name {
+    color: var(--border-strong);
+}
+
 /* ── Projetos dinâmicos ─────────────────────────────────────── */
 
 /* Botão "+" circular — mesmo estilo do task-checkbox-placeholder */
@@ -2102,13 +2196,21 @@ body.graph-mode .main-content {
 
 .edit-task-due {
     margin-left: 8px;
-    padding: 4px;
+    padding: 4px 6px;
     border: 1px solid var(--border-strong);
     border-radius: 6px;
     color: var(--text-secondary);
     background: var(--surface);
     font-family: inherit;
     outline: none;
+    accent-color: var(--accent-blue);
+}
+.edit-task-due:focus {
+    border-color: var(--accent-blue);
+}
+/* Faz o seletor de data nativo (ícone/calendário) acompanhar o tema escuro. */
+[data-theme="dark"] .edit-task-due {
+    color-scheme: dark;
 }
 
 .task-due-badge {
@@ -2710,6 +2812,17 @@ body.graph-mode .main-content {
     padding: 5px 8px;
     font-size: 0.82rem;
     min-width: 110px;
+}
+.int-cell-date {
+    padding: 5px 8px;
+    font-size: 0.82rem;
+    min-width: 130px;
+    accent-color: var(--accent-blue);
+}
+/* Seletor de data nativo acompanha o tema escuro (calendário/ícone). */
+[data-theme="dark"] .int-cell-date,
+[data-theme="dark"] #int-bulk-weekday {
+    color-scheme: dark;
 }
 .int-cell-text {
     max-width: 320px;

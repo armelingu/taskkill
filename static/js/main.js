@@ -14,6 +14,7 @@ import { renderSidebarProjects } from './modules/projects.js';
 import { openIntegrations, hideIntegrationsView } from './modules/integrations.js';
 import './modules/profile.js';  // auto-inicializa o perfil inline
 import './modules/theme.js';    // controle de tema (claro/escuro/sistema)
+import './modules/week.js';     // faixa da semana (datas reais) + navegação
 import {
     skeletonItems, emptyState, projectView, projectTitle, taskList, taskInput,
     graphView, graphCanvas, perfilView, dashboardView,
@@ -138,7 +139,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (tasksRes.ok) {
                 state.tasksData = await tasksRes.json();
                 // Se o usuário já estiver em alguma visão, re-renderiza com os dados carregados
-                if (state.currentCategory || state.currentWeekDay || state.currentTag) {
+                if (state.currentCategory || state.currentWeekDate || state.currentTag) {
                     renderTasks();
                 } else if (dashboardView && !dashboardView.classList.contains('hidden')) {
                     renderDashboard();
@@ -187,7 +188,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (item.id === 'nav-dashboard') {
                 document.body.classList.remove('graph-mode');
                 state.currentCategory = null; 
-                state.currentWeekDay = null;
+                state.currentWeekDate = null;
                 state.currentTag = null;
                 if (emptyState) emptyState.classList.add('hidden');
                 if (projectView) projectView.classList.add('hidden');
@@ -210,7 +211,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (item.id === 'nav-graph') {
                 document.body.classList.add('graph-mode');
                 state.currentCategory = null;
-                state.currentWeekDay = null;
+                state.currentWeekDate = null;
                 state.currentTag = null;
                 if (emptyState) emptyState.classList.add('hidden');
                 if (projectView) projectView.classList.add('hidden');
@@ -229,7 +230,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (item.id === 'nav-integrations') {
                 document.body.classList.remove('graph-mode');
                 state.currentCategory = null;
-                state.currentWeekDay = null;
+                state.currentWeekDate = null;
                 state.currentTag = null;
                 if (emptyState)    emptyState.classList.add('hidden');
                 if (projectView)   projectView.classList.add('hidden');
@@ -240,39 +241,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 openIntegrations();
                 return;
             }
-            
-            // Se for a visão da Semana
-            if (item.classList.contains('week-nav')) {
-                document.body.classList.remove('graph-mode');
-                state.currentCategory = null;
-                state.currentWeekDay = item.getAttribute('data-day');
-                state.currentTag = null;
-                
-                if (emptyState) emptyState.classList.add('hidden');
-                if (dashboardView) dashboardView.classList.add('hidden');
-                if (graphView) graphView.classList.add('hidden');
-                graphStop();
-                if (projectView) {
-                    projectView.classList.remove('hidden');
-                    projectView.style.animation = 'none';
-                    projectView.offsetHeight;
-                    projectView.style.animation = null;
-                }
-                
-                if (projectTitle) projectTitle.textContent = state.currentWeekDay;
-                
-                // Na visão da semana não criamos tarefas novas diretamente (pois falta o projeto), 
-                // então escondemos o input
-                document.querySelector('.task-input-container').style.display = 'none';
-                
-                renderTasks();
-                return;
-            }
+
+            // A visão da Semana (chips de dia com data real) é gerenciada por
+            // modules/week.js — os chips não fazem parte deste laço de skeletons.
 
             // Se for um Projeto Genérico
             document.body.classList.remove('graph-mode');
             state.currentCategory = normText(item.textContent);
-            state.currentWeekDay = null;
+            state.currentWeekDate = null;
             state.currentTag = null;
             
             // Inicializa a lista dessa categoria se ainda não existir
@@ -335,23 +311,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if(!targetTask) return;
 
-            // Se soltou no menu de SEMANA -> Altera o 'due_date'
-            if (item.classList.contains('week-nav')) {
-                const newDay = item.getAttribute('data-day');
-                if (targetTask.due_date === newDay) return; // Nada a fazer
-
-                targetTask.due_date = newDay;
-                
-                apiFetch(`/api/tasks/${targetTask.id}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ due_date: newDay })
-                });
-
-                showToast(`Agendado para ${newDay}`);
-            } 
+            // O agendamento por data (soltar tarefa num dia da semana) é tratado
+            // em modules/week.js. Aqui resta apenas mover entre projetos.
             // Se soltou no menu de PROJETO -> Muda de Projeto (Move to Project)
-            else if (item.classList.contains('project-nav')) {
+            if (item.classList.contains('project-nav')) {
                 const newProject = normText(item.textContent);
                 if (sourceProject === newProject) return; // Mesmo lugar
 

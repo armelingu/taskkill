@@ -6,12 +6,13 @@
  * (ver tests/js/graph.test.mjs).
  *
  * Relações modeladas:
- *  - Dia  <-> Projeto  (tarefas com due_date)
+ *  - Dia  <-> Projeto  (tarefas com due_date; o "dia" é o dia da semana da data
+ *    ISO da tarefa, agregando todas as datas de um mesmo dia em ≤7 nós)
  *  - Projeto <-> Tag   (hashtags no texto das tarefas)
  *  - Projeto <-> Projeto (tags compartilhadas)
  */
 
-import { normText } from './util.js';
+import { normText, weekdayShort } from './util.js';
 
 export function buildGraphModel(days, projects, tasksData) {
     days = days || [];
@@ -45,12 +46,13 @@ export function buildGraphModel(days, projects, tasksData) {
 
     const edges = [];
 
-    // Dia <-> Projeto (tarefas com due_date)
+    // Dia <-> Projeto (tarefas com due_date). O nó "dia" é o dia da SEMANA da
+    // data ISO (Seg…Dom), então datas diferentes de um mesmo dia agregam.
     const counts = new Map(); // day||project -> count
     for (const p of projects) {
         const list = (tasksData[p] || []).filter(t => !t.deleted);
         for (const t of list) {
-            const d = normText(t.due_date || '');
+            const d = weekdayShort(t.due_date || '');
             if (!d) continue;
             const k = `${d}||${p}`;
             counts.set(k, (counts.get(k) || 0) + 1);

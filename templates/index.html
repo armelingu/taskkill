@@ -35,16 +35,18 @@
                 <span class="brand-name">Taskkill</span>
             </div>
 
-            <section class="sidebar-section">
+            <section class="sidebar-section" id="week-section">
                 <div class="section-header">
                     <h2 class="section-title">Semana</h2>
+                    <div class="week-controls">
+                        <button type="button" id="week-prev" class="week-ctrl-btn" title="Semana anterior" aria-label="Semana anterior">&lsaquo;</button>
+                        <button type="button" id="week-today" class="week-ctrl-btn week-today-btn" title="Ir para a semana atual" aria-label="Ir para a semana atual">Hoje</button>
+                        <button type="button" id="week-next" class="week-ctrl-btn" title="Próxima semana" aria-label="Próxima semana">&rsaquo;</button>
+                    </div>
                 </div>
-                <div class="placeholder-container">
-                    <div class="skeleton-item week-nav" data-day="Segunda" aria-label="Segunda-feira">Segunda</div>
-                    <div class="skeleton-item week-nav" data-day="Terça" aria-label="Terça-feira">Terça</div>
-                    <div class="skeleton-item week-nav" data-day="Quarta" aria-label="Quarta-feira">Quarta</div>
-                    <div class="skeleton-item week-nav" data-day="Quinta" aria-label="Quinta-feira">Quinta</div>
-                    <div class="skeleton-item week-nav" data-day="Sexta" aria-label="Sexta-feira">Sexta</div>
+                <div class="week-range" id="week-range" aria-live="polite"></div>
+                <div class="week-strip" id="week-strip">
+                    <!-- populado dinamicamente por modules/week.js -->
                 </div>
             </section>
             <section class="sidebar-section">
@@ -477,15 +479,8 @@
                                 <button class="int-text-btn" id="int-bulk-project-apply" type="button">Aplicar</button>
                             </div>
                             <div class="int-bulk-group">
-                                <label class="int-bulk-label">Definir dia</label>
-                                <select class="auth-input int-bulk-select" id="int-bulk-weekday">
-                                    <option value="">Sem dia</option>
-                                    <option value="Segunda">Segunda</option>
-                                    <option value="Terça">Terça</option>
-                                    <option value="Quarta">Quarta</option>
-                                    <option value="Quinta">Quinta</option>
-                                    <option value="Sexta">Sexta</option>
-                                </select>
+                                <label class="int-bulk-label">Definir prazo</label>
+                                <input type="date" class="auth-input int-bulk-select" id="int-bulk-weekday" aria-label="Prazo (data)">
                                 <button class="int-text-btn" id="int-bulk-weekday-apply" type="button">Aplicar</button>
                             </div>
                         </div>

@@ -92,10 +92,27 @@ test.describe('Fluxos principais do app', () => {
         await page.waitForTimeout(400);
     });
 
-    test('visão da semana filtra por dia', async ({ page }) => {
-        await page.click('.week-nav[data-day="Segunda"]');
+    test('visão da semana: datas reais, fim de semana e navegação', async ({ page }) => {
+        // Faixa com 7 dias (Seg–Dom) com datas reais; 2 são de fim de semana.
+        await expect(page.locator('.week-day')).toHaveCount(7);
+        await expect(page.locator('.week-day.is-weekend')).toHaveCount(2);
+
+        // Segunda-feira da semana atual (primeira coluna) como âncora.
+        const firstDate = await page.locator('.week-day').first().getAttribute('data-date');
+
+        // Abrir um dia -> project-view com título "<Dia da semana>, dd/mm".
+        await page.locator('.week-day').first().click();
         await expect(page.locator('#project-view')).toBeVisible();
-        await expect(page.locator('#project-title')).toHaveText('Segunda');
+        await expect(page.locator('#project-title')).toHaveText(/,\s\d{2}\/\d{2}$/);
+
+        // Próxima semana: as datas dos chips mudam.
+        await page.click('#week-next');
+        const firstDateNext = await page.locator('.week-day').first().getAttribute('data-date');
+        expect(firstDateNext).not.toBe(firstDate);
+
+        // "Hoje" retorna à semana atual (mesma segunda de âncora).
+        await page.click('#week-today');
+        await expect(page.locator('.week-day').first()).toHaveAttribute('data-date', firstDate || '');
     });
 
     test('integrações: abre lista e o wizard', async ({ page }) => {

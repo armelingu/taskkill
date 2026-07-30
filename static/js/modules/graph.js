@@ -9,7 +9,7 @@
 
 import { state } from './state.js';
 import { buildGraphModel } from './graph-model.js';
-import { escapeHTML, normText } from './util.js';
+import { escapeHTML, normText, weekdayShort } from './util.js';
 import { graphView, graphCanvas } from './dom.js';
 import { openTagView } from './tasks.js';
 
@@ -308,11 +308,11 @@ export function graphStart() {
     graph.pan.x = rect.width * 0.5;
     graph.pan.y = rect.height * 0.52;
     graph.scale = 1;
-    const days = Array.from(document.querySelectorAll('.week-nav'))
-        .map(el => el.getAttribute('data-day')).filter(Boolean);
+    // Os nós de "dia" são derivados do dia da semana das datas das tarefas
+    // dentro do próprio modelo; não precisamos mais lê-los do DOM.
     const projects = Array.from(document.querySelectorAll('.project-nav'))
         .map(el => normText(el.textContent)).filter(Boolean);
-    graph.model = buildGraphModel(days, projects, state.tasksData);
+    graph.model = buildGraphModel([], projects, state.tasksData);
     graph.running = true;
     cancelAnimationFrame(graph.raf);
     graph.raf = requestAnimationFrame(graphStep);
@@ -440,8 +440,11 @@ function attachGraphEvents() {
             const node = graph.model.nodes.find(n => n.id === graph.dragId);
             if (node) {
                 if (node.type === 'day') {
-                    const el = document.querySelector(`.week-nav[data-day="${CSS.escape(node.key)}"]`);
-                    if (el) el.click();
+                    // node.key é o dia da semana (Seg…Dom); abre o chip
+                    // correspondente na semana visível da faixa lateral.
+                    const chip = Array.from(document.querySelectorAll('.week-day'))
+                        .find(el => weekdayShort(el.getAttribute('data-date')) === node.key);
+                    if (chip) chip.click();
                 } else if (node.type === 'project') {
                     const items = Array.from(document.querySelectorAll('.project-nav'));
                     const target = items.find(it => normText(it.textContent) === node.key);

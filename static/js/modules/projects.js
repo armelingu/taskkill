@@ -42,7 +42,7 @@ function _attachProjectItemEvents(wrapper) {
 
         document.body.classList.remove('graph-mode');
         state.currentCategory = normText(item.textContent);
-        state.currentWeekDay = null;
+        state.currentWeekDate = null;
         state.currentTag = null;
 
         if (!state.tasksData[state.currentCategory]) state.tasksData[state.currentCategory] = [];

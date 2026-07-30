@@ -86,7 +86,8 @@ let intPreviewRows = [];    // linhas editáveis da prévia (passo 4)
 let intPreviewTotal = 0;
 let intPreviewSig = '';     // assinatura da config quando a prévia foi gerada
 
-const WEEKDAYS = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'];
+// O prazo agora é uma data real ISO YYYY-MM-DD (ou vazio = sem prazo).
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 const TITLE_HINT_FIELDS = ['title', 'subject', 'name', 'nome', 'titulo', 'assunto',
     'summary', 'resumo', 'text', 'texto', 'description', 'descricao'];
@@ -176,7 +177,7 @@ function humanOnUpdate(v) {
     return {
         skip: 'Ignora (não duplica)',
         update_text: 'Atualiza o texto',
-        update_all: 'Atualiza texto, projeto e dia',
+        update_all: 'Atualiza texto, projeto e prazo',
     }[(v || 'skip')] || 'Ignora (não duplica)';
 }
 
@@ -861,7 +862,7 @@ async function onPreview() {
             external_id: r.external_id || '',
             project: r.project || '',
             text: r.text || '',
-            due_date: WEEKDAYS.indexOf(r.due_date) !== -1 ? r.due_date : '',
+            due_date: ISO_DATE_RE.test(r.due_date || '') ? r.due_date : '',
             include: !!r.valid,
         }));
         intPreviewSig = getPreviewSig();
@@ -886,7 +887,7 @@ function renderPreviewTable() {
     }
     html += '<table class="int-table int-table-edit"><thead><tr>' +
         '<th class="int-col-check"><input type="checkbox" id="int-check-all" title="Selecionar todas"></th>' +
-        '<th>Identificador</th><th>Projeto</th><th>Dia</th><th>Texto da tarefa</th><th></th>' +
+        '<th>Identificador</th><th>Projeto</th><th>Prazo</th><th>Texto da tarefa</th><th></th>' +
         '</tr></thead><tbody>';
     intPreviewRows.forEach((r, i) => {
         const valid = rowIsValid(r);
@@ -897,12 +898,12 @@ function renderPreviewTable() {
         if (r.project && projects.indexOf(r.project) === -1) projValues.push(r.project);
         projects.forEach(p => projValues.push(p));
         const projOpts = optionsHtml(projValues, r.project);
-        const dayOpts = optionsHtml([''].concat(WEEKDAYS), r.due_date);
+        const dueVal = ISO_DATE_RE.test(r.due_date || '') ? r.due_date : '';
         html += `<tr class="${valid ? '' : 'int-row-invalid'}" data-i="${i}">
             <td class="int-col-check"><input type="checkbox" class="int-row-check" ${r.include ? 'checked' : ''}></td>
             <td>${escapeHTML(r.external_id)}</td>
             <td><select class="auth-input int-cell-select int-cell-project">${projOpts}</select></td>
-            <td><select class="auth-input int-cell-select int-cell-day">${dayOpts}</select></td>
+            <td><input type="date" class="auth-input int-cell-date" value="${escapeHTML(dueVal)}"></td>
             <td class="int-cell-text" title="${escapeHTML(r.text)}">${escapeHTML(r.text)}</td>
             <td>${valid ? '✓' : '⚠'}</td></tr>`;
     });
@@ -921,7 +922,7 @@ function renderPreviewTable() {
             tr.classList.toggle('int-row-invalid', !rowIsValid(intPreviewRows[i]));
             tr.querySelector('td:last-child').textContent = rowIsValid(intPreviewRows[i]) ? '✓' : '⚠';
         });
-        tr.querySelector('.int-cell-day').addEventListener('change', (e) => {
+        tr.querySelector('.int-cell-date').addEventListener('change', (e) => {
             intPreviewRows[i].due_date = e.target.value;
         });
     });
@@ -960,10 +961,11 @@ function applyBulkProject() {
 }
 
 function applyBulkWeekday() {
-    const day = intBulkWeekday.value;
+    const due = intBulkWeekday.value; // input type=date -> ISO ou ''
+    if (due && !ISO_DATE_RE.test(due)) return;
     let changed = 0;
-    intPreviewRows.forEach(r => { if (r.include) { r.due_date = day; changed++; } });
-    if (changed) { renderPreviewTable(); showToast(`Dia atualizado em ${changed} tarefa(s)`); }
+    intPreviewRows.forEach(r => { if (r.include) { r.due_date = due; changed++; } });
+    if (changed) { renderPreviewTable(); showToast(`Prazo atualizado em ${changed} tarefa(s)`); }
 }
 
 // ── Salvar / executar / excluir ────────────────────────────────

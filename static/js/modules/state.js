@@ -6,8 +6,9 @@
  * Mantido pequeno de propósito — só o que precisa cruzar fronteiras de módulo.
  */
 export const state = {
-    tasksData: {},        // { projeto: [ {id, text, completed, due_date, ...}, ... ] }
-    currentCategory: null, // projeto selecionado
-    currentWeekDay: null,  // dia da semana selecionado (visão semana)
-    currentTag: null,      // #tag selecionada (vinda do grafo)
+    tasksData: {},          // { projeto: [ {id, text, completed, due_date, ...}, ... ] }
+    currentCategory: null,  // projeto selecionado
+    currentWeekDate: null,  // data ISO YYYY-MM-DD selecionada (visão semana)
+    currentWeekStart: null, // segunda-feira ISO da semana visível na faixa
+    currentTag: null,       // #tag selecionada (vinda do grafo)
 };

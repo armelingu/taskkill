@@ -7,7 +7,7 @@
  */
 
 import { state } from './state.js';
-import { escapeHTML } from './util.js';
+import { escapeHTML, formatBR } from './util.js';
 import { apiFetch } from './api.js';
 import { showToast } from './ui.js';
 import { graphStop } from './graph.js';
@@ -28,7 +28,7 @@ export function openTagView(tagKey) {
     document.body.classList.remove('graph-mode');
     state.currentTag = tag;
     state.currentCategory = null;
-    state.currentWeekDay = null;
+    state.currentWeekDate = null;
 
     if (emptyState) emptyState.classList.add('hidden');
     if (dashboardView) dashboardView.classList.add('hidden');
@@ -87,7 +87,7 @@ if (taskInput) {
 if (taskList) {
     taskList.addEventListener('dragover', e => {
         // Não permite reordenar na visão de semana (mistura projetos e quebra consistência de ranking)
-        if (state.currentWeekDay) return;
+        if (state.currentWeekDate) return;
         e.preventDefault(); // Necessário para permitir soltar na lista
         const afterElement = getDragAfterElement(taskList, e.clientY);
         const draggable = document.querySelector('.dragging');
@@ -102,7 +102,7 @@ if (taskList) {
 
     taskList.addEventListener('dragend', () => {
          // Não reordena na visão da semana e só faz sentido reordenar dentro de um projeto
-         if (state.currentWeekDay || !state.currentCategory) return;
+         if (state.currentWeekDate || !state.currentCategory) return;
          // Quando soltar após misturar as visões, captura todas as LIs e a nova ordem
          const sortedLiIds = Array.from(taskList.querySelectorAll('.task-item')).map(li => li.getAttribute('data-id'));
          
@@ -149,11 +149,11 @@ export function renderTasks() {
     let isWeekView = false;
     let isTagView = false;
     
-    if (state.currentWeekDay) {
+    if (state.currentWeekDate) {
         isWeekView = true;
         Object.keys(state.tasksData).forEach(proj => {
             state.tasksData[proj].forEach(t => {
-                if (t.due_date === state.currentWeekDay && !t.deleted) {
+                if (t.due_date === state.currentWeekDate && !t.deleted) {
                     t.originalProject = proj; // Grava o nome pra exibição
                     tasks.push(t);
                 }
@@ -210,7 +210,7 @@ export function renderTasks() {
         // Layout de cada item
         // APLICAÇÃO DE SEGURANÇA MÁXIMA (escapeHTML) NO RENDER:
         const dateBadge = task.created_date ? `<span class="task-date">${escapeHTML(task.created_date)}</span>` : '';
-        const dueBadge = task.due_date && !isWeekView ? `<span class="task-date task-due-badge">${escapeHTML(task.due_date)}</span>` : '';
+        const dueBadge = task.due_date && !isWeekView ? `<span class="task-date task-due-badge">${escapeHTML(formatBR(task.due_date) || task.due_date)}</span>` : '';
         const isCrossView = isWeekView || isTagView;
         const projectBadge = isCrossView ? `<span class="task-project-badge">${escapeHTML(task.originalProject)}</span>` : '';
         
@@ -311,17 +311,13 @@ export function renderTasks() {
             editInput.className = 'edit-task-input';
             editInput.value = task.text;
 
-            const editDue = document.createElement('select');
+            const editDue = document.createElement('input');
+            editDue.type = 'date';
             editDue.className = 'edit-task-due';
-            
-            const days = ['', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'];
-            days.forEach(d => {
-                const opt = document.createElement('option');
-                opt.value = d;
-                opt.textContent = d || 'Sem prazo';
-                if (task.due_date === d) opt.selected = true;
-                editDue.appendChild(opt);
-            });
+            editDue.title = 'Prazo (data)';
+            editDue.setAttribute('aria-label', 'Prazo da tarefa');
+            // Aceita apenas ISO YYYY-MM-DD; vazio = sem prazo.
+            editDue.value = /^\d{4}-\d{2}-\d{2}$/.test(task.due_date || '') ? task.due_date : '';
             
             // Substitui visualmente textSpan pelos inputs
             li.insertBefore(editInput, textSpan);
