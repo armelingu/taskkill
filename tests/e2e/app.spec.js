@@ -114,4 +114,36 @@ test.describe('Fluxos principais do app', () => {
         await page.click('[data-perfil-tab="seguranca"]');
         await expect(page.locator('#perfil-tab-seguranca')).toBeVisible();
     });
+
+    test('tema: alterna para escuro, persiste após reload e volta ao claro', async ({ page }) => {
+        const html = page.locator('html');
+
+        // Default = sistema (headless resolve claro).
+        await expect(html).not.toHaveAttribute('data-theme', 'dark');
+
+        // Ativa o tema escuro pelo controle segmentado do perfil.
+        await page.click('#nav-perfil');
+        await page.click('.theme-seg-btn[data-theme-mode="dark"]');
+        await expect(html).toHaveAttribute('data-theme', 'dark');
+        await expect(page.locator('.theme-seg-btn[data-theme-mode="dark"]')).toHaveClass(/is-active/);
+        expect(await page.evaluate(() => localStorage.getItem('taskkill-theme'))).toBe('dark');
+
+        // Persiste após reload (boot aplica antes da primeira pintura).
+        await page.reload();
+        await expect(html).toHaveAttribute('data-theme', 'dark');
+
+        // Grafo repinta sem erro de runtime no tema escuro.
+        await page.click('#nav-graph');
+        await expect(page.locator('#graph-canvas')).toBeVisible();
+        await page.waitForTimeout(300);
+
+        // Botão-ícone do sidebar cicla os modos (escuro -> sistema).
+        await page.click('#sidebar-theme-toggle');
+        expect(await page.evaluate(() => localStorage.getItem('taskkill-theme'))).toBe('system');
+
+        // Volta ao claro pelo controle segmentado.
+        await page.click('#nav-perfil');
+        await page.click('.theme-seg-btn[data-theme-mode="light"]');
+        await expect(html).toHaveAttribute('data-theme', 'light');
+    });
 });
