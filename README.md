@@ -21,14 +21,24 @@ A maioria dos gerenciadores de tarefas é lista ou kanban. O Taskkill não tenta
 
 ## Funcionalidades
 
-- Projetos dinâmicos: criação e exclusão com soft-delete de tasks
-- Visualização semanal com drag-and-drop entre dias e projetos
+- Projetos dinâmicos: criação e exclusão com soft-delete de tasks (com desfazer)
+- Visão semanal com datas reais — inclui fim de semana — e navegação entre semanas; drag-and-drop entre dias e projetos
+- Prazos por data real (ISO), com ênfase visual de "hoje"/atrasadas e um resumo discreto de lembretes ao abrir o app
+- Tarefas recorrentes (diária, dias úteis, semanal, mensal) que reagendam ao concluir
+- Quick Add em linguagem natural (pt-BR): `amanhã #infra revisar PR`, `toda segunda`, `dia 5`…
 - Dashboard com contagem de tarefas abertas/concluídas por projeto
 - Grafo de dependências interativo (Canvas 2D, force-directed layout)
-- Hashtags inline parseadas e renderizadas como badges
-- Subtarefas via sintaxe `[ ]` no corpo da tarefa
-- Optimistic UI: atualização visual imediata antes da resposta do servidor
+- Hashtags inline como badges e subtarefas via sintaxe `[ ]` no corpo da tarefa
+- Tema claro/escuro/sistema com contraste AA, sincronizado entre os seus dispositivos
+- Pacote teclado-first: command palette (Cmd/Ctrl-K), atalhos com cheatsheet (`?`) e navegação por teclado na lista
+- Acessibilidade: foco visível, focus-trap em modais e respeito a `prefers-reduced-motion`
+- Optimistic UI (atualização imediata antes da resposta do servidor) e toasts com desfazer
 - Backup e restore do banco via painel admin
+- Integrações externas (REST/JSON → tarefas) com wizard, agendamento e histórico
+
+## Dados e sincronização
+
+Taskkill é **auto-hospedado**: os dados vivem no SQLite da sua própria instância — não há nuvem de terceiros. Como o app fala com esse servidor, o que você registra (tarefas, projetos) e a sua preferência de tema ficam disponíveis em qualquer dispositivo que acesse a mesma instância. Backups são explícitos (arquivo `.db` que você baixa/restaura), nunca automáticos para um serviço externo.
 
 ## Estrutura
 
@@ -146,7 +156,7 @@ Módulo genérico para importar itens de uma API REST/JSON como tarefas, configu
 1. **Conexão** — nome, URL da API, autenticação e (avançado) método/headers/query, paginação e agendamento.
 2. **Itens** — "Buscar dados" busca a resposta e sugere onde está a lista (`items_path`) e os campos disponíveis.
 3. **Tarefa** — campo de ID único (deduplicação), projeto de destino (fixo ou vindo de um campo), texto via template seguro `{{ campo }}` e política de atualização.
-4. **Revisar** — prévia interativa: escolha por linha o dia da semana e o projeto (ou em massa), marque o que importar e importe de fato.
+4. **Revisar** — prévia interativa: escolha por linha a data de prazo e o projeto (ou em massa), marque o que importar e importe de fato.
 
 O bloco **Editar como JSON** expõe a mesma configuração declarativa para importar/exportar/editar diretamente.
 
@@ -154,7 +164,7 @@ O bloco **Editar como JSON** expõe a mesma configuração declarativa para impo
 
 **Paginação:** sem paginação (padrão), por número de página, por offset ou por cursor/`next` (segue um token ou URL na resposta). Teto de segurança de páginas por execução.
 
-**Atualização / deduplicação:** dedup por `external_id`. Se um item já foi importado, é possível ignorar, atualizar só o texto, ou atualizar texto + projeto + dia. Um `content_hash` evita updates desnecessários e há a opção de recriar tarefas que foram excluídas depois de importadas.
+**Atualização / deduplicação:** dedup por `external_id`. Se um item já foi importado, é possível ignorar, atualizar só o texto, ou atualizar texto + projeto + data. Um `content_hash` evita updates desnecessários e há a opção de recriar tarefas que foram excluídas depois de importadas.
 
 **Agendamento automático:** cada integração pode rodar sozinha a cada N minutos (mínimo 5). Uma thread daemon in-process reserva execuções vencidas com um *compare-and-set* atômico em `next_run_at` (seguro no deploy single-worker; sem duplicidade mesmo com múltiplos processos). Controle por `TASKKILL_SCHEDULER` (0 desliga) e `TASKKILL_SCHEDULER_TICK` (segundos entre varreduras).
 
