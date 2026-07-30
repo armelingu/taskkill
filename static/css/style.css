@@ -118,7 +118,7 @@
     --text-title: #f1f5f9;
     --text-muted: #94a3b8;
     --text-secondary: #cbd5e1;
-    --text-subtle: #64748b;
+    --text-subtle: #8a97ac;
     --text-inverse: #ffffff;
 
     /* Bordas e divisores */
@@ -129,7 +129,9 @@
     /* Acentos */
     --accent: #818cf8;
     --accent-2: #a78bfa;
-    --accent-grad: linear-gradient(135deg, #818cf8, #a78bfa);
+    /* Gradiente de botão mais escuro no dark p/ texto branco AA (>=4.5). Os
+       tokens --accent/--accent-2 seguem claros pois servem como TEXTO. */
+    --accent-grad: linear-gradient(135deg, #5b52e6, #6d28d9);
     --accent-blue: #60a5fa;
     --accent-blue-soft: #16263f;
     --success: #34d399;
@@ -145,6 +147,7 @@
     --hover: #1e293b;
     --skeleton-color: #1e293b;
     --skeleton-hover: #334155;
+    /* text-subtle mais claro no dark para atingir AA (4.5:1) em cards/sidebar */
 
     /* Superfícies invertidas (toast) e painel de código */
     --toast-bg: #334155;
@@ -217,6 +220,12 @@
 }
 [data-theme="dark"] .auth-input::placeholder {
     color: var(--text-subtle);
+}
+
+/* Numero do passo ativo: azul mais escuro no dark p/ texto branco AA (5.17:1).
+   O token --accent-blue-strong segue claro pois e usado como TEXTO nos passos. */
+[data-theme="dark"] .int-step.is-active .int-step-num {
+    background: #2563eb;
 }
 
 /* Reset básico (CSS Reset) */
@@ -1562,7 +1571,7 @@ body.graph-mode .main-content {
     height: 72px;
     border-radius: 20px;
     color: var(--text-inverse);
-    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    background: var(--accent-grad);
     box-shadow: 0 12px 30px -8px rgba(99, 102, 241, 0.5);
     margin-bottom: 24px;
 }
@@ -1590,7 +1599,7 @@ body.graph-mode .main-content {
     padding: 12px 24px;
     border: none;
     border-radius: 12px;
-    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    background: var(--accent-grad);
     color: var(--text-inverse);
     font-size: 0.95rem;
     font-weight: 600;
