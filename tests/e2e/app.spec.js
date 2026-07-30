@@ -78,6 +78,24 @@ test.describe('Fluxos principais do app', () => {
         await expect(item).toHaveClass(/completed/);
     });
 
+    test('quick add: linguagem natural define prazo e limpa o texto', async ({ page }) => {
+        // Abre um projeto já existente (criado nos testes anteriores).
+        await page.locator('.project-nav', { hasText: 'Trabalho' }).click();
+        await expect(page.locator('#project-title')).toHaveText('Trabalho');
+
+        const input = page.locator('#new-task-input');
+        await input.fill('amanhã revisar PR #infra');
+        // Preview do prazo detectado aparece enquanto digita.
+        await expect(page.locator('#quick-add-hint')).toBeVisible();
+
+        await input.press('Enter');
+
+        // A tarefa é criada com o texto limpo (sem "amanhã") e com badge de data.
+        const item = page.locator('.task-item', { hasText: 'revisar PR #infra' });
+        await expect(item).toBeVisible();
+        await expect(item.locator('.task-due-badge')).toHaveText(/^\d{2}\/\d{2}$/);
+    });
+
     test('dashboard renderiza cards por projeto', async ({ page }) => {
         await page.click('#nav-dashboard');
         await expect(page.locator('#dashboard-view')).toBeVisible();

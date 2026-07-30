@@ -7,7 +7,8 @@
  */
 
 import { state } from './state.js';
-import { escapeHTML, formatBR } from './util.js';
+import { escapeHTML, formatBR, weekdayLong } from './util.js';
+import { parseQuickAdd } from './nlp.js';
 import { apiFetch } from './api.js';
 import { showToast } from './ui.js';
 import { graphStop } from './graph.js';
@@ -51,26 +52,46 @@ export function openTagView(tagKey) {
 
 // ── Criação rápida (Enter no input) ───────────────────────────────
 // 4. Lógica de Tarefas: Adicionar ao apertar Enter
+// Preview ao vivo do prazo detectado pela linguagem natural (Quick Add).
+function updateQuickAddHint() {
+    const hint = document.getElementById('quick-add-hint');
+    if (!hint || !taskInput) return;
+    const { due_date } = parseQuickAdd(taskInput.value);
+    if (due_date) {
+        hint.textContent = `Prazo: ${weekdayLong(due_date)}, ${formatBR(due_date)}`;
+        hint.classList.remove('hidden');
+    } else {
+        hint.textContent = '';
+        hint.classList.add('hidden');
+    }
+}
+
 if (taskInput) {
+    taskInput.addEventListener('input', updateQuickAddHint);
+
     taskInput.addEventListener('keypress', async (e) => {
         if (e.key === 'Enter') {
-            const text = taskInput.value.trim();
+            // Quick Add: extrai a data em linguagem natural e limpa o texto.
+            const { text, due_date } = parseQuickAdd(taskInput.value);
             if (text && state.currentCategory !== null) {
-                
+                const payload = { project: state.currentCategory, text };
+                if (due_date) payload.due_date = due_date;
+
                 try {
                     // Manda para o Backend (API)
                     const response = await apiFetch('/api/tasks', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ project: state.currentCategory, text: text })
+                        body: JSON.stringify(payload)
                     });
                     
                     if (response.ok) {
                         const newTask = await response.json(); // Vem com o ID do banco
                         state.tasksData[state.currentCategory].push(newTask);
                         taskInput.value = '';
+                        updateQuickAddHint();
                         renderTasks();
-                        showToast("Tarefa salva");
+                        showToast(due_date ? `Tarefa salva para ${formatBR(due_date)}` : 'Tarefa salva');
                     }
                 } catch (err) {
                     console.error("Erro ao criar task:", err);

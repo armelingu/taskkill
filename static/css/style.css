@@ -2108,6 +2108,18 @@ body.graph-mode .main-content {
     font-weight: 600;
 }
 
+/* Preview do prazo detectado pelo Quick Add (linguagem natural). */
+.quick-add-hint {
+    margin: -24px 0 24px;
+    padding-left: 40px;   /* alinha com o texto do input (24px + gap 16px) */
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--accent-blue);
+}
+.quick-add-hint.hidden {
+    display: none;
+}
+
 /* Estado de Completo (Transição Mágica) */
 .task-item.completed {
     background-color: transparent !important; /* Perde o fundo de hover caso estivesse */

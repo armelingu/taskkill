@@ -512,11 +512,12 @@
                 <header class="project-header">
                     <h1 id="project-title" class="project-title">Protheus</h1>
                 </header>
-                <!-- Input para nova demanda -->
+                <!-- Input para nova demanda (com Quick Add em linguagem natural) -->
                 <div class="task-input-container">
                     <div class="task-checkbox-placeholder">+</div>
-                    <input type="text" id="new-task-input" class="new-task-input" placeholder="Adicionar demanda...">
+                    <input type="text" id="new-task-input" class="new-task-input" placeholder="Adicionar demanda... (ex.: amanhã revisar PR #infra)">
                 </div>
+                <div id="quick-add-hint" class="quick-add-hint hidden" aria-live="polite"></div>
 
                 <!-- Lista de Demandas -->
                 <ul id="task-list" class="task-list">
