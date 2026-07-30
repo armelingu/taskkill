@@ -80,7 +80,7 @@ function scheduleDroppedTask(iso, taskId) {
         body: JSON.stringify({ due_date: iso }),
     }).then(r => { if (!r.ok) console.error('Falha ao agendar tarefa'); });
 
-    showToast(`Agendado para ${formatBR(iso)}`);
+    showToast(`Agendado para ${formatBR(iso)}`, { variant: 'success' });
     renderTasks();
 }
 

@@ -187,8 +187,9 @@ test.describe('Fluxos principais do app', () => {
         }
         await expect(page.locator('.task-item')).toHaveCount(2);
 
-        // Sai do input para os atalhos de lista valerem.
+        // Sai do input para os atalhos de lista valerem (evita digitar 'j').
         await page.locator('#new-task-input').blur();
+        await expect(page.locator('#new-task-input')).not.toBeFocused();
 
         // j engaja e seleciona a 1ª; j de novo vai para a 2ª (anel visível).
         await page.keyboard.press('j');
@@ -203,6 +204,33 @@ test.describe('Fluxos principais do app', () => {
         // k volta para a 1ª.
         await page.keyboard.press('k');
         await expect(page.locator('.task-item').first()).toHaveClass(/task-nav-active/);
+    });
+
+    test('undo: excluir tarefa mostra "Desfazer" e restaura', async ({ page }) => {
+        const proj = `Undo-${Date.now()}`;
+        await page.click('#btn-add-project');
+        const pin = page.locator('.project-new-input');
+        await pin.fill(proj);
+        await pin.press('Enter');
+        await expect(page.locator('#project-title')).toHaveText(proj);
+
+        await page.fill('#new-task-input', 'Tarefa para desfazer');
+        await page.press('#new-task-input', 'Enter');
+        const item = page.locator('.task-item', { hasText: 'Tarefa para desfazer' });
+        await expect(item).toBeVisible();
+
+        // Exclui e confirma que sumiu; o toast oferece "Desfazer".
+        await item.hover();
+        await item.locator('.delete-btn').click();
+        await expect(page.locator('.task-item', { hasText: 'Tarefa para desfazer' })).toHaveCount(0);
+
+        const toast = page.locator('.toast', { hasText: 'Tarefa removida' });
+        await expect(toast).toBeVisible();
+        await toast.locator('.toast-action').click();
+
+        // Restaura na lista e confirma o feedback de sucesso.
+        await expect(page.locator('.task-item', { hasText: 'Tarefa para desfazer' })).toBeVisible();
+        await expect(page.locator('.toast', { hasText: 'Tarefa restaurada' })).toBeVisible();
     });
 
     test('integrações: abre lista e o wizard', async ({ page }) => {

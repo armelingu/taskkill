@@ -91,7 +91,7 @@ if (taskInput) {
                         taskInput.value = '';
                         updateQuickAddHint();
                         renderTasks();
-                        showToast(due_date ? `Tarefa salva para ${formatBR(due_date)}` : 'Tarefa salva');
+                        showToast(due_date ? `Tarefa salva para ${formatBR(due_date)}` : 'Tarefa salva', { variant: 'success' });
                     }
                 } catch (err) {
                     console.error("Erro ao criar task:", err);
@@ -320,16 +320,34 @@ export function renderTasks() {
             });
         });
 
-        // Apagar
+        // Apagar (soft-delete no back) — oferece "Desfazer" no toast.
         deleteBtn.addEventListener('click', () => {
             const proj = task.originalProject || state.currentCategory;
-            const projTasks = state.tasksData[proj];
+            const projTasks = state.tasksData[proj] || [];
             const realIndex = projTasks.findIndex(t => t.id === task.id);
-            if (realIndex > -1) projTasks.splice(realIndex, 1);
-            
+            const removed = realIndex > -1 ? projTasks.splice(realIndex, 1)[0] : task;
+
             renderTasks();
             apiFetch(`/api/tasks/${task.id}`, { method: 'DELETE' });
-            showToast("Tarefa removida");
+
+            showToast('Tarefa removida', {
+                action: {
+                    label: 'Desfazer',
+                    onClick: () => {
+                        const arr = state.tasksData[proj] || (state.tasksData[proj] = []);
+                        const at = Math.min(realIndex < 0 ? arr.length : realIndex, arr.length);
+                        arr.splice(at, 0, removed);
+                        removed.deleted = false;
+                        apiFetch(`/api/tasks/${task.id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ deleted: 0 }),
+                        });
+                        renderTasks();
+                        showToast('Tarefa restaurada', { variant: 'success' });
+                    },
+                },
+            });
         });
 
         // Editar (Transformar span em input momentâneo)

@@ -2315,21 +2315,56 @@ body.graph-mode .main-content {
 }
 
 .toast {
+    display: flex;
+    align-items: center;
+    gap: 16px;
     background-color: var(--toast-bg); /* Preto/Azul Escuro Premium */
     color: var(--text-inverse);
-    padding: 12px 20px;
-    border-radius: 8px;
+    padding: 12px 16px 12px 18px;
+    border-radius: 10px;
     font-size: 0.90rem;
     font-weight: 500;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
     opacity: 0;
     transform: translateY(20px);
     transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    border-left: 3px solid transparent;
 }
 
 .toast.show {
     opacity: 1;
     transform: translateY(0);
+}
+
+.toast--success {
+    border-left-color: var(--success);
+}
+
+.toast--error {
+    border-left-color: var(--danger);
+}
+
+.toast-text {
+    flex: 1;
+}
+
+/* Botão de ação (ex.: Desfazer) — destacado sobre o fundo escuro do toast. */
+.toast-action {
+    flex-shrink: 0;
+    border: none;
+    background: rgba(255, 255, 255, 0.12);
+    color: var(--text-inverse);
+    font-family: inherit;
+    font-size: 0.82rem;
+    font-weight: 700;
+    padding: 5px 11px;
+    border-radius: 7px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.toast-action:hover {
+    background: rgba(255, 255, 255, 0.24);
 }
 
 /* -------------------------------------------
