@@ -70,6 +70,39 @@ function graphHit(mx, my) {
 // Lerp linear entre dois valores
 function _lerp(a, b, t) { return a + (b - a) * t; }
 
+// ---- Paleta ciente do tema -------------------------------------------------
+// O canvas 2D não lê CSS vars diretamente; extraímos os tokens --graph-* como
+// "r,g,b" (para combinar com o alpha dinâmico) e recacheamos ao trocar o tema.
+let _palette = null;
+
+function _hexToRgb(hex) {
+    hex = (hex || '').trim().replace(/^#/, '');
+    if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+    if (hex.length !== 6) return null;
+    const n = parseInt(hex, 16);
+    if (Number.isNaN(n)) return null;
+    return `${(n >> 16) & 255},${(n >> 8) & 255},${n & 255}`;
+}
+
+function refreshGraphPalette() {
+    const cs = getComputedStyle(document.documentElement);
+    const g = (name, fb) => _hexToRgb(cs.getPropertyValue(name)) || fb;
+    _palette = {
+        edgeSchedule: g('--graph-edge-schedule', '100,116,139'),
+        edgeTaglink:  g('--graph-edge-taglink', '59,130,246'),
+        dayFill:      g('--graph-node-day-fill', '226,232,240'),
+        tagFill:      g('--graph-node-tag-fill', '239,246,255'),
+        projFill:     g('--graph-node-project-fill', '255,255,255'),
+        dayStroke:    g('--graph-node-day-stroke', '100,116,139'),
+        tagStroke:    g('--graph-node-tag-stroke', '59,130,246'),
+        projStroke:   g('--graph-node-project-stroke', '59,130,246'),
+        label:        g('--graph-label', '15,23,42'),
+    };
+    return _palette;
+}
+
+function _pal() { return _palette || refreshGraphPalette(); }
+
 function graphDraw() {
     if (!graphCanvas || !graph.model) return;
     const ctx = graphCanvas.getContext('2d');
@@ -80,6 +113,7 @@ function graphDraw() {
 
     const hov = graph.hoverId;
     const dp  = graph.dimProgress; // 0..1, animado suavemente
+    const pal = _pal();
 
     // Pré-computa conjuntos conectados (só se houver hover)
     let connectedNodeIds = null;
@@ -102,10 +136,7 @@ function graphDraw() {
         if (!e.na || !e.nb) continue;
         const a = worldToScreen(e.na.x, e.na.y);
         const b = worldToScreen(e.nb.x, e.nb.y);
-        const base =
-            e.kind === 'schedule' ? '100,116,139' :
-            e.kind === 'taglink'  ? '59,130,246'  :
-            '59,130,246';
+        const base = e.kind === 'schedule' ? pal.edgeSchedule : pal.edgeTaglink;
 
         // alpha "normal" da aresta
         const alphaNormal = (
@@ -145,12 +176,11 @@ function graphDraw() {
         const nodeOp = isDimmed ? _lerp(1, 0.18, dp) : 1;
 
         const fillBase  =
-            n.type === 'day' ? [226,232,240] :
-            n.type === 'tag' ? [239,246,255] : [255,255,255];
+            n.type === 'day' ? pal.dayFill :
+            n.type === 'tag' ? pal.tagFill : pal.projFill;
         const strokeBase =
-            n.type === 'day' ? [100,116,139] :
-            n.type === 'tag' ? [ 59,130,246] :
-                               [ 59,130,246];
+            n.type === 'day' ? pal.dayStroke :
+            n.type === 'tag' ? pal.tagStroke : pal.projStroke;
 
         const fillA   = isDimmed ? _lerp(0.95, 0.25, dp) : 0.97;
         const strokeA = isDimmed
@@ -162,10 +192,10 @@ function graphDraw() {
 
         ctx.beginPath();
         ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
-        ctx.fillStyle   = `rgba(${fillBase.join(',')},${fillA})`;
+        ctx.fillStyle   = `rgba(${fillBase},${fillA})`;
         ctx.fill();
         ctx.lineWidth   = isHover ? _lerp(1.5, 2.6, dp) : 1.5;
-        ctx.strokeStyle = `rgba(${strokeBase.join(',')},${strokeA})`;
+        ctx.strokeStyle = `rgba(${strokeBase},${strokeA})`;
         ctx.stroke();
 
         // Label: dimmed some suavemente, hover fica em destaque
@@ -175,7 +205,7 @@ function graphDraw() {
 
         if (labelOp > 0.02) {
             ctx.font = `600 ${n.type === 'day' ? 12 : 12.5}px Inter, system-ui, -apple-system, Segoe UI, sans-serif`;
-            ctx.fillStyle   = `rgba(15,23,42,${labelOp})`;
+            ctx.fillStyle   = `rgba(${pal.label},${labelOp})`;
             ctx.textBaseline = 'middle';
             ctx.fillText(n.label, p.x + r + 10, p.y);
         }
@@ -272,6 +302,7 @@ function graphStep() {
 
 export function graphStart() {
     if (!graphCanvas || !graphView || graphView.classList.contains('hidden')) return;
+    refreshGraphPalette();
     graphResize();
     const rect = graphCanvas.getBoundingClientRect();
     graph.pan.x = rect.width * 0.5;
@@ -450,3 +481,11 @@ function attachGraphEvents() {
 }
 
 attachGraphEvents();
+
+// Recacheia a paleta ao trocar de tema e repinta se o grafo estiver visível.
+document.addEventListener('taskkill:theme-changed', () => {
+    refreshGraphPalette();
+    if (graphView && !graphView.classList.contains('hidden') && !graph.running) {
+        graphDraw();
+    }
+});

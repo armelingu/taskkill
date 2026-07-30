@@ -210,9 +210,9 @@ export function renderTasks() {
         // Layout de cada item
         // APLICAÇÃO DE SEGURANÇA MÁXIMA (escapeHTML) NO RENDER:
         const dateBadge = task.created_date ? `<span class="task-date">${escapeHTML(task.created_date)}</span>` : '';
-        const dueBadge = task.due_date && !isWeekView ? `<span class="task-date" style="color: #8b5cf6; font-weight: 700;">${escapeHTML(task.due_date)}</span>` : '';
+        const dueBadge = task.due_date && !isWeekView ? `<span class="task-date task-due-badge">${escapeHTML(task.due_date)}</span>` : '';
         const isCrossView = isWeekView || isTagView;
-        const projectBadge = isCrossView ? `<span style="font-size: 0.65rem; color: #fff; background: #64748b; padding: 2px 6px; border-radius: 4px; margin-right: 8px; text-transform: uppercase;">${escapeHTML(task.originalProject)}</span>` : '';
+        const projectBadge = isCrossView ? `<span class="task-project-badge">${escapeHTML(task.originalProject)}</span>` : '';
         
         // Processa as tags (#) no texto para renderizar badges visuais
         let escapedText = escapeHTML(task.text);
@@ -310,18 +310,9 @@ export function renderTasks() {
             editInput.type = 'text';
             editInput.className = 'edit-task-input';
             editInput.value = task.text;
-            editInput.style.flex = '1';
-            editInput.style.border = '1px solid #cbd5e1';
-            editInput.style.padding = '4px 8px';
-            editInput.style.borderRadius = '6px';
-            
+
             const editDue = document.createElement('select');
             editDue.className = 'edit-task-due';
-            editDue.style.marginLeft = '8px';
-            editDue.style.padding = '4px';
-            editDue.style.borderRadius = '6px';
-            editDue.style.border = '1px solid #cbd5e1';
-            editDue.style.color = '#475569';
             
             const days = ['', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'];
             days.forEach(d => {

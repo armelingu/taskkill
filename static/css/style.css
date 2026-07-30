@@ -2081,13 +2081,40 @@ body.graph-mode .main-content {
     font-size: 1.05rem;
     font-weight: 700;
     color: var(--text-title);
-    padding: 2px 6px;
+    background: var(--surface);
+    padding: 4px 8px;
     border: 1px solid var(--border-strong);
-    border-radius: 4px;
+    border-radius: 6px;
     outline: none;
 }
 .edit-task-input:focus {
     border-color: var(--accent-blue);
+}
+
+.edit-task-due {
+    margin-left: 8px;
+    padding: 4px;
+    border: 1px solid var(--border-strong);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    background: var(--surface);
+    font-family: inherit;
+    outline: none;
+}
+
+.task-due-badge {
+    color: var(--accent-2);
+    font-weight: 700;
+}
+
+.task-project-badge {
+    font-size: 0.65rem;
+    color: var(--text-inverse);
+    background: var(--text-muted);
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-right: 8px;
+    text-transform: uppercase;
 }
 
 /* -------------------------------------------
