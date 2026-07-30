@@ -5,15 +5,19 @@
  * `script-src 'self'`, que proíbe script inline. Deve ser incluído no <head>,
  * antes do CSS, tanto no app quanto na tela de login (funciona pré-auth).
  *
- * Lê localStorage['taskkill-theme'] com os valores 'light' | 'dark' | 'system'
- * (default 'system') e resolve 'system' via prefers-color-scheme, aplicando
- * data-theme no <html>.
+ * Fonte de verdade: a preferência salva no servidor, injetada em
+ * <html data-theme-mode="..."> (sincroniza entre dispositivos). Se ausente
+ * (ex.: tela de login pré-auth), cai para localStorage['taskkill-theme'].
+ * Valores: 'light' | 'dark' | 'system' (default 'system'); 'system' é resolvido
+ * via prefers-color-scheme. Aplica data-theme no <html>.
  */
 (function () {
     var KEY = 'taskkill-theme';
+    var VALID = { light: 1, dark: 1, system: 1 };
     try {
-        var mode = localStorage.getItem(KEY) || 'system';
-        if (mode !== 'light' && mode !== 'dark' && mode !== 'system') {
+        var serverMode = document.documentElement.getAttribute('data-theme-mode');
+        var mode = (serverMode && VALID[serverMode]) ? serverMode : (localStorage.getItem(KEY) || 'system');
+        if (!VALID[mode]) {
             mode = 'system';
         }
         var resolved = mode;

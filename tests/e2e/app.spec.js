@@ -324,6 +324,13 @@ test.describe('Fluxos principais do app', () => {
         await page.reload();
         await expect(html).toHaveAttribute('data-theme', 'dark');
 
+        // Sincronização entre dispositivos: mesmo sem cache local (localStorage
+        // limpo, simulando outro dispositivo), o servidor injeta a preferência.
+        await page.evaluate(() => localStorage.removeItem('taskkill-theme'));
+        await page.reload();
+        await expect(html).toHaveAttribute('data-theme-mode', 'dark');
+        await expect(html).toHaveAttribute('data-theme', 'dark');
+
         // Grafo repinta sem erro de runtime no tema escuro.
         await page.click('#nav-graph');
         await expect(page.locator('#graph-canvas')).toBeVisible();

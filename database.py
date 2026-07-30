@@ -180,6 +180,8 @@ def init_db():
             'ALTER TABLE users ADD COLUMN avatar_mime TEXT',
             'ALTER TABLE users ADD COLUMN avatar_data BLOB',
             'ALTER TABLE users ADD COLUMN session_version INTEGER NOT NULL DEFAULT 0',
+            # Preferência de tema (light/dark/system) sincronizada entre dispositivos.
+            "ALTER TABLE users ADD COLUMN theme_pref TEXT NOT NULL DEFAULT 'system'",
         ):
             try:
                 cursor.execute(_ddl)

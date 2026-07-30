@@ -2,11 +2,17 @@
  * theme.js — controle de tema (Claro / Escuro / Sistema).
  *
  * O tema inicial já é aplicado por theme-boot.js no <head> (anti-FOUC). Este
- * módulo apenas gerencia a troca em runtime: persiste o modo em localStorage,
- * reage a mudanças do SO quando em "system", sincroniza a UI (controle
- * segmentado do perfil + botão-ícone do sidebar) e emite `taskkill:theme-changed`
- * para quem precisa repintar fora do CSS (ex.: o canvas do grafo).
+ * módulo apenas gerencia a troca em runtime: persiste o modo em localStorage +
+ * no servidor (users.theme_pref, sincroniza entre dispositivos), reage a
+ * mudanças do SO quando em "system", sincroniza a UI (controle segmentado do
+ * perfil + botão-ícone do sidebar) e emite `taskkill:theme-changed` para quem
+ * precisa repintar fora do CSS (ex.: o canvas do grafo).
+ *
+ * Fonte de verdade: a preferência do servidor, injetada em
+ * <html data-theme-mode> pelo backend; o localStorage é só um cache local.
  */
+
+import { apiFetch } from './api.js';
 
 const KEY = 'taskkill-theme';
 const MODES = ['light', 'dark', 'system'];
@@ -23,6 +29,21 @@ const mql = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)'
 function getMode() {
     const stored = localStorage.getItem(KEY);
     return MODES.includes(stored) ? stored : 'system';
+}
+
+// Modo salvo no servidor, injetado em <html data-theme-mode> (fonte de verdade).
+function getServerMode() {
+    const m = document.documentElement.dataset.themeMode;
+    return MODES.includes(m) ? m : null;
+}
+
+// Persiste no servidor (fire-and-forget); offline mantém só o cache local.
+function syncServer(mode) {
+    apiFetch('/api/profile/theme', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode }),
+    }).catch(() => { /* sem rede: fica só no localStorage */ });
 }
 
 function resolve(mode) {
@@ -55,6 +76,8 @@ function apply(mode, { persist = true } = {}) {
     document.documentElement.setAttribute('data-theme', resolved);
     if (persist) {
         localStorage.setItem(KEY, mode);
+        document.documentElement.dataset.themeMode = mode;
+        syncServer(mode);
     }
     syncUI(mode, resolved);
     document.dispatchEvent(new CustomEvent('taskkill:theme-changed', {
@@ -63,6 +86,14 @@ function apply(mode, { persist = true } = {}) {
 }
 
 function initThemeControls() {
+    // Reconcilia com o servidor (fonte de verdade): se o modo salvo no banco
+    // difere do cache local, adota o do servidor. O boot já pintou com ele,
+    // então isto só alinha o localStorage/UI — sem flash.
+    const serverMode = getServerMode();
+    if (serverMode && serverMode !== getMode()) {
+        localStorage.setItem(KEY, serverMode);
+    }
+
     const mode = getMode();
     syncUI(mode, resolve(mode));
 

@@ -188,6 +188,9 @@ api_bp = Blueprint('api', __name__, url_prefix='/api')
 MAX_PROJECT_LEN = 18
 MAX_TEXT_LEN = 1000
 
+# Preferências de tema válidas (sincronizadas entre dispositivos via users.theme_pref).
+VALID_THEMES = ('light', 'dark', 'system')
+
 
 def valid_due_date(value: str) -> bool:
     """Prazo é '' (sem prazo) ou uma data real ISO YYYY-MM-DD."""
@@ -222,7 +225,7 @@ def _current_user():
     with get_db_connection() as conn:
         row = conn.execute(
             'SELECT id, username, is_admin, created_at, last_login_at, '
-            '       session_version, avatar_mime '
+            '       session_version, avatar_mime, theme_pref '
             'FROM users WHERE id = ?', (int(uid),)
         ).fetchone()
     if not row:
@@ -295,7 +298,13 @@ def api_admin_required(fn):
 @main_bp.route('/')
 @login_required
 def index():
-    return render_template('index.html', csrf_token=_ensure_csrf_token(), user=_current_user())
+    user = _current_user()
+    theme_pref = (user or {}).get('theme_pref') or 'system'
+    if theme_pref not in VALID_THEMES:
+        theme_pref = 'system'
+    return render_template(
+        'index.html', csrf_token=_ensure_csrf_token(), user=user, theme_pref=theme_pref
+    )
 
 
 @main_bp.route('/login', methods=['GET', 'POST'])
@@ -453,7 +462,22 @@ def get_profile():
         'last_login_at': user.get('last_login_at'),
         'prev_login_at': session.get('prev_login'),
         'has_avatar': user.get('has_avatar', False),
+        'theme_pref': user.get('theme_pref') or 'system',
     })
+
+
+@api_bp.route('/profile/theme', methods=['PUT'])
+def update_theme():
+    """Persiste a preferência de tema do usuário (sincroniza entre dispositivos)."""
+    user = _current_user()
+    data = request.get_json(silent=True) or {}
+    mode = str(data.get('mode') or '').strip()
+    if mode not in VALID_THEMES:
+        return jsonify({"error": "Bad Request: tema inválido"}), 400
+    with get_db_connection() as conn:
+        conn.execute('UPDATE users SET theme_pref = ? WHERE id = ?', (mode, int(user['id'])))
+        conn.commit()
+    return jsonify({"success": True, "theme_pref": mode})
 
 
 @api_bp.route('/profile/username', methods=['POST'])
