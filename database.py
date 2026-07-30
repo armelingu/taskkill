@@ -150,6 +150,27 @@ def init_db():
         except sqlite3.OperationalError:
             pass
 
+        # Dependências entre tarefas: (task_id depende de depends_on_id).
+        # O pré-requisito (depends_on_id) precisa sair antes. ON DELETE CASCADE
+        # limpa vínculos se uma tarefa for removida de fato (hard delete).
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS task_dependencies (
+                task_id       INTEGER NOT NULL,
+                depends_on_id INTEGER NOT NULL,
+                created_at    TEXT,
+                PRIMARY KEY (task_id, depends_on_id),
+                FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+                FOREIGN KEY (depends_on_id) REFERENCES tasks(id) ON DELETE CASCADE
+            )
+        ''')
+        try:
+            cursor.execute(
+                'CREATE INDEX IF NOT EXISTS idx_task_deps_depends_on '
+                'ON task_dependencies(depends_on_id)'
+            )
+        except sqlite3.OperationalError:
+            pass
+
         # Índices simples para manter leituras/ordenações consistentes e rápidas
         try:
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_tasks_project_position ON tasks(project, position, id)')

@@ -635,6 +635,11 @@ def get_tasks():
         cursor.execute("SELECT * FROM tasks WHERE deleted = 0 ORDER BY project ASC, position ASC, id ASC")
         rows = cursor.fetchall()
 
+        # Dependências: mapa task_id -> [depends_on_id...] (pré-requisitos).
+        deps_by_task = {}
+        for dep in cursor.execute("SELECT task_id, depends_on_id FROM task_dependencies").fetchall():
+            deps_by_task.setdefault(dep['task_id'], []).append(dep['depends_on_id'])
+
         # O JS espera um formato Dictionary/HashMap de categorias pro Dashboard Global
         tasks_data = {}
         for row in rows:
@@ -657,7 +662,8 @@ def get_tasks():
                 'due_date': d_date,
                 'position': pos,
                 'deleted': del_flag,
-                'recurrence': rec
+                'recurrence': rec,
+                'depends_on': deps_by_task.get(row['id'], [])
             })
 
         return jsonify(tasks_data)
@@ -902,6 +908,81 @@ def delete_task(task_id):
         cursor = conn.cursor()
         # Consistência com o modelo (flag deleted): arquiva em vez de remover.
         cursor.execute("UPDATE tasks SET deleted = 1 WHERE id = ?", (task_id,))
+        conn.commit()
+    return jsonify({"success": True})
+
+
+# ── Dependências entre tarefas ──────────────────────────────────────
+
+def _task_exists(conn, task_id):
+    """True se a tarefa existe e não está arquivada (deleted=0)."""
+    row = conn.execute(
+        "SELECT 1 FROM tasks WHERE id = ? AND deleted = 0", (task_id,)
+    ).fetchone()
+    return row is not None
+
+
+def _would_create_cycle(conn, task_id, depends_on_id):
+    """
+    Adicionar (task_id depende de depends_on_id) fecha um ciclo se depends_on_id
+    já alcança task_id seguindo as arestas de dependência existentes. DFS a
+    partir de depends_on_id pelos seus próprios pré-requisitos.
+    """
+    if task_id == depends_on_id:
+        return True
+    adj = {}
+    for r in conn.execute("SELECT task_id, depends_on_id FROM task_dependencies").fetchall():
+        adj.setdefault(r['task_id'], []).append(r['depends_on_id'])
+    stack = [depends_on_id]
+    seen = set()
+    while stack:
+        cur = stack.pop()
+        if cur == task_id:
+            return True
+        if cur in seen:
+            continue
+        seen.add(cur)
+        stack.extend(adj.get(cur, []))
+    return False
+
+
+@api_bp.route('/tasks/<int:task_id>/dependencies', methods=['POST'])
+def add_dependency(task_id):
+    """Cria (task_id depende de depends_on_id), barrando auto/ciclo/inexistente."""
+    data = request.get_json(silent=True) or {}
+    try:
+        depends_on_id = int(data.get('depends_on'))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Bad Request: depends_on deve ser um id inteiro"}), 400
+
+    if task_id == depends_on_id:
+        return jsonify({"error": "Uma tarefa não pode depender de si mesma."}), 400
+
+    with get_db_connection() as conn:
+        if not _task_exists(conn, task_id) or not _task_exists(conn, depends_on_id):
+            return jsonify({"error": "Tarefa inexistente ou arquivada."}), 404
+        if _would_create_cycle(conn, task_id, depends_on_id):
+            return jsonify({"error": "Isso criaria um ciclo de dependências."}), 409
+        conn.execute(
+            "INSERT OR IGNORE INTO task_dependencies (task_id, depends_on_id, created_at) "
+            "VALUES (?, ?, ?)",
+            (task_id, depends_on_id, datetime.utcnow().isoformat())
+        )
+        conn.commit()
+        deps = [r['depends_on_id'] for r in conn.execute(
+            "SELECT depends_on_id FROM task_dependencies WHERE task_id = ?", (task_id,)
+        ).fetchall()]
+    return jsonify({"success": True, "task_id": task_id, "depends_on": deps}), 201
+
+
+@api_bp.route('/tasks/<int:task_id>/dependencies/<int:depends_on_id>', methods=['DELETE'])
+def remove_dependency(task_id, depends_on_id):
+    """Remove o vínculo (task_id depende de depends_on_id), se existir."""
+    with get_db_connection() as conn:
+        conn.execute(
+            "DELETE FROM task_dependencies WHERE task_id = ? AND depends_on_id = ?",
+            (task_id, depends_on_id)
+        )
         conn.commit()
     return jsonify({"success": True})
 
