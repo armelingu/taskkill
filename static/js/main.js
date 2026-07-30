@@ -17,6 +17,7 @@ import './modules/profile.js';  // auto-inicializa o perfil inline
 import './modules/theme.js';    // controle de tema (claro/escuro/sistema)
 import './modules/week.js';     // faixa da semana (datas reais) + navegação
 import './modules/shortcuts.js'; // sistema central de atalhos + cheatsheet ('?')
+import './modules/palette.js';   // command palette (Cmd/Ctrl-K)
 import {
     skeletonItems, emptyState, projectView, projectTitle, taskList, taskInput,
     graphView, graphCanvas, perfilView, dashboardView,

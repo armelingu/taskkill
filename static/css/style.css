@@ -3302,3 +3302,123 @@ kbd {
     font-size: 0.7rem;
     color: var(--text-subtle);
 }
+
+/* ===========================================================================
+   COMMAND PALETTE (Cmd/Ctrl-K)
+   =========================================================================== */
+.palette-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1100;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 12vh 20px 20px;
+    background: var(--overlay);
+    backdrop-filter: blur(3px);
+    animation: fadeIn 0.14s ease;
+}
+
+.palette-overlay.hidden {
+    display: none;
+}
+
+.palette-panel {
+    width: 100%;
+    max-width: 600px;
+    display: flex;
+    flex-direction: column;
+    max-height: 64vh;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: var(--shadow-lg);
+    overflow: hidden;
+    animation: modalSlideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.palette-input-wrap {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--divider);
+}
+
+.palette-input {
+    width: 100%;
+    border: none;
+    background: transparent;
+    color: var(--text-title);
+    font-family: inherit;
+    font-size: 1.02rem;
+    outline: none;
+}
+
+.palette-input::placeholder {
+    color: var(--text-subtle);
+}
+
+.palette-results {
+    overflow-y: auto;
+    padding: 6px;
+    flex: 1;
+}
+
+.palette-group {
+    padding: 10px 12px 4px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-subtle);
+}
+
+.palette-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 9px 12px;
+    border-radius: 10px;
+    cursor: pointer;
+    color: var(--text-secondary);
+}
+
+.palette-item.is-selected {
+    background: var(--indigo-active-bg);
+    color: var(--indigo-active-text);
+}
+
+.palette-item-label {
+    font-size: 0.9rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.palette-item-keys {
+    display: inline-flex;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.palette-empty {
+    padding: 28px 18px;
+    text-align: center;
+    color: var(--text-subtle);
+    font-size: 0.9rem;
+}
+
+.palette-footer {
+    display: flex;
+    gap: 16px;
+    padding: 10px 16px;
+    border-top: 1px solid var(--divider);
+    background: var(--surface-inset);
+    font-size: 0.72rem;
+    color: var(--text-subtle);
+}
+
+.palette-footer kbd {
+    min-width: 18px;
+    height: 18px;
+    font-size: 0.66rem;
+}

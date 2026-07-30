@@ -152,6 +152,27 @@ test.describe('Fluxos principais do app', () => {
         await expect(page.locator('#shortcuts-overlay')).toBeHidden();
     });
 
+    test('command palette: Ctrl-K abre, filtra e executa comando', async ({ page }) => {
+        // Ctrl-K (portável: o handler aceita meta OU ctrl).
+        await page.keyboard.press('Control+k');
+        await expect(page.locator('#command-palette')).toBeVisible();
+        await expect(page.locator('.palette-input')).toBeFocused();
+
+        // Filtra e executa: "grafo" -> Enter navega ao grafo.
+        await page.locator('.palette-input').fill('grafo');
+        await expect(page.locator('.palette-item.is-selected').first()).toBeVisible();
+        await page.keyboard.press('Enter');
+        await expect(page.locator('#command-palette')).toBeHidden();
+        await expect(page.locator('#graph-view')).toBeVisible();
+
+        // Reabre, busca inexistente mostra estado vazio; Esc fecha.
+        await page.keyboard.press('Control+k');
+        await page.locator('.palette-input').fill('zzzxyq');
+        await expect(page.locator('.palette-empty')).toBeVisible();
+        await page.keyboard.press('Escape');
+        await expect(page.locator('#command-palette')).toBeHidden();
+    });
+
     test('integrações: abre lista e o wizard', async ({ page }) => {
         await page.click('#nav-integrations');
         await expect(page.locator('#integrations-view')).toBeVisible();
