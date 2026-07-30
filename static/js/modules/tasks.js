@@ -220,6 +220,13 @@ export function renderTasks() {
         return;
     }
 
+    // Estado vazio sob medida por visão (dia/semana, #tag ou projeto).
+    if (tasks.length === 0) {
+        taskList.appendChild(_makeEmptyState({ isWeekView, isTagView }));
+        _syncNavAfterRender();
+        return;
+    }
+
     tasks.forEach((task, index) => {
         const li = document.createElement('li');
         li.className = `task-item ${task.completed ? 'completed' : ''}`;
@@ -447,6 +454,47 @@ export function renderTasks() {
     });
 
     _syncNavAfterRender();
+}
+
+// Monta o estado vazio contextual (mensagem + dica) para a lista.
+function _makeEmptyState({ isWeekView, isTagView }) {
+    let title;
+    let hint;
+    if (isWeekView) {
+        title = `Nada agendado para ${weekdayLong(state.currentWeekDate)}.`;
+        hint = 'Arraste uma tarefa para este dia na faixa da semana ao lado.';
+    } else if (isTagView) {
+        title = `Nenhuma tarefa com #${state.currentTag}.`;
+        hint = 'As #tags aparecem aqui quando você as usa no texto de uma tarefa.';
+    } else {
+        title = 'Sem tarefas por aqui ainda.';
+        hint = 'Pressione N ou comece a digitar acima para criar a primeira.';
+    }
+
+    const li = document.createElement('li');
+    li.className = 'task-empty';
+    li.setAttribute('role', 'note');
+
+    const icon = document.createElement('div');
+    icon.className = 'task-empty-icon';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.innerHTML = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="3.5" y="4.5" width="17" height="15" rx="3" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M8 10h8M8 14h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </svg>`;
+
+    const t = document.createElement('p');
+    t.className = 'task-empty-title';
+    t.textContent = title;
+
+    const h = document.createElement('p');
+    h.className = 'task-empty-hint';
+    h.textContent = hint;
+
+    li.appendChild(icon);
+    li.appendChild(t);
+    li.appendChild(h);
+    return li;
 }
 
 // ── Navegação por teclado na lista (estilo Linear) ────────────────

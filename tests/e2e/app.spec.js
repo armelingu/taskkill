@@ -233,6 +233,20 @@ test.describe('Fluxos principais do app', () => {
         await expect(page.locator('.toast', { hasText: 'Tarefa restaurada' })).toBeVisible();
     });
 
+    test('estado vazio: projeto novo mostra mensagem e dica contextual', async ({ page }) => {
+        const proj = `V-${Date.now()}`;
+        await page.click('#btn-add-project');
+        const pin = page.locator('.project-new-input');
+        await pin.fill(proj);
+        await pin.press('Enter');
+        await expect(page.locator('#project-title')).toHaveText(proj);
+
+        const empty = page.locator('.task-empty');
+        await expect(empty).toBeVisible();
+        await expect(empty.locator('.task-empty-title')).toHaveText('Sem tarefas por aqui ainda.');
+        await expect(empty.locator('.task-empty-hint')).toContainText('Pressione N');
+    });
+
     test('integrações: abre lista e o wizard', async ({ page }) => {
         await page.click('#nav-integrations');
         await expect(page.locator('#integrations-view')).toBeVisible();
