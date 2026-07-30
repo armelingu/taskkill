@@ -3169,3 +3169,136 @@ body.graph-mode .main-content {
     width: 15px;
     height: 15px;
 }
+
+/* ===========================================================================
+   CHEATSHEET DE ATALHOS (overlay '?') e KBD
+   =========================================================================== */
+kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    border: 1px solid var(--border-strong);
+    border-bottom-width: 2px;
+    border-radius: 6px;
+    background: var(--surface-inset);
+    color: var(--text-secondary);
+    font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1;
+}
+
+.shortcuts-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 12vh 20px 20px;
+    background: var(--overlay);
+    backdrop-filter: blur(3px);
+    animation: fadeIn 0.16s ease;
+}
+
+.shortcuts-overlay.hidden {
+    display: none;
+}
+
+.shortcuts-sheet {
+    width: 100%;
+    max-width: 560px;
+    max-height: 76vh;
+    overflow-y: auto;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: var(--shadow-lg);
+    animation: modalSlideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.shortcuts-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 22px 12px;
+    position: sticky;
+    top: 0;
+    background: var(--surface);
+    border-bottom: 1px solid var(--divider);
+}
+
+.shortcuts-head h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-title);
+}
+
+.shortcuts-close {
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 1.4rem;
+    line-height: 1;
+    cursor: pointer;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.shortcuts-close:hover {
+    background: var(--surface-hover);
+    color: var(--text-title);
+}
+
+.shortcuts-body {
+    padding: 8px 22px 20px;
+}
+
+.shortcuts-group {
+    margin-top: 14px;
+}
+
+.shortcuts-group-title {
+    margin: 0 0 6px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-subtle);
+}
+
+.shortcut-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--divider);
+}
+
+.shortcut-row:last-child {
+    border-bottom: none;
+}
+
+.shortcut-label {
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+}
+
+.shortcut-keys {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    flex-shrink: 0;
+}
+
+.shortcut-sep {
+    font-size: 0.7rem;
+    color: var(--text-subtle);
+}

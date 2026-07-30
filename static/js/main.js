@@ -16,6 +16,7 @@ import { openIntegrations, hideIntegrationsView } from './modules/integrations.j
 import './modules/profile.js';  // auto-inicializa o perfil inline
 import './modules/theme.js';    // controle de tema (claro/escuro/sistema)
 import './modules/week.js';     // faixa da semana (datas reais) + navegação
+import './modules/shortcuts.js'; // sistema central de atalhos + cheatsheet ('?')
 import {
     skeletonItems, emptyState, projectView, projectTitle, taskList, taskInput,
     graphView, graphCanvas, perfilView, dashboardView,
@@ -339,25 +340,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 
-
-
-    // Função Principal para renderizar as tarefas na tela
-
-    // 5. UX Premium: Atalho Globais (Linear style)
-    document.addEventListener('keydown', (e) => {
-        // Se já estiver focando em qualquer elemento de input, não aciona para evitar escrever a letra "n" dentro de um lugar errado
-        if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') {
-            return;
-        }
-
-        // Aperta "N" para focar e criar nova tarefa
-        if (e.key.toLowerCase() === 'n' && state.currentCategory) {
-            e.preventDefault(); // Evita escrever de fato algo
-            if (taskInput) {
-                taskInput.focus();
-            }
-        }
-    });
 
 
 });

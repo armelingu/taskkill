@@ -29,7 +29,7 @@ const WEEKEND = new Set([0, 6]); // getDay(): 0=Dom, 6=Sáb
 
 // Abre a visão da semana para uma data ISO específica (equivalente à antiga
 // navegação por nome de dia, agora com data real).
-function openWeekView(iso, chip) {
+export function openWeekView(iso, chip) {
     document.querySelectorAll('.skeleton-item').forEach(s => s.classList.remove('active'));
     if (chip) chip.classList.add('active');
 
@@ -158,6 +158,14 @@ export function renderWeek() {
     }
 
     if (range) range.textContent = _rangeLabel(state.currentWeekStart, last);
+}
+
+// Vai para a semana atual e abre a visão do dia de hoje (usado por atalho/palette).
+export function goToToday() {
+    state.currentWeekStart = startOfWeekISO(todayISO());
+    renderWeek();
+    const chip = document.querySelector(`.week-day[data-date="${todayISO()}"]`);
+    openWeekView(todayISO(), chip);
 }
 
 function _shiftWeek(deltaDays) {

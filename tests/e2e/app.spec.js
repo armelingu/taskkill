@@ -133,6 +133,25 @@ test.describe('Fluxos principais do app', () => {
         await expect(page.locator('.week-day').first()).toHaveAttribute('data-date', firstDate || '');
     });
 
+    test('atalhos: chord "g d" navega e "?" abre a cheatsheet', async ({ page }) => {
+        // Chord estilo Linear: g depois d -> dashboard.
+        await page.keyboard.press('g');
+        await page.keyboard.press('d');
+        await expect(page.locator('#dashboard-view')).toBeVisible();
+
+        // g depois g -> grafo.
+        await page.keyboard.press('g');
+        await page.keyboard.press('g');
+        await expect(page.locator('#graph-view')).toBeVisible();
+
+        // "?" abre a cheatsheet; Esc fecha e devolve o foco.
+        await page.keyboard.press('?');
+        await expect(page.locator('#shortcuts-overlay')).toBeVisible();
+        await expect(page.locator('#shortcuts-overlay .shortcut-row').first()).toBeVisible();
+        await page.keyboard.press('Escape');
+        await expect(page.locator('#shortcuts-overlay')).toBeHidden();
+    });
+
     test('integrações: abre lista e o wizard', async ({ page }) => {
         await page.click('#nav-integrations');
         await expect(page.locator('#integrations-view')).toBeVisible();
