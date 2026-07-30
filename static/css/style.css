@@ -2018,6 +2018,26 @@ body.graph-mode .main-content {
     box-shadow: 0 1px 4px rgba(0,0,0,0.02); /* Fundo branco pra indicar que dá pra interagir com essa linha toda */
 }
 
+/* Linha ativa da navegação por teclado (j/k) — cursor visível estilo Linear. */
+.task-item.task-nav-active {
+    background-color: var(--surface);
+    box-shadow: inset 3px 0 0 var(--accent), 0 1px 4px rgba(0, 0, 0, 0.03);
+}
+
+.task-item.task-nav-active::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 8px;
+    outline: 2px solid var(--ring);
+    outline-offset: -2px;
+    pointer-events: none;
+}
+
+.task-item {
+    position: relative;
+}
+
 /* Drag and Drop Premium States */
 .task-item[draggable="true"] {
     cursor: grab;

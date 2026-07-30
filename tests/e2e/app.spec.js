@@ -173,6 +173,38 @@ test.describe('Fluxos principais do app', () => {
         await expect(page.locator('#command-palette')).toBeHidden();
     });
 
+    test('lista: navegação por teclado (j/k), concluir (x) e anel de foco', async ({ page }) => {
+        const proj = `Nav-${Date.now()}`;
+        await page.click('#btn-add-project');
+        const pin = page.locator('.project-new-input');
+        await pin.fill(proj);
+        await pin.press('Enter');
+        await expect(page.locator('#project-title')).toHaveText(proj);
+
+        for (const t of ['Primeira tarefa', 'Segunda tarefa']) {
+            await page.fill('#new-task-input', t);
+            await page.press('#new-task-input', 'Enter');
+        }
+        await expect(page.locator('.task-item')).toHaveCount(2);
+
+        // Sai do input para os atalhos de lista valerem.
+        await page.locator('#new-task-input').blur();
+
+        // j engaja e seleciona a 1ª; j de novo vai para a 2ª (anel visível).
+        await page.keyboard.press('j');
+        await expect(page.locator('.task-item').first()).toHaveClass(/task-nav-active/);
+        await page.keyboard.press('j');
+        await expect(page.locator('.task-item').nth(1)).toHaveClass(/task-nav-active/);
+
+        // x conclui a linha ativa.
+        await page.keyboard.press('x');
+        await expect(page.locator('.task-item').nth(1)).toHaveClass(/completed/);
+
+        // k volta para a 1ª.
+        await page.keyboard.press('k');
+        await expect(page.locator('.task-item').first()).toHaveClass(/task-nav-active/);
+    });
+
     test('integrações: abre lista e o wizard', async ({ page }) => {
         await page.click('#nav-integrations');
         await expect(page.locator('#integrations-view')).toBeVisible();

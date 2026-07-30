@@ -164,7 +164,18 @@ function getDragAfterElement(container, y) {
 // ── Render principal da lista ─────────────────────────────────────
 export function renderTasks() {
     if (!taskList) return;
-    
+
+    // Ao trocar de visão (projeto/tag/dia), zera a navegação por teclado para
+    // o anel de foco não "vazar" entre listas diferentes.
+    const viewKey = state.currentWeekDate ? `w:${state.currentWeekDate}`
+        : state.currentTag ? `t:${state.currentTag}`
+        : state.currentCategory ? `p:${state.currentCategory}` : null;
+    if (viewKey !== _lastViewKey) {
+        _navIndex = -1;
+        _navEngaged = false;
+        _lastViewKey = viewKey;
+    }
+
     taskList.innerHTML = ''; // Limpa a lista
     let tasks = [];
     let isWeekView = false;
@@ -416,4 +427,95 @@ export function renderTasks() {
 
         taskList.appendChild(li);
     });
+
+    _syncNavAfterRender();
 }
+
+// ── Navegação por teclado na lista (estilo Linear) ────────────────
+// j/k ou setas movem a seleção; x conclui, e edita, d edita e foca a data,
+// Backspace/Delete remove. O anel só aparece após a 1ª tecla de navegação.
+let _navIndex = -1;
+let _navEngaged = false;
+let _lastViewKey = null;
+
+function _taskLis() {
+    return taskList ? Array.from(taskList.querySelectorAll('.task-item')) : [];
+}
+
+function _applyNavHighlight() {
+    const lis = _taskLis();
+    lis.forEach((li, i) => li.classList.toggle('task-nav-active', _navEngaged && i === _navIndex));
+    if (_navEngaged && _navIndex >= 0 && lis[_navIndex]) {
+        lis[_navIndex].scrollIntoView({ block: 'nearest' });
+    }
+}
+
+function _syncNavAfterRender() {
+    const lis = _taskLis();
+    if (!lis.length) { _navIndex = -1; _navEngaged = false; return; }
+    if (_navIndex >= lis.length) _navIndex = lis.length - 1;
+    if (_navEngaged && _navIndex < 0) _navIndex = 0;
+    _applyNavHighlight();
+}
+
+function _moveNav(delta) {
+    const lis = _taskLis();
+    if (!lis.length) { _navIndex = -1; _navEngaged = false; return; }
+    if (!_navEngaged) {
+        _navEngaged = true;
+        if (_navIndex < 0 || _navIndex >= lis.length) _navIndex = 0;
+        _applyNavHighlight();
+        return;
+    }
+    _navIndex = (_navIndex + delta + lis.length) % lis.length;
+    _applyNavHighlight();
+}
+
+function _navTyping() {
+    const el = document.activeElement;
+    return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
+}
+
+function _overlayOpen() {
+    return !!document.querySelector(
+        '.palette-overlay:not(.hidden), .shortcuts-overlay:not(.hidden), .project-confirm-overlay:not(.hidden)'
+    );
+}
+
+function _listActive() {
+    if (!projectView || projectView.classList.contains('hidden')) return false;
+    if (!(state.currentCategory || state.currentTag || state.currentWeekDate)) return false;
+    return _taskLis().length > 0;
+}
+
+document.addEventListener('keydown', (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (_navTyping() || _overlayOpen() || !_listActive()) return;
+
+    const lis = _taskLis();
+    const engaged = () => _navEngaged && _navIndex >= 0 && lis[_navIndex];
+
+    switch (e.key) {
+        case 'j': case 'ArrowDown': e.preventDefault(); _moveNav(1); break;
+        case 'k': case 'ArrowUp': e.preventDefault(); _moveNav(-1); break;
+        case 'x':
+            if (engaged()) { e.preventDefault(); lis[_navIndex].querySelector('.task-checkbox')?.click(); }
+            break;
+        case 'e': case 'Enter':
+            if (engaged()) { e.preventDefault(); lis[_navIndex].querySelector('.edit-btn')?.click(); }
+            break;
+        case 'd':
+            if (engaged()) {
+                e.preventDefault();
+                lis[_navIndex].querySelector('.edit-btn')?.click();
+                const due = lis[_navIndex].querySelector('.edit-task-due');
+                if (due) due.focus();
+            }
+            break;
+        case 'Backspace': case 'Delete':
+            if (engaged()) { e.preventDefault(); lis[_navIndex].querySelector('.delete-btn')?.click(); }
+            break;
+        default:
+            break;
+    }
+});
