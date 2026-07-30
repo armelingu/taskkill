@@ -42,6 +42,27 @@
     --warning: #b45309;
     --warning-soft: #fffbeb;
 
+    /* Acentos — variantes de estado (pills, wizard, links, presença) */
+    --accent-blue-strong: #2563eb;   /* blue-600: hover/ativo, número do passo */
+    --accent-blue-deep: #1d4ed8;     /* blue-700: label do passo ativo */
+    --accent-blue-border: #bfdbfe;   /* blue-200: borda de pill informativo */
+    --indigo-active-bg: #eef2ff;     /* indigo-50: fundo selecionado */
+    --indigo-active-border: #a5b4fc; /* indigo-300 */
+    --indigo-active-text: #4f46e5;   /* indigo-600 */
+    --success-bright: #22c55e;       /* dot de presença/online */
+    --success-text: #065f46;         /* texto sobre success-soft */
+    --danger-text: #991b1b;          /* texto sobre danger-soft */
+    --danger-border: #fca5a5;        /* red-300: borda de estado inválido */
+    --danger-border-2: #fecaca;      /* red-200 */
+    --warning-text: #92400e;         /* texto sobre warning-soft */
+    --warning-border: #fde68a;       /* amber-200 */
+    --warning-bg-2: #fbfaf7;         /* off-white quente (linha de aviso) */
+    --surface-subtle: #eef1f5;       /* off-white (ilustração login, divisores perfil) */
+    --surface-subtle-2: #eef2f7;     /* off-white 2 (linha, bordas int) */
+    --slate-700: #334155;            /* stop de gradiente/superfície escura clara */
+    --ink: #1e293b;                  /* texto escuro forte (títulos onboarding, bordas) */
+    --graph-bg-deep: #111c33;        /* fundo profundo (mini-grafo) */
+
     /* Interação */
     --hover: #e2e8f0;         /* Hover de itens do sidebar/listas */
     --skeleton-color: #e2e8f0;/* Tons elegantes de cinza slate */
@@ -74,6 +95,128 @@
     --graph-edge-schedule: #64748b;
     --graph-edge-taglink: #3b82f6;
     --graph-label: #0f172a;
+}
+
+/* ===========================================================================
+   TEMA ESCURO — sobrescreve apenas os tokens. Nenhuma regra fora deste bloco
+   precisa mudar; o boot aplica html[data-theme="dark"]. Base slate-900/800,
+   texto slate-100/400, bordas slate-700, acentos ajustados p/ contraste AA.
+   =========================================================================== */
+[data-theme="dark"] {
+    color-scheme: dark;
+
+    /* Superfícies */
+    --bg-main: #0f172a;
+    --bg-sidebar: #0b1220;
+    --surface: #1e293b;
+    --surface-2: #223047;
+    --surface-inset: #172033;
+    --surface-hover: #334155;
+    --overlay: rgba(2, 6, 23, 0.6);
+
+    /* Texto */
+    --text-title: #f1f5f9;
+    --text-muted: #94a3b8;
+    --text-secondary: #cbd5e1;
+    --text-subtle: #64748b;
+    --text-inverse: #ffffff;
+
+    /* Bordas e divisores */
+    --border: #334155;
+    --border-strong: #475569;
+    --divider: #1e293b;
+
+    /* Acentos */
+    --accent: #818cf8;
+    --accent-2: #a78bfa;
+    --accent-grad: linear-gradient(135deg, #818cf8, #a78bfa);
+    --accent-blue: #60a5fa;
+    --accent-blue-soft: #16263f;
+    --success: #34d399;
+    --success-strong: #10b981;
+    --success-soft: #10241d;
+    --danger: #f87171;
+    --danger-strong: #ef4444;
+    --danger-soft: #2a1517;
+    --warning: #fbbf24;
+    --warning-soft: #2a2210;
+
+    /* Interação */
+    --hover: #1e293b;
+    --skeleton-color: #1e293b;
+    --skeleton-hover: #334155;
+
+    /* Superfícies invertidas (toast) e painel de código */
+    --toast-bg: #334155;
+    --toast-text: #f8fafc;
+    --code-bg: #0b1220;
+    --code-text: #e2e8f0;
+
+    /* Sombras (mais profundas no escuro) */
+    --shadow-color: rgba(0, 0, 0, 0.4);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.35);
+    --shadow-lg: 0 12px 30px -8px rgba(0, 0, 0, 0.55);
+
+    /* Scrollbar */
+    --scroll-track: rgba(255, 255, 255, 0.03);
+    --scroll-thumb: rgba(148, 163, 184, 0.22);
+    --scroll-thumb-hover: rgba(148, 163, 184, 0.42);
+
+    /* Acentos — variantes de estado */
+    --accent-blue-strong: #60a5fa;
+    --accent-blue-deep: #93c5fd;
+    --accent-blue-border: #1e3a5f;
+    --indigo-active-bg: #1e1b4b;
+    --indigo-active-border: #4338ca;
+    --indigo-active-text: #c7d2fe;
+    --success-bright: #22c55e;
+    --success-text: #6ee7b7;
+    --danger-text: #fca5a5;
+    --danger-border: #7f1d1d;
+    --danger-border-2: #7f1d1d;
+    --warning-text: #fcd34d;
+    --warning-border: #4a3c12;
+    --warning-bg-2: #241f14;
+    --surface-subtle: #223047;
+    --surface-subtle-2: #172033;
+    --slate-700: #475569;
+    --ink: #e2e8f0;
+    --graph-bg-deep: #0b1220;
+
+    /* Grafo (canvas) */
+    --graph-node-project-fill: #1e293b;
+    --graph-node-day-fill: #334155;
+    --graph-node-tag-fill: #16263f;
+    --graph-node-project-stroke: #60a5fa;
+    --graph-node-day-stroke: #94a3b8;
+    --graph-node-tag-stroke: #60a5fa;
+    --graph-edge-schedule: #475569;
+    --graph-edge-taglink: #60a5fa;
+    --graph-label: #f1f5f9;
+}
+
+/* Ajustes do login no escuro (glass usa branco literal, fora do sistema de tokens) */
+[data-theme="dark"] .auth-card {
+    background: rgba(30, 41, 59, 0.55);
+    border-color: rgba(148, 163, 184, 0.16);
+}
+[data-theme="dark"] .auth-card {
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.06),
+        0 24px 60px -28px rgba(0, 0, 0, 0.55);
+}
+[data-theme="dark"] .auth-input {
+    background: rgba(15, 23, 42, 0.55);
+    border-color: rgba(148, 163, 184, 0.22);
+}
+[data-theme="dark"] .auth-input:focus {
+    background: rgba(15, 23, 42, 0.75);
+    border-color: rgba(96, 165, 250, 0.6);
+    box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.14);
+}
+[data-theme="dark"] .auth-input::placeholder {
+    color: var(--text-subtle);
 }
 
 /* Reset básico (CSS Reset) */
@@ -248,7 +391,7 @@ body {
 
 .auth-task-line--sub {
     height: 0.38em;
-    background: #eef1f5;
+    background: var(--surface-subtle);
     animation: none;
 }
 
@@ -276,7 +419,7 @@ body {
 
 @keyframes taskBox {
     0%, 40%   { background: transparent; border-color: var(--border-strong); }
-    50%, 100% { background: #22c55e; border-color: #22c55e; }
+    50%, 100% { background: var(--success-bright); border-color: var(--success-bright); }
 }
 
 @keyframes taskDraw {
@@ -287,7 +430,7 @@ body {
 
 @keyframes taskLine {
     0%, 40%   { background: var(--border); }
-    50%, 100% { background: #eef2f7; }
+    50%, 100% { background: var(--surface-subtle-2); }
 }
 
 @keyframes taskStrike {
@@ -348,7 +491,7 @@ body {
 }
 
 .auth-btn:hover {
-    background: #111c33;
+    background: var(--graph-bg-deep);
     box-shadow: 0 14px 26px -12px rgba(15, 23, 42, 0.6);
 }
 
@@ -429,13 +572,13 @@ body {
 
 .auth-alert-error {
     background: var(--danger-soft);
-    color: #991b1b;
+    color: var(--danger-text);
     border: 1px solid rgba(239, 68, 68, 0.15);
 }
 
 .auth-alert-ok {
     background: var(--success-soft);
-    color: #065f46;
+    color: var(--success-text);
     border: 1px solid rgba(16, 185, 129, 0.15);
 }
 
@@ -553,7 +696,7 @@ body {
     width: 34px;
     height: 34px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #334155, var(--code-bg));
+    background: linear-gradient(135deg, var(--slate-700), var(--code-bg));
     color: var(--text-inverse);
     display: flex;
     align-items: center;
@@ -586,7 +729,7 @@ body {
     width: 10px;
     height: 10px;
     border-radius: 50%;
-    background: #22c55e;
+    background: var(--success-bright);
     box-shadow: 0 0 0 2px var(--bg-sidebar);
 }
 
@@ -828,7 +971,7 @@ body {
     width: 184px;
     flex-shrink: 0;
     background: var(--surface-2);
-    border-right: 1px solid #eef1f5;
+    border-right: 1px solid var(--surface-subtle);
     padding: 16px 12px;
 }
 
@@ -854,7 +997,7 @@ body {
 }
 
 .perfil-nav-item:hover {
-    background: #eef2f7;
+    background: var(--surface-subtle-2);
     color: var(--text-title);
 }
 
@@ -899,7 +1042,7 @@ body {
     .perfil-sidebar {
         width: 100%;
         border-right: none;
-        border-bottom: 1px solid #eef1f5;
+        border-bottom: 1px solid var(--surface-subtle);
     }
     .perfil-nav { flex-direction: row; flex-wrap: wrap; gap: 4px; }
     .perfil-content { padding: 20px 18px; }
@@ -1217,7 +1360,7 @@ html {
     pointer-events: auto;
 }
 .btn-delete-project:hover {
-    border-color: #fca5a5;
+    border-color: var(--danger-border);
     background-color: var(--danger-soft);
     color: var(--danger);
 }
@@ -1278,7 +1421,7 @@ html {
     height: 52px;
     border-radius: 50%;
     background: var(--danger-soft);
-    border: 2px solid #fecaca;
+    border: 2px solid var(--danger-border-2);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1427,7 +1570,7 @@ body.graph-mode .main-content {
 .onboarding-title {
     font-size: 1.6rem;
     font-weight: 700;
-    color: #1e293b;
+    color: var(--ink);
     margin: 0 0 10px;
     letter-spacing: -0.02em;
 }
@@ -1499,9 +1642,9 @@ body.graph-mode .main-content {
 }
 
 .tpl-chip:hover {
-    border-color: #a5b4fc;
-    color: #4f46e5;
-    background: #eef2ff;
+    border-color: var(--indigo-active-border);
+    color: var(--indigo-active-text);
+    background: var(--indigo-active-bg);
     transform: translateY(-1px);
 }
 
@@ -1580,7 +1723,7 @@ body.graph-mode .main-content {
     border-radius: 10px;
     padding: 8px 13px;
     font-size: 0.82rem;
-    color: #1e293b;
+    color: var(--ink);
     box-shadow: 0 4px 16px rgba(0,0,0,0.10), 0 1px 4px rgba(0,0,0,0.06);
     line-height: 1.5;
     white-space: nowrap;
@@ -2009,7 +2152,7 @@ body.graph-mode .main-content {
     background: var(--text-secondary);
 }
 .int-btn-secondary:hover {
-    background: #334155;
+    background: var(--slate-700);
 }
 
 .int-btn-success {
@@ -2101,7 +2244,7 @@ body.graph-mode .main-content {
 
 .int-card--paused {
     opacity: 0.72;
-    background: #fbfaf7;
+    background: var(--warning-bg-2);
 }
 .int-card--paused .int-card-title::after {
     content: 'pausada';
@@ -2111,7 +2254,7 @@ body.graph-mode .main-content {
     letter-spacing: 0.04em;
     color: var(--warning);
     background: var(--warning-soft);
-    border: 1px solid #fde68a;
+    border: 1px solid var(--warning-border);
     border-radius: 999px;
     padding: 1px 7px;
     margin-left: 8px;
@@ -2134,8 +2277,8 @@ body.graph-mode .main-content {
     border-radius: 999px;
     flex-shrink: 0;
 }
-.int-status-ok     { background: var(--success-soft); color: #065f46; }
-.int-status-error  { background: var(--danger-soft); color: #991b1b; }
+.int-status-ok     { background: var(--success-soft); color: var(--success-text); }
+.int-status-error  { background: var(--danger-soft); color: var(--danger-text); }
 .int-status-never  { background: var(--divider); color: var(--text-muted); }
 
 /* Modal de histórico de execuções */
@@ -2172,7 +2315,7 @@ body.graph-mode .main-content {
     align-items: flex-start;
     gap: 10px;
     padding: 10px 12px;
-    border: 1px solid #eef2f7;
+    border: 1px solid var(--surface-subtle-2);
     border-radius: 10px;
     background: var(--surface-2);
 }
@@ -2189,7 +2332,7 @@ body.graph-mode .main-content {
 .int-run-detail {
     font-size: 0.86rem;
     font-weight: 600;
-    color: #334155;
+    color: var(--slate-700);
 }
 .int-run-meta {
     font-size: 0.74rem;
@@ -2335,7 +2478,7 @@ body.graph-mode .main-content {
 }
 .int-kv-del:hover {
     background: var(--danger-soft);
-    border-color: #fca5a5;
+    border-color: var(--danger-border);
     color: var(--danger);
 }
 
@@ -2368,7 +2511,7 @@ body.graph-mode .main-content {
     line-height: 1.5;
     background: var(--code-bg);
     color: var(--border);
-    border-color: #1e293b;
+    border-color: var(--ink);
 }
 .int-json-editor:focus {
     border-color: var(--accent-blue);
@@ -2397,13 +2540,13 @@ body.graph-mode .main-content {
 }
 .int-chip:hover {
     background: var(--accent-blue-soft);
-    border-color: #bfdbfe;
+    border-color: var(--accent-blue-border);
     color: var(--accent-blue);
 }
 .int-chip-array {
     background: var(--accent-blue-soft);
-    border-color: #bfdbfe;
-    color: #2563eb;
+    border-color: var(--accent-blue-border);
+    color: var(--accent-blue-strong);
 }
 
 .int-muted {
@@ -2414,7 +2557,7 @@ body.graph-mode .main-content {
 
 .int-error {
     background: var(--danger-soft);
-    color: #991b1b;
+    color: var(--danger-text);
     border: 1px solid rgba(239, 68, 68, 0.15);
     border-radius: 10px;
     padding: 10px 12px;
@@ -2424,7 +2567,7 @@ body.graph-mode .main-content {
 
 .int-warn {
     background: var(--warning-soft);
-    color: #92400e;
+    color: var(--warning-text);
     border: 1px solid rgba(245, 158, 11, 0.25);
     border-radius: 10px;
     padding: 9px 12px;
@@ -2496,7 +2639,7 @@ body.graph-mode .main-content {
 .int-bulk-count {
     font-size: 0.8rem;
     font-weight: 700;
-    color: #2563eb;
+    color: var(--accent-blue-strong);
 }
 .int-bulk-group {
     display: flex;
@@ -2589,9 +2732,9 @@ body.graph-mode .main-content {
 
 .int-step.is-active {
     background: var(--accent-blue-soft);
-    color: #1d4ed8;
+    color: var(--accent-blue-deep);
 }
-.int-step.is-active .int-step-num { background: #2563eb; }
+.int-step.is-active .int-step-num { background: var(--accent-blue-strong); }
 
 .int-step.is-done { color: var(--success-strong); }
 .int-step.is-done .int-step-num { background: var(--success); }
@@ -2744,7 +2887,7 @@ body.graph-mode .main-content {
     font-size: 2.4rem;
     font-weight: 800;
     line-height: 1.1;
-    color: #2563eb;
+    color: var(--accent-blue-strong);
 }
 
 @media (max-width: 720px) {
