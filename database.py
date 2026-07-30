@@ -103,7 +103,8 @@ def init_db():
                 created_date TEXT,
                 due_date TEXT,
                 position INTEGER DEFAULT 0,
-                deleted BOOLEAN NOT NULL DEFAULT 0
+                deleted BOOLEAN NOT NULL DEFAULT 0,
+                recurrence TEXT NOT NULL DEFAULT 'none'
             )
         ''')
 
@@ -140,6 +141,12 @@ def init_db():
 
         try:
             cursor.execute('ALTER TABLE tasks ADD COLUMN deleted BOOLEAN NOT NULL DEFAULT 0')
+        except sqlite3.OperationalError:
+            pass
+
+        # Recorrência de tarefas (none/daily/weekdays/weekly/monthly).
+        try:
+            cursor.execute("ALTER TABLE tasks ADD COLUMN recurrence TEXT NOT NULL DEFAULT 'none'")
         except sqlite3.OperationalError:
             pass
 

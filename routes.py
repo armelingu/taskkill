@@ -22,6 +22,7 @@ from werkzeug.security import check_password_hash
 import integrations
 import scheduler
 from integrations import IntegrationError
+from recurrence import valid_recurrence, next_occurrence
 
 # Hash "dummy" usado para igualar o tempo de resposta do login quando o usuário
 # não existe (ou a senha excede o limite). Sem isso, o "caminho de usuário
@@ -621,6 +622,7 @@ def get_tasks():
             d_date = row['due_date'] if 'due_date' in row.keys() else None
             pos = row['position'] if 'position' in row.keys() else 0
             del_flag = bool(row['deleted']) if 'deleted' in row.keys() else False
+            rec = (row['recurrence'] if 'recurrence' in row.keys() else 'none') or 'none'
 
             tasks_data[project].append({
                 'id': row['id'],
@@ -630,7 +632,8 @@ def get_tasks():
                 'created_date': c_date,
                 'due_date': d_date,
                 'position': pos,
-                'deleted': del_flag
+                'deleted': del_flag,
+                'recurrence': rec
             })
 
         return jsonify(tasks_data)
@@ -654,6 +657,9 @@ def create_task():
     if due_date is not None:
         due_date = str(due_date).strip()
 
+    recurrence = data.get('recurrence')  # Opcional (default 'none')
+    recurrence = (str(recurrence).strip() or 'none') if recurrence is not None else 'none'
+
     if len(project) == 0 or len(project) > MAX_PROJECT_LEN:
         return jsonify({"error": "Bad Request: project length invalid"}), 400
 
@@ -662,6 +668,9 @@ def create_task():
 
     if due_date is not None and not valid_due_date(due_date):
         return jsonify({"error": "Bad Request: due_date invalid"}), 400
+
+    if not valid_recurrence(recurrence):
+        return jsonify({"error": "Bad Request: recurrence invalid"}), 400
 
     # Salva apenas a data formata sem hora no padrão brasileiro para minimalismo.
     today_str = date.today().strftime("%d/%m/%Y")
@@ -678,8 +687,8 @@ def create_task():
         new_pos = int(max_pos) + 1
 
         cursor.execute(
-            "INSERT INTO tasks (project, text, completed, created_date, due_date, position, deleted) VALUES (?, ?, 0, ?, ?, ?, 0)",
-            (project, text, today_str, due_date, new_pos)
+            "INSERT INTO tasks (project, text, completed, created_date, due_date, position, deleted, recurrence) VALUES (?, ?, 0, ?, ?, ?, 0, ?)",
+            (project, text, today_str, due_date, new_pos, recurrence)
         )
         conn.commit()
         task_id = cursor.lastrowid # Recupera ID criado para UX não piscar e deletar certo sem refresh
@@ -692,7 +701,8 @@ def create_task():
             "created_date": today_str,
             "due_date": due_date,
             "position": new_pos,
-            "deleted": False
+            "deleted": False,
+            "recurrence": recurrence
         }), 201
 
 # 3. UPDATE: Atualizar nome por texto ou marca de check concluído
@@ -724,8 +734,34 @@ def update_task(task_id):
         except ValueError as e:
             return jsonify({"error": f"Bad Request: {e}"}), 400
 
+    recurrence = data.get('recurrence')
+    if recurrence is not None:
+        recurrence = str(recurrence).strip() or 'none'
+        if not valid_recurrence(recurrence):
+            return jsonify({"error": "Bad Request: recurrence invalid"}), 400
+
     with get_db_connection() as conn:
         cursor = conn.cursor()
+
+        # Conclusão de tarefa recorrente -> reagenda a MESMA tarefa (mantém viva).
+        # Avança o due_date para a próxima ocorrência em vez de marcar concluída.
+        recurred_to = None
+        if completed == 1:
+            row = cursor.execute(
+                "SELECT recurrence, due_date FROM tasks WHERE id = ?", (task_id,)
+            ).fetchone()
+            if row is not None:
+                rule = (row['recurrence'] if 'recurrence' in row.keys() else 'none') or 'none'
+                cur_due = row['due_date'] if 'due_date' in row.keys() else None
+                if rule != 'none' and cur_due:
+                    nxt = next_occurrence(cur_due, rule)
+                    if nxt:
+                        cursor.execute(
+                            "UPDATE tasks SET due_date = ?, completed = 0 WHERE id = ?",
+                            (nxt, task_id)
+                        )
+                        recurred_to = nxt
+                        completed = None  # já tratado; não sobrescreve abaixo
 
         # Logica inteligente que aceita um payload só de update text ou só update status.
         if text is not None and completed is not None:
@@ -738,6 +774,10 @@ def update_task(task_id):
         # Faz um update separado/adicional de due_date se ele for enviado no objeto PUT
         if 'due_date' in data:
             cursor.execute("UPDATE tasks SET due_date = ? WHERE id = ?", (due_date, task_id))
+
+        # Atualiza a regra de recorrência quando enviada.
+        if recurrence is not None:
+            cursor.execute("UPDATE tasks SET recurrence = ? WHERE id = ?", (recurrence, task_id))
 
         # Faz update da flag deleted (Lixeira/Arquivo)
         if 'deleted' in data:
@@ -768,7 +808,13 @@ def update_task(task_id):
 
         conn.commit()
 
-    return jsonify({"success": True})
+    resp = {"success": True}
+    if recurred_to:
+        # Sinaliza ao front que a tarefa recorrente foi reagendada (não concluída).
+        resp["recurred"] = True
+        resp["due_date"] = recurred_to
+        resp["completed"] = False
+    return jsonify(resp)
 
 # 3.5. BATCH UPDATE: Reordenar posições após o arrastar e soltar do usuário
 @api_bp.route('/tasks/reorder', methods=['PUT'])
