@@ -2895,3 +2895,75 @@ body.graph-mode .main-content {
         grid-template-columns: 1fr;
     }
 }
+
+/* ===========================================================================
+   Tema — controle de aparência (perfil) + botão-ícone (sidebar)
+   =========================================================================== */
+.perfil-appearance {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.perfil-field-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+}
+
+.theme-segmented {
+    display: inline-flex;
+    width: fit-content;
+    gap: 4px;
+    padding: 4px;
+    background: var(--surface-inset);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+}
+
+.theme-seg-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 14px;
+    border: none;
+    border-radius: 9px;
+    background: transparent;
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.theme-seg-btn:hover {
+    color: var(--text-title);
+}
+
+.theme-seg-btn.is-active {
+    background: var(--surface);
+    color: var(--text-title);
+    box-shadow: var(--shadow-sm);
+}
+
+.theme-seg-icon {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+}
+
+.sidebar-theme-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 15px;
+    height: 15px;
+}
+
+.sidebar-theme-icon svg {
+    width: 15px;
+    height: 15px;
+}

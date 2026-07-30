@@ -13,6 +13,7 @@ import { renderTasks } from './modules/tasks.js';
 import { renderSidebarProjects } from './modules/projects.js';
 import { openIntegrations, hideIntegrationsView } from './modules/integrations.js';
 import './modules/profile.js';  // auto-inicializa o perfil inline
+import './modules/theme.js';    // controle de tema (claro/escuro/sistema)
 import {
     skeletonItems, emptyState, projectView, projectTitle, taskList, taskInput,
     graphView, graphCanvas, perfilView, dashboardView,
