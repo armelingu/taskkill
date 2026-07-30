@@ -2330,6 +2330,46 @@ body.graph-mode .main-content {
     font-weight: 700;
 }
 
+/* Badge de recorrência (↻ + rótulo) na linha da tarefa. */
+.task-recur-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--accent-blue-strong);
+    background: var(--accent-blue-soft);
+    padding: 2px 7px;
+    border-radius: 999px;
+    white-space: nowrap;
+}
+
+.task-recur-icon {
+    font-size: 0.82rem;
+    line-height: 1;
+}
+
+/* Seletor de recorrência no editor inline. */
+.edit-task-recur {
+    margin-left: 8px;
+    padding: 4px 6px;
+    border: 1px solid var(--border-strong);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    background: var(--surface);
+    font-family: inherit;
+    font-size: 0.82rem;
+    outline: none;
+}
+
+.edit-task-recur:focus {
+    border-color: var(--accent-blue);
+}
+
+[data-theme="dark"] .edit-task-recur {
+    color-scheme: dark;
+}
+
 .task-project-badge {
     font-size: 0.65rem;
     color: var(--text-inverse);

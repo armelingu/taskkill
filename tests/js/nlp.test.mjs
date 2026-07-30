@@ -8,7 +8,7 @@ const MON = '2026-07-27';
 
 test('relativos: hoje / amanhã / depois de amanhã', () => {
     assert.deepEqual(parseQuickAdd('hoje reunião', MON),
-        { text: 'reunião', due_date: '2026-07-27', matched: 'hoje' });
+        { text: 'reunião', due_date: '2026-07-27', matched: 'hoje', recurrence: 'none' });
     assert.equal(parseQuickAdd('amanhã comprar leite', MON).due_date, '2026-07-28');
     assert.equal(parseQuickAdd('comprar leite amanhã', MON).text, 'comprar leite');
     assert.equal(parseQuickAdd('depois de amanhã X', MON).due_date, '2026-07-29');
@@ -68,7 +68,7 @@ test('tokens de hora são removidos, mas não viram prazo', () => {
 
 test('sem expressão de data: texto intacto, sem prazo', () => {
     assert.deepEqual(parseQuickAdd('comprar pão', MON),
-        { text: 'comprar pão', due_date: '', matched: '' });
+        { text: 'comprar pão', due_date: '', matched: '', recurrence: 'none' });
     // #tags são preservadas no texto.
     assert.equal(parseQuickAdd('amanhã deploy #api', MON).text, 'deploy #api');
 });
@@ -78,4 +78,33 @@ test('não confunde palavras que contêm nomes de dia', () => {
     const r = parseQuickAdd('alterar layout', MON);
     assert.equal(r.due_date, '');
     assert.equal(r.text, 'alterar layout');
+});
+
+test('recorrência: todo dia / dias úteis / toda semana / todo mês', () => {
+    const diaria = parseQuickAdd('todo dia beber água', MON);
+    assert.equal(diaria.recurrence, 'daily');
+    assert.equal(diaria.text, 'beber água');
+
+    const uteis = parseQuickAdd('dias úteis checar email', MON);
+    assert.equal(uteis.recurrence, 'weekdays');
+    assert.equal(uteis.text, 'checar email');
+
+    const semanal = parseQuickAdd('toda semana revisar métricas', MON);
+    assert.equal(semanal.recurrence, 'weekly');
+    assert.equal(semanal.text, 'revisar métricas');
+
+    const mensal = parseQuickAdd('todo mês pagar aluguel', MON);
+    assert.equal(mensal.recurrence, 'monthly');
+    assert.equal(mensal.text, 'pagar aluguel');
+});
+
+test('recorrência "toda <dia>" vira semanal e define o próximo dia como prazo', () => {
+    const r = parseQuickAdd('toda segunda planejar semana', MON);
+    assert.equal(r.recurrence, 'weekly');
+    assert.equal(r.due_date, '2026-08-03'); // próxima segunda
+    assert.equal(r.text, 'planejar semana');
+});
+
+test('sem recorrência: regra é "none"', () => {
+    assert.equal(parseQuickAdd('amanhã deploy', MON).recurrence, 'none');
 });

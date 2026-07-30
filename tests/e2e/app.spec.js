@@ -247,6 +247,30 @@ test.describe('Fluxos principais do app', () => {
         await expect(empty.locator('.task-empty-hint')).toContainText('Pressione N');
     });
 
+    test('recorrência: quick add cria com badge e concluir reagenda', async ({ page }) => {
+        const proj = `Rec-${Date.now()}`;
+        await page.click('#btn-add-project');
+        const pin = page.locator('.project-new-input');
+        await pin.fill(proj);
+        await pin.press('Enter');
+        await expect(page.locator('#project-title')).toHaveText(proj);
+
+        // "todo dia" -> recorrência diária; "amanhã" -> prazo. Hint mostra ambos.
+        await page.fill('#new-task-input', 'todo dia amanhã beber agua');
+        await expect(page.locator('#quick-add-hint')).toContainText('Repete');
+        await page.press('#new-task-input', 'Enter');
+
+        const item = page.locator('.task-item', { hasText: 'beber agua' });
+        await expect(item).toBeVisible();
+        await expect(item.locator('.task-recur-badge')).toBeVisible();
+
+        // Concluir uma recorrente reagenda (não conclui) e avisa por toast.
+        await item.locator('.task-checkbox').click();
+        await expect(page.locator('.toast', { hasText: 'reagendada' })).toBeVisible();
+        await expect(page.locator('.task-item', { hasText: 'beber agua' })).not.toHaveClass(/completed/);
+        await expect(page.locator('.task-item', { hasText: 'beber agua' }).locator('.task-recur-badge')).toBeVisible();
+    });
+
     test('integrações: abre lista e o wizard', async ({ page }) => {
         await page.click('#nav-integrations');
         await expect(page.locator('#integrations-view')).toBeVisible();

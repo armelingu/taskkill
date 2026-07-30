@@ -12,6 +12,10 @@
  *  - datas dd/mm(/aaaa)
  *  - "em N dias" / "daqui a N dias"
  *
+ * Também reconhece RECORRÊNCIA (pt-BR) e devolve a regra (none/daily/weekdays/
+ * weekly/monthly): "todo dia", "dias úteis", "toda semana", "todo mês",
+ * "toda segunda" (weekly + próxima segunda como prazo).
+ *
  * O modelo de prazo é SÓ data (sem hora): tokens de hora (14h, 14:30, às 9h)
  * são reconhecidos e removidos do texto, mas não viram prazo (fica p/ lembretes).
  * Apenas a PRIMEIRA expressão de data encontrada define o prazo.
@@ -61,16 +65,45 @@ const TIME_RES = [
     new RegExp(`${BL}[àa]s\\s+\\d{1,2}${BR}`, 'gi'),
 ];
 
+// Frases de recorrência. Ordem importa: "dias úteis" antes de "todo dia".
+const RECUR_RES = [
+    { re: new RegExp(`${BL}(?:em\\s+)?dias?\\s+[úu]teis${BR}`, 'i'), rule: 'weekdays' },
+    { re: new RegExp(`${BL}todo\\s+dia\\s+[úu]til${BR}`, 'i'), rule: 'weekdays' },
+    { re: new RegExp(`${BL}(?:todos?\\s+os\\s+dias|todo\\s+dia|diariamente|di[áa]rio)${BR}`, 'i'), rule: 'daily' },
+    { re: new RegExp(`${BL}(?:todas?\\s+as\\s+semanas|toda\\s+semana|semanalmente)${BR}`, 'i'), rule: 'weekly' },
+    { re: new RegExp(`${BL}(?:todos?\\s+os\\s+meses|todo\\s+m[êe]s|mensalmente)${BR}`, 'i'), rule: 'monthly' },
+];
+
 /**
  * @param {string} input  texto digitado pelo usuário
  * @param {string} [todayIso] data de referência (para testes); default = hoje
- * @returns {{text: string, due_date: string, matched: string}}
+ * @returns {{text: string, due_date: string, matched: string, recurrence: string}}
  */
 export function parseQuickAdd(input, todayIso) {
     const today = todayIso || todayISO();
     let text = String(input || '');
     let due = '';
     let matched = '';
+    let recurrence = 'none';
+
+    // 1) Recorrência explícita (sem dia específico).
+    for (const r of RECUR_RES) {
+        const m = r.re.exec(text);
+        if (m) {
+            recurrence = r.rule;
+            text = `${text.slice(0, m.index)} ${text.slice(m.index + m[0].length)}`;
+            break;
+        }
+    }
+    // 2) "toda/todo <dia da semana>" -> semanal, mantendo o dia para virar prazo.
+    if (recurrence === 'none') {
+        const wre = new RegExp(`${BL}tod[oa]s?\\s+(?:as\\s+|os\\s+)?(${WEEKDAY_ALT})${BR}`, 'i');
+        const m = wre.exec(text);
+        if (m) {
+            recurrence = 'weekly';
+            text = `${text.slice(0, m.index)} ${m[1]} ${text.slice(m.index + m[0].length)}`;
+        }
+    }
 
     const trials = [
         { re: new RegExp(`${BL}${PRE}(depois de amanh[ãa])${BR}`, 'i'), fn: () => addDaysISO(today, 2) },
@@ -130,5 +163,5 @@ export function parseQuickAdd(input, todayIso) {
 
     text = text.replace(/\s{2,}/g, ' ').trim();
 
-    return { text, due_date: due, matched: matched.trim() };
+    return { text, due_date: due, matched: matched.trim(), recurrence };
 }

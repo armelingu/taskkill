@@ -18,6 +18,14 @@ import {
     graphView, dashboardView, perfilView, skeletonItems,
 } from './dom.js';
 
+// Rótulos das regras de recorrência (espelham o backend recurrence.py).
+const RECUR_LABELS = {
+    daily: 'Todo dia',
+    weekdays: 'Dias úteis',
+    weekly: 'Toda semana',
+    monthly: 'Todo mês',
+};
+
 // ── Visão por #tag (aberta a partir do grafo) ─────────────────────
 export function openTagView(tagKey) {
     const tag = String(tagKey || '').toLowerCase();
@@ -56,9 +64,12 @@ export function openTagView(tagKey) {
 function updateQuickAddHint() {
     const hint = document.getElementById('quick-add-hint');
     if (!hint || !taskInput) return;
-    const { due_date } = parseQuickAdd(taskInput.value);
-    if (due_date) {
-        hint.textContent = `Prazo: ${weekdayLong(due_date)}, ${formatBR(due_date)}`;
+    const { due_date, recurrence } = parseQuickAdd(taskInput.value);
+    const parts = [];
+    if (due_date) parts.push(`Prazo: ${weekdayLong(due_date)}, ${formatBR(due_date)}`);
+    if (recurrence && recurrence !== 'none') parts.push(`Repete: ${RECUR_LABELS[recurrence] || 'recorrente'}`);
+    if (parts.length) {
+        hint.textContent = parts.join(' · ');
         hint.classList.remove('hidden');
     } else {
         hint.textContent = '';
@@ -71,11 +82,12 @@ if (taskInput) {
 
     taskInput.addEventListener('keypress', async (e) => {
         if (e.key === 'Enter') {
-            // Quick Add: extrai a data em linguagem natural e limpa o texto.
-            const { text, due_date } = parseQuickAdd(taskInput.value);
+            // Quick Add: extrai data + recorrência em linguagem natural e limpa o texto.
+            const { text, due_date, recurrence } = parseQuickAdd(taskInput.value);
             if (text && state.currentCategory !== null) {
                 const payload = { project: state.currentCategory, text };
                 if (due_date) payload.due_date = due_date;
+                if (recurrence && recurrence !== 'none') payload.recurrence = recurrence;
 
                 try {
                     // Manda para o Backend (API)
@@ -250,6 +262,8 @@ export function renderTasks() {
         // APLICAÇÃO DE SEGURANÇA MÁXIMA (escapeHTML) NO RENDER:
         const dateBadge = task.created_date ? `<span class="task-date">${escapeHTML(task.created_date)}</span>` : '';
         const dueBadge = task.due_date && !isWeekView ? `<span class="task-date task-due-badge">${escapeHTML(formatBR(task.due_date) || task.due_date)}</span>` : '';
+        const recur = task.recurrence && task.recurrence !== 'none' ? task.recurrence : '';
+        const recurBadge = recur ? `<span class="task-recur-badge" title="Repete: ${escapeHTML(RECUR_LABELS[recur] || 'recorrente')}"><span class="task-recur-icon" aria-hidden="true">\u21bb</span>${escapeHTML(RECUR_LABELS[recur] || '')}</span>` : '';
         const isCrossView = isWeekView || isTagView;
         const projectBadge = isCrossView ? `<span class="task-project-badge">${escapeHTML(task.originalProject)}</span>` : '';
         
@@ -271,6 +285,7 @@ export function renderTasks() {
             <button class="task-checkbox" aria-label="Marcar como concluído"></button>
             ${projectBadge}
             <span class="task-text">${formattedText}</span>
+            ${recurBadge}
             ${dueBadge}
             ${dateBadge}
             <div class="task-actions">
@@ -284,8 +299,9 @@ export function renderTasks() {
         const editBtn = li.querySelector('.edit-btn');
         const textSpan = li.querySelector('.task-text');
 
-        // Marcar / Desmarcar (atualização cirúrgica — sem re-renderizar toda a lista)
-        checkbox.addEventListener('click', () => {
+        // Marcar / Desmarcar (atualização cirúrgica — sem re-renderizar toda a lista).
+        // Tarefas recorrentes: o back reagenda a mesma tarefa e responde `recurred`.
+        checkbox.addEventListener('click', async () => {
             const novoStatus = !task.completed;
             task.completed = novoStatus;
 
@@ -293,11 +309,25 @@ export function renderTasks() {
             li.classList.toggle('completed', novoStatus);
             checkbox.classList.toggle('checked', novoStatus);
 
-            apiFetch(`/api/tasks/${task.id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ completed: novoStatus })
-            });
+            try {
+                const res = await apiFetch(`/api/tasks/${task.id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ completed: novoStatus })
+                });
+                if (res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    if (data && data.recurred) {
+                        // Não concluiu: reagendou. Reverte o check e move para a nova data.
+                        task.completed = false;
+                        task.due_date = data.due_date;
+                        showToast(`Recorrente reagendada para ${formatBR(data.due_date)}`, { variant: 'success' });
+                        renderTasks();
+                    }
+                }
+            } catch (err) {
+                console.error('Erro ao atualizar tarefa:', err);
+            }
         });
 
         // Sub-tarefas (Micro-passos dinâmicos baseados no texto)
@@ -375,14 +405,29 @@ export function renderTasks() {
             editDue.setAttribute('aria-label', 'Prazo da tarefa');
             // Aceita apenas ISO YYYY-MM-DD; vazio = sem prazo.
             editDue.value = /^\d{4}-\d{2}-\d{2}$/.test(task.due_date || '') ? task.due_date : '';
-            
+
+            // Seletor de recorrência (regras espelham o backend).
+            const editRec = document.createElement('select');
+            editRec.className = 'edit-task-recur';
+            editRec.title = 'Recorrência';
+            editRec.setAttribute('aria-label', 'Recorrência da tarefa');
+            [['none', 'Não repete'], ...Object.entries(RECUR_LABELS)].forEach(([val, label]) => {
+                const opt = document.createElement('option');
+                opt.value = val;
+                opt.textContent = label;
+                editRec.appendChild(opt);
+            });
+            editRec.value = task.recurrence && RECUR_LABELS[task.recurrence] ? task.recurrence : 'none';
+
             // Substitui visualmente textSpan pelos inputs
             li.insertBefore(editInput, textSpan);
             li.insertBefore(editDue, textSpan);
+            li.insertBefore(editRec, textSpan);
             textSpan.style.display = 'none';
-            
-            if (li.querySelector('.task-date')) li.querySelector('.task-date').style.display = 'none'; // esconde badges
-            
+
+            // Esconde badges (data criada, prazo, recorrência) durante a edição.
+            li.querySelectorAll('.task-date, .task-recur-badge').forEach(b => { b.style.display = 'none'; });
+
             editInput.focus();
 
             // Lógica ao salvar a edição (perder foco ou apertar enter)
@@ -402,7 +447,13 @@ export function renderTasks() {
                     payload.due_date = newDue;
                     changed = true;
                 }
-                
+                const newRec = editRec.value || 'none';
+                if (newRec !== (task.recurrence || 'none')) {
+                    task.recurrence = newRec;
+                    payload.recurrence = newRec;
+                    changed = true;
+                }
+
                 if (changed) {
                     renderTasks(); // Altera suave sem piscar
                     
@@ -421,7 +472,8 @@ export function renderTasks() {
             const handleBlur = () => {
                 clearTimeout(blurTimeout);
                 blurTimeout = setTimeout(() => {
-                    if (document.activeElement !== editInput && document.activeElement !== editDue) {
+                    const a = document.activeElement;
+                    if (a !== editInput && a !== editDue && a !== editRec) {
                         saveEdit();
                     }
                 }, 100);
@@ -429,6 +481,7 @@ export function renderTasks() {
 
             editInput.addEventListener('blur', handleBlur);
             editDue.addEventListener('blur', handleBlur);
+            editRec.addEventListener('blur', handleBlur);
             
             editInput.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') {
