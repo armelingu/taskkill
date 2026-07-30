@@ -96,11 +96,11 @@ def test_build_task_from_item_fixed_project_and_template():
         'external_id': 'id',
         'project': {'mode': 'fixed', 'value': 'Protheus'},
         'text_template': '{{summary}}',
-        'due_date': {'mode': 'fixed', 'value': 'Segunda'},
+        'due_date': {'mode': 'fixed', 'value': '2026-08-03'},
     }
     t = I.build_task_from_item(item, mapping)
     assert t == {'external_id': '42', 'project': 'Protheus',
-                 'text': 'Corrigir login', 'due_date': 'Segunda'}
+                 'text': 'Corrigir login', 'due_date': '2026-08-03'}
 
 
 def test_build_task_project_from_field_and_invalid_due():
@@ -109,11 +109,29 @@ def test_build_task_project_from_field_and_invalid_due():
         'external_id': 'id',
         'project': {'mode': 'field', 'field': 'queue'},
         'text_template': '{{summary}}',
-        'due_date': {'mode': 'fixed', 'value': 'Sabado'},  # inválido -> ''
+        'due_date': {'mode': 'fixed', 'value': '2026-13-40'},  # data inválida -> ''
     }
     t = I.build_task_from_item(item, mapping)
     assert t['project'] == 'Fila-A'
     assert t['due_date'] == ''
+
+
+# ── Validação de due_date (datas reais ISO) ────────────────────────
+def test_valid_due_date_accepts_iso_and_empty():
+    assert I.valid_due_date('') is True
+    assert I.valid_due_date('2026-08-03') is True
+
+
+def test_valid_due_date_rejects_garbage_and_bad_dates():
+    assert I.valid_due_date('2026-13-40') is False
+    assert I.valid_due_date('03/08/2026') is False
+    assert I.valid_due_date('amanhã') is False
+
+
+def test_valid_due_date_rejects_legacy_weekday_names():
+    # Nomes de dia legados não são mais aceitos (só datas ISO reais).
+    assert I.valid_due_date('Segunda') is False
+    assert I.valid_due_date('Sexta') is False
 
 
 # ── Dedup / upsert com banco temporário ────────────────────────────
@@ -136,17 +154,39 @@ def _new_integration(conn, name='Teste'):
     return cur.lastrowid
 
 
+def test_migration_converts_legacy_weekday_to_iso(db_conn):
+    from datetime import timedelta
+    # Insere um prazo legado direto na tabela e roda a migração (init_db).
+    db_conn.execute(
+        "INSERT INTO tasks (project, text, completed, due_date, position, deleted) "
+        "VALUES ('Proj', 'Legada', 0, 'Segunda', 0, 0)"
+    )
+    db_conn.commit()
+    db_conn.close()
+
+    database.init_db()
+
+    today = date.today()
+    monday = today - timedelta(days=today.weekday())
+    conn = database.get_db_connection()
+    row = conn.execute(
+        "SELECT due_date FROM tasks WHERE text = 'Legada'"
+    ).fetchone()
+    conn.close()
+    assert row['due_date'] == monday.isoformat()
+
+
 def test_upsert_creates_then_skips(db_conn):
     iid = _new_integration(db_conn)
     today = date.today().strftime('%d/%m/%Y')
     now = datetime.utcnow().isoformat()
 
-    c, u, s = I._upsert_task(db_conn, iid, 'EXT-1', 'Proj', 'Texto', 'Segunda',
+    c, u, s = I._upsert_task(db_conn, iid, 'EXT-1', 'Proj', 'Texto', '2026-08-03',
                              'skip', today, now)
     assert (c, u, s) == (1, 0, 0)
 
     # Reimportar o mesmo external_id com on_update=skip -> ignora.
-    c, u, s = I._upsert_task(db_conn, iid, 'EXT-1', 'Proj', 'Texto', 'Segunda',
+    c, u, s = I._upsert_task(db_conn, iid, 'EXT-1', 'Proj', 'Texto', '2026-08-03',
                              'skip', today, now)
     assert (c, u, s) == (0, 0, 1)
 
@@ -157,7 +197,7 @@ def test_upsert_update_all_changes_task(db_conn):
     now = datetime.utcnow().isoformat()
 
     I._upsert_task(db_conn, iid, 'EXT-9', 'Proj', 'Antigo', '', 'skip', today, now)
-    c, u, s = I._upsert_task(db_conn, iid, 'EXT-9', 'Proj', 'Novo texto', 'Terça',
+    c, u, s = I._upsert_task(db_conn, iid, 'EXT-9', 'Proj', 'Novo texto', '2026-08-04',
                              'update_all', today, now)
     assert (c, u, s) == (0, 1, 0)
 
@@ -168,7 +208,7 @@ def test_upsert_update_all_changes_task(db_conn):
         (iid, 'EXT-9'),
     ).fetchone()
     assert row['text'] == 'Novo texto'
-    assert row['due_date'] == 'Terça'
+    assert row['due_date'] == '2026-08-04'
 
 
 # ── Paginação (_gather_items) ──────────────────────────────────────

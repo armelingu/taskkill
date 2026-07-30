@@ -34,9 +34,16 @@ MAX_ITEMS_PER_RUN = 500
 PREVIEW_LIMIT = 200
 MAX_TEXT_LEN = 1000                    # espelha routes.MAX_TEXT_LEN
 MAX_PROJECT_LEN = 18                   # espelha routes.MAX_PROJECT_LEN
-# Dias da semana válidos p/ due_date (espelha routes.ALLOWED_DUE_DAYS).
-# No Taskkill, o "prazo" da tarefa é um dia da semana, não uma data.
-ALLOWED_DUE_DAYS = {'', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'}
+# due_date é '' (sem prazo) ou uma data real ISO YYYY-MM-DD (espelha
+# routes.valid_due_date).
+def valid_due_date(value: str) -> bool:
+    if value == '':
+        return True
+    try:
+        date.fromisoformat(value)
+        return True
+    except ValueError:
+        return False
 
 ALLOWED_METHODS = {'GET', 'POST'}
 SECRET_MASK = '••••••••'
@@ -490,7 +497,7 @@ def build_task_from_item(item, mapping):
 
 
 def _resolve_due_date(due_cfg, item):
-    """Resolve o dia da semana (Segunda–Sexta) da tarefa a partir do mapeamento."""
+    """Resolve a data de prazo (ISO YYYY-MM-DD) da tarefa a partir do mapeamento."""
     due_cfg = due_cfg or {}
     mode = (due_cfg.get('mode') or 'none').lower()
     if mode == 'fixed':
@@ -500,7 +507,7 @@ def _resolve_due_date(due_cfg, item):
         due = '' if val is None else str(val).strip()
     else:
         due = ''
-    return due if due in ALLOWED_DUE_DAYS else ''
+    return due if valid_due_date(due) else ''
 
 
 # ── Execução (preview e importação real) ───────────────────────────
@@ -611,7 +618,7 @@ def _upsert_task(conn, integration_id, ext, project, text, due, on_update, today
       - 'update_all'  : atualiza texto, projeto e dia (due).
     reimport_deleted: se a task vinculada foi excluída, recria uma nova.
     """
-    if due not in ALLOWED_DUE_DAYS:
+    if not valid_due_date(due):
         due = ''
 
     # Garante o projeto na tabela (para aparecer no sidebar).

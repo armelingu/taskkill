@@ -184,9 +184,19 @@ main_bp = Blueprint('main', __name__)
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 
 # Regras de domínio (local single-user)
-ALLOWED_DUE_DAYS = {'', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'}
 MAX_PROJECT_LEN = 18
 MAX_TEXT_LEN = 1000
+
+
+def valid_due_date(value: str) -> bool:
+    """Prazo é '' (sem prazo) ou uma data real ISO YYYY-MM-DD."""
+    if value == '':
+        return True
+    try:
+        date.fromisoformat(value)
+        return True
+    except ValueError:
+        return False
 
 def _coerce_01(value, field_name: str):
     if isinstance(value, bool):
@@ -650,7 +660,7 @@ def create_task():
     if len(text) == 0 or len(text) > MAX_TEXT_LEN:
         return jsonify({"error": "Payload Length Exceeded or Empty"}), 400
 
-    if due_date is not None and due_date not in ALLOWED_DUE_DAYS:
+    if due_date is not None and not valid_due_date(due_date):
         return jsonify({"error": "Bad Request: due_date invalid"}), 400
 
     # Salva apenas a data formata sem hora no padrão brasileiro para minimalismo.
@@ -705,7 +715,7 @@ def update_task(task_id):
         if due_date is None:
             due_date = ''
         due_date = str(due_date).strip()
-        if due_date not in ALLOWED_DUE_DAYS:
+        if not valid_due_date(due_date):
             return jsonify({"error": "Bad Request: due_date invalid"}), 400
 
     if completed is not None:

@@ -1,7 +1,7 @@
 import sqlite3
 import os
 import shutil
-from datetime import datetime
+from datetime import datetime, date, timedelta
 
 from werkzeug.security import generate_password_hash
 
@@ -117,6 +117,21 @@ def init_db():
             cursor.execute('ALTER TABLE tasks ADD COLUMN due_date TEXT')
         except sqlite3.OperationalError:
             pass
+
+        # Migração: prazos legados eram nomes de dia da semana ('Segunda'…'Sexta').
+        # Passamos a usar datas reais ISO (YYYY-MM-DD). Converte cada nome legado
+        # para a data daquele dia na semana atual (semana começa na segunda).
+        # Idempotente: nomes já convertidos deixam de existir na próxima execução.
+        _today = date.today()
+        _monday = _today - timedelta(days=_today.weekday())
+        _legacy_to_offset = {
+            'Segunda': 0, 'Terça': 1, 'Terca': 1, 'Quarta': 2, 'Quinta': 3, 'Sexta': 4,
+        }
+        for _name, _offset in _legacy_to_offset.items():
+            _iso = (_monday + timedelta(days=_offset)).isoformat()
+            cursor.execute(
+                'UPDATE tasks SET due_date = ? WHERE due_date = ?', (_iso, _name)
+            )
 
         try:
             cursor.execute('ALTER TABLE tasks ADD COLUMN position INTEGER DEFAULT 0')
