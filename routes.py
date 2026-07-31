@@ -23,6 +23,7 @@ import integrations
 import scheduler
 from integrations import IntegrationError
 from recurrence import valid_recurrence, next_occurrence
+from storage import tasks as tasks_repo
 
 # Hash "dummy" usado para igualar o tempo de resposta do login quando o usuário
 # não existe (ou a senha excede o limite). Sem isso, o "caminho de usuário
@@ -628,45 +629,9 @@ def delete_project(project_name):
 # 1. READ: Buscar todas as tarefas agrupadas por projeto
 @api_bp.route('/tasks', methods=['GET'])
 def get_tasks():
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        # Por consistência: o frontend trabalha por "projeto"; então ordenamos por projeto + posição.
-        # Também escondemos tarefas arquivadas (deleted=1) por padrão.
-        cursor.execute("SELECT * FROM tasks WHERE deleted = 0 ORDER BY project ASC, position ASC, id ASC")
-        rows = cursor.fetchall()
-
-        # Dependências: mapa task_id -> [depends_on_id...] (pré-requisitos).
-        deps_by_task = {}
-        for dep in cursor.execute("SELECT task_id, depends_on_id FROM task_dependencies").fetchall():
-            deps_by_task.setdefault(dep['task_id'], []).append(dep['depends_on_id'])
-
-        # O JS espera um formato Dictionary/HashMap de categorias pro Dashboard Global
-        tasks_data = {}
-        for row in rows:
-            project = row['project']
-            if project not in tasks_data:
-                tasks_data[project] = []
-
-            c_date = row['created_date'] if 'created_date' in row.keys() else None
-            d_date = row['due_date'] if 'due_date' in row.keys() else None
-            pos = row['position'] if 'position' in row.keys() else 0
-            del_flag = bool(row['deleted']) if 'deleted' in row.keys() else False
-            rec = (row['recurrence'] if 'recurrence' in row.keys() else 'none') or 'none'
-
-            tasks_data[project].append({
-                'id': row['id'],
-                'project': row['project'],
-                'text': row['text'],
-                'completed': bool(row['completed']),
-                'created_date': c_date,
-                'due_date': d_date,
-                'position': pos,
-                'deleted': del_flag,
-                'recurrence': rec,
-                'depends_on': deps_by_task.get(row['id'], [])
-            })
-
-        return jsonify(tasks_data)
+    # O frontend trabalha por "projeto": o repositório já entrega agrupado por
+    # projeto/posição, sem arquivadas e com depends_on por tarefa.
+    return jsonify(tasks_repo.fetch_tasks_grouped())
 
 # 2. CREATE: Adicionar uma nova tarefa em um projeto
 @api_bp.route('/tasks', methods=['POST'])
@@ -703,37 +668,10 @@ def create_task():
         return jsonify({"error": "Bad Request: recurrence invalid"}), 400
 
     # Salva apenas a data formata sem hora no padrão brasileiro para minimalismo.
-    today_str = date.today().strftime("%d/%m/%Y")
+    today_str = tasks_repo.today_br()
 
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        # Define a posição no FINAL do projeto para manter o ranking consistente
-        cursor.execute(
-            "SELECT COALESCE(MAX(position), -1) AS max_pos FROM tasks WHERE project = ? AND deleted = 0",
-            (project,)
-        )
-        row = cursor.fetchone()
-        max_pos = row['max_pos'] if row and row['max_pos'] is not None else -1
-        new_pos = int(max_pos) + 1
-
-        cursor.execute(
-            "INSERT INTO tasks (project, text, completed, created_date, due_date, position, deleted, recurrence) VALUES (?, ?, 0, ?, ?, ?, 0, ?)",
-            (project, text, today_str, due_date, new_pos, recurrence)
-        )
-        conn.commit()
-        task_id = cursor.lastrowid # Recupera ID criado para UX não piscar e deletar certo sem refresh
-
-        return jsonify({
-            "id": task_id,
-            "project": project,
-            "text": text,
-            "completed": False,
-            "created_date": today_str,
-            "due_date": due_date,
-            "position": new_pos,
-            "deleted": False,
-            "recurrence": recurrence
-        }), 201
+    created = tasks_repo.create(project, text, today_str, due_date, recurrence)
+    return jsonify(created), 201
 
 # 3. UPDATE: Atualizar nome por texto ou marca de check concluído
 @api_bp.route('/tasks/<int:task_id>', methods=['PUT'])
@@ -770,73 +708,33 @@ def update_task(task_id):
         if not valid_recurrence(recurrence):
             return jsonify({"error": "Bad Request: recurrence invalid"}), 400
 
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
+    # Validações que dependem de flags do payload ficam na rota; o repositório
+    # recebe apenas valores já sanitizados.
+    deleted = tasks_repo._UNSET
+    if 'deleted' in data:
+        try:
+            deleted = _coerce_01(data['deleted'], 'deleted')
+        except ValueError as e:
+            return jsonify({"error": f"Bad Request: {e}"}), 400
 
-        # Conclusão de tarefa recorrente -> reagenda a MESMA tarefa (mantém viva).
-        # Avança o due_date para a próxima ocorrência em vez de marcar concluída.
-        recurred_to = None
-        if completed == 1:
-            row = cursor.execute(
-                "SELECT recurrence, due_date FROM tasks WHERE id = ?", (task_id,)
-            ).fetchone()
-            if row is not None:
-                rule = (row['recurrence'] if 'recurrence' in row.keys() else 'none') or 'none'
-                cur_due = row['due_date'] if 'due_date' in row.keys() else None
-                if rule != 'none' and cur_due:
-                    nxt = next_occurrence(cur_due, rule)
-                    if nxt:
-                        cursor.execute(
-                            "UPDATE tasks SET due_date = ?, completed = 0 WHERE id = ?",
-                            (nxt, task_id)
-                        )
-                        recurred_to = nxt
-                        completed = None  # já tratado; não sobrescreve abaixo
+    new_project = None
+    if 'project' in data and data['project']:
+        new_project = str(data['project']).strip()
+        if len(new_project) == 0 or len(new_project) > MAX_PROJECT_LEN:
+            return jsonify({"error": "Bad Request: project length invalid"}), 400
 
-        # Logica inteligente que aceita um payload só de update text ou só update status.
-        if text is not None and completed is not None:
-            cursor.execute("UPDATE tasks SET text = ?, completed = ? WHERE id = ?", (text, completed, task_id))
-        elif text is not None:
-             cursor.execute("UPDATE tasks SET text = ? WHERE id = ?", (text, task_id))
-        elif completed is not None:
-             cursor.execute("UPDATE tasks SET completed = ? WHERE id = ?", (completed, task_id))
+    due_date_arg = due_date if 'due_date' in data else tasks_repo._UNSET
 
-        # Faz um update separado/adicional de due_date se ele for enviado no objeto PUT
-        if 'due_date' in data:
-            cursor.execute("UPDATE tasks SET due_date = ? WHERE id = ?", (due_date, task_id))
-
-        # Atualiza a regra de recorrência quando enviada.
-        if recurrence is not None:
-            cursor.execute("UPDATE tasks SET recurrence = ? WHERE id = ?", (recurrence, task_id))
-
-        # Faz update da flag deleted (Lixeira/Arquivo)
-        if 'deleted' in data:
-            try:
-                deleted = _coerce_01(data['deleted'], 'deleted')
-            except ValueError as e:
-                return jsonify({"error": f"Bad Request: {e}"}), 400
-            cursor.execute("UPDATE tasks SET deleted = ? WHERE id = ?", (deleted, task_id))
-
-        # Update the project if changed (used for drag and drop)
-        if 'project' in data and data['project']:
-            new_project = str(data['project']).strip()
-            if len(new_project) == 0 or len(new_project) > MAX_PROJECT_LEN:
-                return jsonify({"error": "Bad Request: project length invalid"}), 400
-            # Ao mover de projeto, reposiciona para o FINAL do novo projeto.
-            cursor.execute(
-                "SELECT COALESCE(MAX(position), -1) AS max_pos FROM tasks WHERE project = ? AND deleted = 0",
-                (new_project,)
-            )
-            row = cursor.fetchone()
-            max_pos = row['max_pos'] if row and row['max_pos'] is not None else -1
-            new_pos = int(max_pos) + 1
-
-            cursor.execute(
-                "UPDATE tasks SET project = ?, position = ? WHERE id = ?",
-                (new_project, new_pos, task_id)
-            )
-
-        conn.commit()
+    recurred_to = tasks_repo.update(
+        task_id,
+        next_occurrence_fn=next_occurrence,
+        text=text,
+        completed=completed,
+        due_date=due_date_arg,
+        recurrence=recurrence,
+        deleted=deleted,
+        project=new_project,
+    )
 
     resp = {"success": True}
     if recurred_to:
@@ -855,96 +753,42 @@ def reorder_tasks():
     if not isinstance(data, list):
         return jsonify({"error": "Bad Request: payload must be a list"}), 400
 
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
+    # Sanitização + normalização dos IDs/posições (regra de HTTP fica na rota)
+    seen_ids = set()
+    updates = []
+    for item in data:
+        if not isinstance(item, dict):
+            return jsonify({"error": "Bad Request: each item must be an object"}), 400
+        if 'id' not in item or 'position' not in item:
+            return jsonify({"error": "Bad Request: id and position are required"}), 400
+        try:
+            tid = int(item.get('id'))
+            pos = int(item.get('position'))
+        except (TypeError, ValueError):
+            return jsonify({"error": "Bad Request: id/position must be integers"}), 400
+        if pos < 0:
+            return jsonify({"error": "Bad Request: position must be >= 0"}), 400
+        if tid in seen_ids:
+            return jsonify({"error": "Bad Request: duplicated id in payload"}), 400
+        seen_ids.add(tid)
+        updates.append((pos, tid))
 
-        # Sanitização + normalização dos IDs/posições
-        seen_ids = set()
-        updates = []
-        ids = []
-        for item in data:
-            if not isinstance(item, dict):
-                return jsonify({"error": "Bad Request: each item must be an object"}), 400
-            if 'id' not in item or 'position' not in item:
-                return jsonify({"error": "Bad Request: id and position are required"}), 400
-            try:
-                tid = int(item.get('id'))
-                pos = int(item.get('position'))
-            except (TypeError, ValueError):
-                return jsonify({"error": "Bad Request: id/position must be integers"}), 400
-            if pos < 0:
-                return jsonify({"error": "Bad Request: position must be >= 0"}), 400
-            if tid in seen_ids:
-                return jsonify({"error": "Bad Request: duplicated id in payload"}), 400
-            seen_ids.add(tid)
-            updates.append((pos, tid))
-            ids.append(tid)
-
-        if not ids:
-            return jsonify({"success": True})
-
-        # Garantia forte: reorder deve ser de UM único projeto e incluir todas as tarefas ativas dele.
-        qmarks = ",".join(["?"] * len(ids))
-        cursor.execute(f"SELECT DISTINCT project FROM tasks WHERE deleted = 0 AND id IN ({qmarks})", ids)
-        projects = [r['project'] for r in cursor.fetchall()]
-        if len(projects) != 1:
-            return jsonify({"error": "Bad Request: reorder must target a single project"}), 400
-
-        project = projects[0]
-        cursor.execute("SELECT COUNT(*) AS cnt FROM tasks WHERE project = ? AND deleted = 0", (project,))
-        cnt = cursor.fetchone()['cnt']
-        if int(cnt) != len(ids):
-            return jsonify({"error": "Bad Request: reorder must include all active tasks of the project"}), 400
-
-        cursor.executemany("UPDATE tasks SET position = ? WHERE id = ?", updates)
-        conn.commit()
+    # Garantia forte (único projeto + todas as ativas) e persistência no repo.
+    ok, error = tasks_repo.reorder(updates)
+    if not ok:
+        return jsonify({"error": error}), 400
 
     return jsonify({"success": True})
 
 # 4. DELETE: Arrancar os dados de fato do SQLite
 @api_bp.route('/tasks/<int:task_id>', methods=['DELETE'])
 def delete_task(task_id):
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        # Consistência com o modelo (flag deleted): arquiva em vez de remover.
-        cursor.execute("UPDATE tasks SET deleted = 1 WHERE id = ?", (task_id,))
-        conn.commit()
+    # Consistência com o modelo (flag deleted): arquiva em vez de remover.
+    tasks_repo.soft_delete(task_id)
     return jsonify({"success": True})
 
 
 # ── Dependências entre tarefas ──────────────────────────────────────
-
-def _task_exists(conn, task_id):
-    """True se a tarefa existe e não está arquivada (deleted=0)."""
-    row = conn.execute(
-        "SELECT 1 FROM tasks WHERE id = ? AND deleted = 0", (task_id,)
-    ).fetchone()
-    return row is not None
-
-
-def _would_create_cycle(conn, task_id, depends_on_id):
-    """
-    Adicionar (task_id depende de depends_on_id) fecha um ciclo se depends_on_id
-    já alcança task_id seguindo as arestas de dependência existentes. DFS a
-    partir de depends_on_id pelos seus próprios pré-requisitos.
-    """
-    if task_id == depends_on_id:
-        return True
-    adj = {}
-    for r in conn.execute("SELECT task_id, depends_on_id FROM task_dependencies").fetchall():
-        adj.setdefault(r['task_id'], []).append(r['depends_on_id'])
-    stack = [depends_on_id]
-    seen = set()
-    while stack:
-        cur = stack.pop()
-        if cur == task_id:
-            return True
-        if cur in seen:
-            continue
-        seen.add(cur)
-        stack.extend(adj.get(cur, []))
-    return False
-
 
 @api_bp.route('/tasks/<int:task_id>/dependencies', methods=['POST'])
 def add_dependency(task_id):
@@ -958,32 +802,19 @@ def add_dependency(task_id):
     if task_id == depends_on_id:
         return jsonify({"error": "Uma tarefa não pode depender de si mesma."}), 400
 
-    with get_db_connection() as conn:
-        if not _task_exists(conn, task_id) or not _task_exists(conn, depends_on_id):
-            return jsonify({"error": "Tarefa inexistente ou arquivada."}), 404
-        if _would_create_cycle(conn, task_id, depends_on_id):
-            return jsonify({"error": "Isso criaria um ciclo de dependências."}), 409
-        conn.execute(
-            "INSERT OR IGNORE INTO task_dependencies (task_id, depends_on_id, created_at) "
-            "VALUES (?, ?, ?)",
-            (task_id, depends_on_id, datetime.utcnow().isoformat())
-        )
-        conn.commit()
-        deps = [r['depends_on_id'] for r in conn.execute(
-            "SELECT depends_on_id FROM task_dependencies WHERE task_id = ?", (task_id,)
-        ).fetchall()]
+    if not tasks_repo.is_active(task_id) or not tasks_repo.is_active(depends_on_id):
+        return jsonify({"error": "Tarefa inexistente ou arquivada."}), 404
+    if tasks_repo.would_create_cycle(task_id, depends_on_id):
+        return jsonify({"error": "Isso criaria um ciclo de dependências."}), 409
+
+    deps = tasks_repo.add_dependency(task_id, depends_on_id)
     return jsonify({"success": True, "task_id": task_id, "depends_on": deps}), 201
 
 
 @api_bp.route('/tasks/<int:task_id>/dependencies/<int:depends_on_id>', methods=['DELETE'])
 def remove_dependency(task_id, depends_on_id):
     """Remove o vínculo (task_id depende de depends_on_id), se existir."""
-    with get_db_connection() as conn:
-        conn.execute(
-            "DELETE FROM task_dependencies WHERE task_id = ? AND depends_on_id = ?",
-            (task_id, depends_on_id)
-        )
-        conn.commit()
+    tasks_repo.remove_dependency(task_id, depends_on_id)
     return jsonify({"success": True})
 
 
