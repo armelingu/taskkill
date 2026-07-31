@@ -384,4 +384,41 @@ test.describe('Fluxos principais do app', () => {
         await page.click('.theme-seg-btn[data-theme-mode="light"]');
         await expect(html).toHaveAttribute('data-theme', 'light');
     });
+
+    test('mobile: drawer abre pelo menu, backdrop e navegação fecham', async ({ page }) => {
+        await page.setViewportSize({ width: 390, height: 780 });
+
+        const toggle = page.locator('#sidebar-toggle');
+        const sidebar = page.locator('#app-sidebar');
+        const body = page.locator('body');
+
+        // Topbar/hamburguer aparece no mobile; drawer começa fora da tela.
+        // (poll: o transform anima ao trocar de breakpoint, então aguarda assentar)
+        await expect(toggle).toBeVisible();
+        await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+        await expect.poll(async () => {
+            const b = await sidebar.boundingBox();
+            return b ? b.x : 0;
+        }).toBeLessThan(0);
+
+        // Abre pelo hamburguer: entra na tela e marca aria-expanded.
+        await toggle.click();
+        await expect(body).toHaveClass(/sidebar-open/);
+        await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+        await expect.poll(async () => {
+            const b = await sidebar.boundingBox();
+            return b ? b.x : -1;
+        }).toBeGreaterThanOrEqual(0);
+
+        // Clique no backdrop fecha.
+        await page.locator('#sidebar-backdrop').click({ position: { x: 360, y: 400 } });
+        await expect(body).not.toHaveClass(/sidebar-open/);
+
+        // Reabre e navega (Dashboard) -> fecha sozinho e troca a visão.
+        await toggle.click();
+        await expect(body).toHaveClass(/sidebar-open/);
+        await page.locator('#nav-dashboard').click();
+        await expect(body).not.toHaveClass(/sidebar-open/);
+        await expect(page.locator('#dashboard-view')).toBeVisible();
+    });
 });

@@ -1194,6 +1194,38 @@ html {
     overflow: hidden;
 }
 
+/* Topbar e backdrop do drawer existem só no mobile (ativados no @media). */
+.mobile-topbar { display: none; }
+.sidebar-backdrop { display: none; }
+
+.mobile-menu-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border: none;
+    background: transparent;
+    color: var(--text-title);
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.mobile-menu-btn:hover { background: var(--surface-subtle); }
+
+.mobile-topbar-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.mobile-brand-name {
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: var(--text-title);
+    letter-spacing: -0.04em;
+}
+
 /* --------------- 
    Barra Lateral (Sidebar)
    --------------- */
@@ -3651,4 +3683,78 @@ kbd {
     min-width: 18px;
     height: 18px;
     font-size: 0.66rem;
+}
+
+/* ===========================================================================
+   RESPONSIVIDADE — web adaptativa (sem PWA)
+   Tiers: >1080px desktop cheio · ≤1080 tablet (padding menor) ·
+   ≤860 mobile (drawer off-canvas + topbar)
+   =========================================================================== */
+
+/* Tablet: reduz o respiro lateral generoso do desktop. */
+@media (max-width: 1080px) {
+    .main-content { padding: 48px 40px; }
+    body.graph-mode .main-content { padding: 24px 28px 16px; }
+}
+
+/* Mobile: sidebar vira drawer, topbar fixa aparece. */
+@media (max-width: 860px) {
+    .mobile-topbar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 54px;
+        padding: 0 12px;
+        background: var(--bg-sidebar);
+        border-bottom: 1px solid var(--divider);
+        z-index: 40;
+    }
+
+    .sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        width: min(84vw, 300px);
+        padding: 24px 18px;
+        transform: translateX(-100%);
+        transition: transform 0.26s cubic-bezier(0.4, 0, 0.2, 1);
+        z-index: 60;
+        box-shadow: none;
+    }
+
+    body.sidebar-open .sidebar {
+        transform: translateX(0);
+        box-shadow: 0 0 48px rgba(0, 0, 0, 0.28);
+    }
+
+    .sidebar-backdrop {
+        display: block;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.45);
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.26s ease;
+        z-index: 50;
+    }
+
+    body.sidebar-open .sidebar-backdrop {
+        opacity: 1;
+        visibility: visible;
+    }
+    /* [hidden] esconde no fluxo; a animação usa opacity/visibility acima. */
+    .sidebar-backdrop[hidden] { display: block; }
+
+    .main-content { padding: 74px 18px 28px; }
+    body.graph-mode .main-content { padding: 66px 12px 12px; }
+}
+
+/* Telas bem estreitas: aperta mais o respiro. */
+@media (max-width: 480px) {
+    .main-content { padding: 70px 12px 24px; }
 }

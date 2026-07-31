@@ -14,6 +14,7 @@ import { renderTasks } from './modules/tasks.js';
 import { renderSidebarProjects } from './modules/projects.js';
 import { openIntegrations, hideIntegrationsView } from './modules/integrations.js';
 import { showRemindersSummary } from './modules/reminders.js';
+import { initDrawer } from './modules/drawer.js';
 import './modules/profile.js';  // auto-inicializa o perfil inline
 import './modules/theme.js';    // controle de tema (claro/escuro/sistema)
 import './modules/week.js';     // faixa da semana (datas reais) + navegação
@@ -26,6 +27,9 @@ import {
 
 document.addEventListener('DOMContentLoaded', () => {
     // Elementos da interface vivem em ./modules/dom.js (refs estáticas do index.html).
+
+    // Drawer off-canvas da sidebar (mobile).
+    initDrawer();
 
 
 
