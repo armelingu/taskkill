@@ -29,6 +29,24 @@ def get_auth_by_username(username: str):
     return dict(row) if row else None
 
 
+def create(username: str, pw_hash: str, created_at: str, is_admin: int = 0):
+    """
+    Cria um usuário (auto-cadastro). Retorna o novo id, ou None se o username já
+    existir. ON CONFLICT DO NOTHING fecha a corrida entre o check e o insert
+    (portável SQLite/Postgres): rowcount == 0 indica nome já tomado.
+    """
+    with transaction() as conn:
+        cur = conn.execute(
+            'INSERT INTO users (username, password_hash, is_admin, created_at) '
+            'VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING',
+            (username, pw_hash, int(is_admin), created_at),
+        )
+        if cur.rowcount != 1:
+            return None
+        row = conn.execute('SELECT id FROM users WHERE username = ?', (username,)).fetchone()
+        return int(row['id']) if row else None
+
+
 def get_password_hash(uid: int):
     """Hash de senha atual do usuário (ou None)."""
     with connection() as conn:

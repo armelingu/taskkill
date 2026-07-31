@@ -49,9 +49,11 @@ def _reset_rate_limits():
     import routes
     routes._login_attempts.clear()
     routes._user_attempts.clear()
+    routes._register_attempts.clear()
     yield
     routes._login_attempts.clear()
     routes._user_attempts.clear()
+    routes._register_attempts.clear()
 
 
 def _login(client, username=ADMIN_USER, password=ADMIN_PASSWORD, ip='127.0.0.1'):

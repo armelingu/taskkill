@@ -645,6 +645,18 @@ body {
     text-decoration: none;
 }
 
+/* Rodapé de alternância entre login e cadastro */
+.auth-alt {
+    margin-top: 18px;
+    text-align: center;
+    font-size: 0.9rem;
+    color: var(--text-subtle);
+}
+
+.auth-alt .auth-link {
+    font-size: 0.9rem;
+}
+
 .auth-hint {
     font-size: 0.75rem;
     font-weight: 500;

@@ -14,9 +14,9 @@
         });
     }
 
-    // Estado de carregando no botão ao enviar
+    // Estado de carregando no botão ao enviar (login e cadastro compartilham)
     const form = document.querySelector('.auth-form');
-    const submit = document.getElementById('login-submit');
+    const submit = form ? form.querySelector('.auth-btn') : null;
     if (form && submit) {
         form.addEventListener('submit', () => {
             submit.classList.add('is-loading');

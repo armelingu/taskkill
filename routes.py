@@ -82,7 +82,11 @@ _LOGIN_LOCKOUT_MAX    = int(os.environ.get('LOGIN_LOCKOUT_MAX_SECONDS', str(6 * 
 _LOGIN_MAX_TRACKED    = int(os.environ.get('LOGIN_MAX_TRACKED_IPS', '10000'))
 _login_attempts: dict = {}   # por IP:       { ip: {'count','locked_until','strikes'} }
 _user_attempts: dict = {}    # por username: { user: {'count','locked_until','strikes'} }
+_register_attempts: dict = {}  # por IP: barra criação em massa de contas (signup)
 _login_lock = threading.Lock()
+
+# Auto-cadastro: quantas contas um mesmo IP pode criar antes do lockout.
+_REGISTER_MAX_ATTEMPTS = int(os.environ.get('REGISTER_MAX_ATTEMPTS', '5'))
 
 # Tamanho máximo de senha aceito antes de hashear. Evita DoS de CPU (pbkdf2
 # processando um payload enorme). Nenhuma senha legítima chega perto disso.
@@ -402,6 +406,75 @@ def login():
         return redirect(url_for('main.index'))
 
     return render_template('login.html', csrf_token=csrf)
+
+
+@main_bp.route('/register', methods=['GET', 'POST'])
+def register():
+    # Já logado vai direto pro app
+    if session.get('user_id'):
+        return redirect(url_for('main.index'))
+
+    csrf = _ensure_csrf_token()
+    ip = _get_client_ip()
+
+    if request.method == 'POST':
+        # Rate-limit por IP: barra criação em massa de contas
+        locked, remaining = _is_locked(_register_attempts, ip)
+        if locked:
+            mins = (remaining // 60) + 1
+            _log_auth('register_lockout', ip=ip, detail=f'remaining_s={remaining}')
+            error = f'Muitos cadastros a partir deste endereço. Tente novamente em {mins} minuto(s).'
+            return render_template('register.html', error=error, csrf_token=csrf), 429, {'Retry-After': str(max(1, remaining))}
+
+        form_csrf = request.form.get('csrf_token')
+        if not _csrf_ok(csrf, form_csrf):
+            _log_auth('csrf_fail', ip=ip, detail='route=register')
+            return render_template('register.html', error='Sessão expirada. Recarregue e tente novamente.', csrf_token=csrf), 400
+
+        username = (request.form.get('username') or '').strip()
+        password = (request.form.get('password') or '')
+        confirm = (request.form.get('confirm_password') or '')
+
+        def _fail(msg, code):
+            return render_template('register.html', error=msg, csrf_token=csrf, username=username), code
+
+        if not username or not password:
+            return _fail('Usuário e senha são obrigatórios.', 400)
+        if len(username) > 60:
+            return _fail('Nome de usuário muito longo (máx. 60 caracteres).', 400)
+        if len(password.strip()) < 10:
+            return _fail('A senha precisa ter pelo menos 10 caracteres.', 400)
+        if len(password) > MAX_PASSWORD_LEN:
+            return _fail(f'A senha é muito longa (máx. {MAX_PASSWORD_LEN} caracteres).', 400)
+        if password != confirm:
+            return _fail('A confirmação da senha não confere.', 400)
+        # -1: nenhum usuário real a excluir -> True se QUALQUER usuário já tiver o nome
+        if users_repo.username_taken(username, -1):
+            return _fail('Esse nome de usuário já está em uso.', 409)
+
+        now_iso = datetime.utcnow().isoformat()
+        new_id = users_repo.create(username, hash_password(password.strip()), now_iso)
+        if new_id is None:
+            # Corrida: outro cadastro pegou o nome entre o check e o insert
+            return _fail('Esse nome de usuário já está em uso.', 409)
+
+        # Conta o cadastro no limite por IP (após sucesso) e registra auditoria.
+        _record_failed(_register_attempts, ip, _REGISTER_MAX_ATTEMPTS)
+        _log_auth('register_success', username=username, ip=ip)
+
+        # Loga o novo usuário automaticamente (sessão limpa, como no login).
+        users_repo.set_last_login(new_id, now_iso)
+        session.clear()
+        session.permanent = True
+        session['user_id'] = new_id
+        session['is_admin'] = 0
+        session['sv'] = 0
+        session['prev_login'] = None
+        session['login_at'] = int(datetime.utcnow().timestamp())
+        _ensure_csrf_token()
+        return redirect(url_for('main.index'))
+
+    return render_template('register.html', csrf_token=csrf)
 
 
 @main_bp.route('/logout', methods=['POST'])

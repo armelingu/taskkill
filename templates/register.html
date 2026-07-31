@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Taskkill — Login</title>
+  <title>Taskkill — Criar conta</title>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
   <link rel="shortcut icon" href="/static/favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -18,7 +18,6 @@
     <div class="auth-card auth-card--anim">
 
       <div class="auth-brand">
-        <!-- Logo inline (mesmo ícone do sidebar) -->
         <div class="auth-logo" aria-hidden="true">
           <svg width="34" height="34" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <rect x="3" y="3" width="7" height="7" rx="2" fill="currentColor"/>
@@ -29,7 +28,7 @@
         </div>
         <div>
           <div class="auth-title">Taskkill</div>
-          <div class="auth-subtitle">Bem-vindo de volta. Entre para continuar.</div>
+          <div class="auth-subtitle">Crie sua conta para começar.</div>
         </div>
       </div>
 
@@ -44,7 +43,7 @@
         </div>
       {% endif %}
 
-      <form method="POST" action="/login" class="auth-form" novalidate>
+      <form method="POST" action="/register" class="auth-form" novalidate>
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
         <label class="auth-label" for="username">Usuário</label>
@@ -54,7 +53,8 @@
             <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
           </svg>
           <input class="auth-input auth-input--icon" id="username" name="username"
-                 type="text" autocomplete="username" required autofocus placeholder="seu usuário">
+                 type="text" autocomplete="username" required autofocus placeholder="escolha um usuário"
+                 maxlength="60" value="{{ username|default('') }}">
         </div>
 
         <label class="auth-label" for="password">Senha</label>
@@ -64,7 +64,7 @@
             <path d="M7 11V7a5 5 0 0110 0v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
           </svg>
           <input class="auth-input auth-input--icon auth-input--pad-right" id="password" name="password"
-                 type="password" autocomplete="current-password" required placeholder="••••••••">
+                 type="password" autocomplete="new-password" required placeholder="mínimo 10 caracteres">
           <button type="button" class="auth-toggle-pw" id="toggle-pw" aria-label="Mostrar senha" tabindex="-1">
             <svg id="eye-show" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="currentColor" stroke-width="2"/>
@@ -78,14 +78,24 @@
           </button>
         </div>
 
-        <button class="auth-btn" type="submit" id="login-submit">
-          <span class="auth-btn-label">Entrar</span>
+        <label class="auth-label" for="confirm_password">Confirmar senha</label>
+        <div class="auth-input-wrap">
+          <svg class="auth-input-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <rect x="3" y="11" width="18" height="11" rx="2" stroke="currentColor" stroke-width="2"/>
+            <path d="M7 11V7a5 5 0 0110 0v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          <input class="auth-input auth-input--icon" id="confirm_password" name="confirm_password"
+                 type="password" autocomplete="new-password" required placeholder="repita a senha">
+        </div>
+
+        <button class="auth-btn" type="submit" id="register-submit">
+          <span class="auth-btn-label">Criar conta</span>
           <span class="auth-spinner" aria-hidden="true"></span>
         </button>
       </form>
 
       <div class="auth-alt">
-        Não tem conta? <a class="auth-link" href="/register">Criar conta</a>
+        Já tem conta? <a class="auth-link" href="/login">Entrar</a>
       </div>
     </div>
   </main>
