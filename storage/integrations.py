@@ -9,7 +9,7 @@ Duas famílias de funções:
   scheduler precisam de atomicidade entre vários upserts + registro de run).
 """
 
-from .db import connection, transaction
+from .db import connection, transaction, insert_returning_id
 
 
 # ── CRUD (conexão própria) ──────────────────────────────────────────
@@ -59,14 +59,14 @@ def get_config_and_interval(integration_id: int):
 def create(name, enabled, config_json, now, sched_enabled, interval, next_run) -> int:
     """Insere uma integração e devolve o novo id."""
     with transaction() as conn:
-        cursor = conn.execute(
+        return insert_returning_id(
+            conn,
             "INSERT INTO integrations "
             "(name, enabled, config_json, last_status, created_at, updated_at, "
             " schedule_enabled, schedule_interval_minutes, next_run_at) "
             "VALUES (?, ?, ?, 'never', ?, ?, ?, ?, ?)",
             (name, enabled, config_json, now, now, sched_enabled, interval, next_run)
         )
-        return cursor.lastrowid
 
 
 def update_dynamic(integration_id: int, fields, params) -> None:
@@ -121,16 +121,16 @@ def max_task_position(conn, project: str) -> int:
 
 
 def insert_task(conn, project, text, today_str, due, position) -> int:
-    cur = conn.execute(
+    return insert_returning_id(
+        conn,
         'INSERT INTO tasks (project, text, completed, created_date, due_date, position, deleted) '
         'VALUES (?, ?, 0, ?, ?, ?, 0)',
         (project, text, today_str, due, position)
     )
-    return cur.lastrowid
 
 
 def ensure_project(conn, project: str) -> None:
-    conn.execute('INSERT OR IGNORE INTO projects (name) VALUES (?)', (project,))
+    conn.execute('INSERT INTO projects (name) VALUES (?) ON CONFLICT DO NOTHING', (project,))
 
 
 def get_item(conn, integration_id, ext):

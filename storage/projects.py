@@ -15,15 +15,14 @@ def list_names():
 def create(name: str) -> bool:
     """
     Cria um projeto. Retorna False se já existir (violação de UNIQUE), como o
-    endpoint espera para responder 409.
+    endpoint espera para responder 409. Usa ON CONFLICT DO NOTHING (portável
+    SQLite/Postgres): rowcount == 0 indica que já existia.
     """
     with transaction() as conn:
-        try:
-            conn.execute("INSERT INTO projects (name) VALUES (?)", (name,))
-        except Exception:
-            # Duplicado (UNIQUE) ou similar: sinaliza ao chamador sem propagar.
-            return False
-    return True
+        cur = conn.execute(
+            "INSERT INTO projects (name) VALUES (?) ON CONFLICT DO NOTHING", (name,)
+        )
+        return cur.rowcount == 1
 
 
 def delete(name: str) -> None:

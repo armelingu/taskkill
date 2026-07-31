@@ -3,3 +3,6 @@ Werkzeug==3.1.8
 gunicorn==26.0.0
 waitress==3.0.2
 httpx==0.28.1
+# Driver Postgres (opcional): usado apenas quando TASKKILL_DATABASE_URL aponta
+# para postgres://. Em modo SQLite (padrão) não é importado.
+psycopg[binary]==3.2.9

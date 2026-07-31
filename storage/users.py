@@ -5,8 +5,6 @@ As rotas mantêm a lógica de HTTP/segurança (hash, rate-limit, CSRF) e delegam
 persistência a estas funções.
 """
 
-import sqlite3
-
 from .db import connection, transaction
 
 
@@ -80,10 +78,11 @@ def set_username(uid: int, new_username: str) -> None:
 
 
 def set_avatar(uid: int, mime: str, data: bytes) -> None:
+    # bytes é aceito como BLOB (SQLite) e BYTEA (Postgres) diretamente.
     with transaction() as conn:
         conn.execute(
             'UPDATE users SET avatar_mime = ?, avatar_data = ? WHERE id = ?',
-            (mime, sqlite3.Binary(data), int(uid))
+            (mime, data, int(uid))
         )
 
 

@@ -7,7 +7,7 @@ Comportamento espelha 1:1 o que antes era SQL inline em routes.py.
 
 from datetime import date, datetime
 
-from .db import connection, transaction
+from .db import connection, transaction, insert_returning_id
 
 # Sentinela para distinguir "não enviado" de "enviado como vazio/None".
 _UNSET = object()
@@ -75,14 +75,13 @@ def _max_position(conn, project: str) -> int:
 def create(project: str, text: str, created_date: str, due_date, recurrence: str) -> dict:
     """Insere uma tarefa no fim do projeto e devolve o registro criado."""
     with transaction() as conn:
-        cursor = conn.cursor()
         new_pos = _max_position(conn, project) + 1
-        cursor.execute(
+        task_id = insert_returning_id(
+            conn,
             "INSERT INTO tasks (project, text, completed, created_date, due_date, position, deleted, recurrence) "
             "VALUES (?, ?, 0, ?, ?, ?, 0, ?)",
             (project, text, created_date, due_date, new_pos, recurrence),
         )
-        task_id = cursor.lastrowid
         return {
             'id': task_id,
             'project': project,
@@ -248,8 +247,8 @@ def add_dependency(task_id: int, depends_on_id: int):
     """Cria o vínculo (idempotente) e devolve a lista atualizada de pré-requisitos."""
     with transaction() as conn:
         conn.execute(
-            "INSERT OR IGNORE INTO task_dependencies (task_id, depends_on_id, created_at) "
-            "VALUES (?, ?, ?)",
+            "INSERT INTO task_dependencies (task_id, depends_on_id, created_at) "
+            "VALUES (?, ?, ?) ON CONFLICT DO NOTHING",
             (task_id, depends_on_id, datetime.utcnow().isoformat()),
         )
         deps = [r['depends_on_id'] for r in conn.execute(
