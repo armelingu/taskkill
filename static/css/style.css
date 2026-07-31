@@ -3758,3 +3758,33 @@ kbd {
 @media (max-width: 480px) {
     .main-content { padding: 70px 12px 24px; }
 }
+
+/* Conteúdo fluido no mobile (títulos, linhas de tarefa, formulários, modais). */
+@media (max-width: 860px) {
+    .project-header { margin-bottom: 24px; }
+    .project-title { font-size: 1.7rem; }
+
+    /* A linha da tarefa (e o editor inline) passam a quebrar em telas estreitas
+       em vez de transbordar; o texto pode encolher. */
+    .task-item { flex-wrap: wrap; row-gap: 8px; gap: 12px; }
+    .task-text { min-width: 0; }
+
+    /* Fonte >= 16px evita o zoom automático de formulários no iOS. */
+    .edit-task-input,
+    .edit-task-due,
+    .edit-task-recur,
+    .edit-task-dep-select,
+    .auth-input { font-size: 16px; }
+
+    /* Modais não encostam nas bordas da tela. */
+    .project-confirm-overlay { padding: 16px; }
+
+    .onboarding-title { font-size: 1.5rem; }
+}
+
+/* Dispositivos de toque (sem hover): ações da tarefa e input de nova demanda
+   ficam sempre acessíveis, já que não há estado :hover para revelá-los. */
+@media (hover: none) and (pointer: coarse) {
+    .task-actions { opacity: 1; }
+    .task-input-container { opacity: 1; }
+}

@@ -422,3 +422,42 @@ test.describe('Fluxos principais do app', () => {
         await expect(page.locator('#dashboard-view')).toBeVisible();
     });
 });
+
+// Dispositivo touch real (sem hover, pointer coarse): valida que as ações da
+// tarefa não dependem mais de :hover para serem acessíveis.
+test.describe('Touch (dispositivo móvel)', () => {
+    // Opções de toque (sem defaultBrowserType, que não pode ir num describe):
+    // hasTouch + isMobile fazem o Chromium reportar pointer:coarse / hover:none.
+    test.use({ viewport: { width: 393, height: 851 }, hasTouch: true, isMobile: true });
+
+    test('ações da tarefa ficam acessíveis sem hover', async ({ page }) => {
+        const errors = attachErrorGuard(page);
+        await login(page);
+
+        // Abre o drawer e cria um projeto próprio para o teste.
+        await page.locator('#sidebar-toggle').click();
+        const proj = `T-${Date.now()}`;
+        await page.click('#btn-add-project');
+        const pin = page.locator('.project-new-input');
+        await pin.fill(proj);
+        await pin.press('Enter');
+        await expect(page.locator('#project-title')).toHaveText(proj);
+
+        await page.fill('#new-task-input', 'Tarefa no touch');
+        await page.press('#new-task-input', 'Enter');
+        const item = page.locator('.task-item', { hasText: 'Tarefa no touch' });
+        await expect(item).toBeVisible();
+
+        // Sem :hover, as ações precisam estar reveladas (opacity 1) no touch.
+        const opacity = await item.locator('.task-actions').evaluate(
+            (el) => getComputedStyle(el).opacity
+        );
+        expect(opacity).toBe('1');
+
+        // E são realmente clicáveis: abrir o editor inline.
+        await item.locator('.edit-btn').click();
+        await expect(item.locator('.edit-task-input')).toBeVisible();
+
+        expect(errors, `erros de runtime: ${errors.join(' | ')}`).toEqual([]);
+    });
+});
