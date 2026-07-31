@@ -22,7 +22,8 @@ from datetime import date, datetime
 
 import httpx
 
-from database import get_db_connection
+from storage.db import connection
+from storage import integrations as store
 
 # ── Limites / constantes de segurança ──────────────────────────────
 FETCH_TIMEOUT_SECS = 10.0
@@ -577,32 +578,13 @@ def _content_hash(project, text, due):
 
 def _create_task_and_link(conn, integration_id, ext, project, text, due, today_str, now_iso, link_id=None):
     """Cria a task e cria (ou re-vincula) a linha em integration_items."""
-    row = conn.execute(
-        'SELECT COALESCE(MAX(position), -1) AS max_pos FROM tasks '
-        'WHERE project = ? AND deleted = 0',
-        (project,)
-    ).fetchone()
-    new_pos = int(row['max_pos']) + 1
-
-    cur = conn.execute(
-        'INSERT INTO tasks (project, text, completed, created_date, due_date, position, deleted) '
-        'VALUES (?, ?, 0, ?, ?, ?, 0)',
-        (project, text, today_str, due, new_pos)
-    )
-    task_id = cur.lastrowid
+    new_pos = store.max_task_position(conn, project) + 1
+    task_id = store.insert_task(conn, project, text, today_str, due, new_pos)
     chash = _content_hash(project, text, due)
     if link_id is not None:
-        conn.execute(
-            'UPDATE integration_items SET task_id = ?, content_hash = ?, updated_at = ? WHERE id = ?',
-            (task_id, chash, now_iso, link_id)
-        )
+        store.link_item_update(conn, link_id, task_id, chash, now_iso)
     else:
-        conn.execute(
-            'INSERT INTO integration_items '
-            '(integration_id, external_id, task_id, content_hash, created_at, updated_at) '
-            'VALUES (?, ?, ?, ?, ?, ?)',
-            (integration_id, ext, task_id, chash, now_iso, now_iso)
-        )
+        store.link_item_insert(conn, integration_id, ext, task_id, chash, now_iso)
     return task_id
 
 
@@ -622,13 +604,9 @@ def _upsert_task(conn, integration_id, ext, project, text, due, on_update, today
         due = ''
 
     # Garante o projeto na tabela (para aparecer no sidebar).
-    conn.execute('INSERT OR IGNORE INTO projects (name) VALUES (?)', (project,))
+    store.ensure_project(conn, project)
 
-    existing = conn.execute(
-        'SELECT id, task_id, content_hash FROM integration_items '
-        'WHERE integration_id = ? AND external_id = ?',
-        (integration_id, ext)
-    ).fetchone()
+    existing = store.get_item(conn, integration_id, ext)
 
     if not existing:
         _create_task_and_link(conn, integration_id, ext, project, text, due, today_str, now_iso)
@@ -637,9 +615,7 @@ def _upsert_task(conn, integration_id, ext, project, text, due, on_update, today
     # Estado da task vinculada (pode ter sido excluída ou apagada de vez).
     task_row = None
     if existing['task_id']:
-        task_row = conn.execute(
-            'SELECT id, deleted FROM tasks WHERE id = ?', (existing['task_id'],)
-        ).fetchone()
+        task_row = store.get_task_state(conn, existing['task_id'])
     task_gone = (task_row is None) or bool(task_row['deleted'])
 
     if task_gone:
@@ -657,41 +633,31 @@ def _upsert_task(conn, integration_id, ext, project, text, due, on_update, today
         return (0, 0, 1)  # nada mudou
 
     if on_update == 'update_text':
-        conn.execute('UPDATE tasks SET text = ? WHERE id = ?', (text, existing['task_id']))
+        store.update_task_text(conn, existing['task_id'], text)
     else:  # update_all
-        conn.execute(
-            'UPDATE tasks SET text = ?, project = ?, due_date = ? WHERE id = ?',
-            (text, project, due, existing['task_id'])
-        )
-    conn.execute('UPDATE integration_items SET content_hash = ?, updated_at = ? WHERE id = ?',
-                 (new_hash, now_iso, existing['id']))
+        store.update_task_all(conn, existing['task_id'], text, project, due)
+    store.update_item_hash(conn, existing['id'], new_hash, now_iso)
     return (0, 1, 0)
 
 
 def _record_run(conn, integration_id, started_at, trigger, status, result=None, error=None):
     """Grava uma linha no histórico de execuções (integration_runs)."""
     result = result or {}
-    conn.execute(
-        'INSERT INTO integration_runs '
-        '(integration_id, started_at, finished_at, trigger, status, '
-        ' total_items, created, updated, skipped, error) '
-        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        (
-            int(integration_id), started_at, datetime.utcnow().isoformat(),
-            trigger, status,
-            int(result.get('total_items', 0)),
-            int(result.get('created', 0)),
-            int(result.get('updated', 0)),
-            int(result.get('skipped', 0)),
-            error,
-        )
+    store.insert_run(
+        conn, integration_id, started_at, datetime.utcnow().isoformat(),
+        trigger, status,
+        result.get('total_items', 0),
+        result.get('created', 0),
+        result.get('updated', 0),
+        result.get('skipped', 0),
+        error,
     )
 
 
 def run_integration(integration_id, dry_run=False, trigger='manual'):
     """Carrega a integração salva e executa (preview ou importação real)."""
-    with get_db_connection() as conn:
-        row = conn.execute('SELECT * FROM integrations WHERE id = ?', (int(integration_id),)).fetchone()
+    with connection() as conn:
+        row = store.get_full(conn, integration_id)
         if not row:
             raise IntegrationError('Integração não encontrada.')
         try:
@@ -706,19 +672,12 @@ def run_integration(integration_id, dry_run=False, trigger='manual'):
         try:
             result = run_config(config, dry_run=False, integration_id=int(integration_id), conn=conn)
         except IntegrationError as exc:
-            conn.execute(
-                'UPDATE integrations SET last_run_at = ?, last_status = ?, last_error = ? WHERE id = ?',
-                (datetime.utcnow().isoformat(), 'error', str(exc), int(integration_id))
-            )
+            store.mark_error(conn, integration_id, datetime.utcnow().isoformat(), str(exc))
             _record_run(conn, integration_id, started_at, trigger, 'error', error=str(exc))
             conn.commit()
             raise
 
-        conn.execute(
-            'UPDATE integrations SET last_run_at = ?, last_status = ?, last_error = NULL, '
-            'last_item_count = ? WHERE id = ?',
-            (datetime.utcnow().isoformat(), 'ok', result.get('created', 0), int(integration_id))
-        )
+        store.mark_ok(conn, integration_id, datetime.utcnow().isoformat(), result.get('created', 0))
         _record_run(conn, integration_id, started_at, trigger, 'ok', result=result)
         conn.commit()
         return result
@@ -739,8 +698,8 @@ def commit_items(integration_id, items, on_update='skip', reimport_deleted=False
     if len(items) > MAX_ITEMS_PER_RUN:
         items = items[:MAX_ITEMS_PER_RUN]
 
-    with get_db_connection() as conn:
-        row = conn.execute('SELECT id FROM integrations WHERE id = ?', (integration_id,)).fetchone()
+    with connection() as conn:
+        row = store.get_full(conn, integration_id)
         if not row:
             raise IntegrationError('Integração não encontrada.')
 
@@ -771,11 +730,7 @@ def commit_items(integration_id, items, on_update='skip', reimport_deleted=False
             'updated': updated,
             'skipped': skipped,
         }
-        conn.execute(
-            'UPDATE integrations SET last_run_at = ?, last_status = ?, last_error = NULL, '
-            'last_item_count = ? WHERE id = ?',
-            (datetime.utcnow().isoformat(), 'ok', created, integration_id)
-        )
+        store.mark_ok(conn, integration_id, datetime.utcnow().isoformat(), created)
         _record_run(conn, integration_id, started_at, 'import', 'ok', result=result)
         conn.commit()
         return result
@@ -783,16 +738,7 @@ def commit_items(integration_id, items, on_update='skip', reimport_deleted=False
 
 def list_runs(integration_id, limit=50):
     """Retorna o histórico de execuções (mais recentes primeiro)."""
-    limit = max(1, min(int(limit or 50), 200))
-    with get_db_connection() as conn:
-        rows = conn.execute(
-            'SELECT id, started_at, finished_at, trigger, status, '
-            '       total_items, created, updated, skipped, error '
-            'FROM integration_runs WHERE integration_id = ? '
-            'ORDER BY id DESC LIMIT ?',
-            (int(integration_id), limit)
-        ).fetchall()
-    return [dict(r) for r in rows]
+    return store.list_runs(integration_id, limit=limit)
 
 
 # ── Mascaramento / merge de segredos ───────────────────────────────

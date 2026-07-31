@@ -17,7 +17,8 @@ import os
 import threading
 from datetime import datetime, timedelta
 
-from database import get_db_connection
+from storage.db import connection
+from storage import integrations as store
 
 logger = logging.getLogger('taskkill.scheduler')
 
@@ -53,12 +54,7 @@ def _claim_due(conn, now_iso):
     Retorna a lista de ids de integrações vencidas que este processo conseguiu
     reservar (compare-and-set), já reagendando o próximo horário.
     """
-    rows = conn.execute(
-        'SELECT id, schedule_interval_minutes, next_run_at FROM integrations '
-        'WHERE enabled = 1 AND schedule_enabled = 1 AND schedule_interval_minutes > 0 '
-        'AND (next_run_at IS NULL OR next_run_at <= ?)',
-        (now_iso,)
-    ).fetchall()
+    rows = store.select_due(conn, now_iso)
 
     claimed = []
     now = datetime.utcnow()
@@ -66,18 +62,7 @@ def _claim_due(conn, now_iso):
         new_next = compute_next_run(r['schedule_interval_minutes'], base=now)
         if not new_next:
             continue
-        old = r['next_run_at']
-        if old is None:
-            cur = conn.execute(
-                'UPDATE integrations SET next_run_at = ? WHERE id = ? AND next_run_at IS NULL',
-                (new_next, r['id'])
-            )
-        else:
-            cur = conn.execute(
-                'UPDATE integrations SET next_run_at = ? WHERE id = ? AND next_run_at = ?',
-                (new_next, r['id'], old)
-            )
-        if cur.rowcount == 1:
+        if store.claim_next_run(conn, r['id'], new_next, r['next_run_at']) == 1:
             claimed.append(r['id'])
     conn.commit()
     return claimed
@@ -89,7 +74,7 @@ def run_due_now():
     import integrations
 
     now_iso = datetime.utcnow().isoformat()
-    with get_db_connection() as conn:
+    with connection() as conn:
         claimed = _claim_due(conn, now_iso)
 
     for integration_id in claimed:

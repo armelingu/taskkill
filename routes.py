@@ -14,7 +14,7 @@ from functools import wraps
 from flask import Blueprint, render_template, request, jsonify, send_file, session, redirect, url_for, abort, Response
 
 from database import (
-    get_db_connection, get_db_path, init_db,
+    get_db_path, init_db,
     hash_password, password_needs_rehash,
 )
 from werkzeug.security import check_password_hash
@@ -26,6 +26,7 @@ from recurrence import valid_recurrence, next_occurrence
 from storage import tasks as tasks_repo
 from storage import users as users_repo
 from storage import projects as projects_repo
+from storage import integrations as integrations_store
 
 # Hash "dummy" usado para igualar o tempo de resposta do login quando o usuário
 # não existe (ou a senha excede o limite). Sem isso, o "caminho de usuário
@@ -898,8 +899,7 @@ def _integration_row_to_dict(row):
 @api_bp.route('/integrations', methods=['GET'])
 @api_admin_required
 def list_integrations():
-    with get_db_connection() as conn:
-        rows = conn.execute('SELECT * FROM integrations ORDER BY name ASC').fetchall()
+    rows = integrations_store.list_all()
     return jsonify([_integration_row_to_dict(r) for r in rows])
 
 
@@ -922,25 +922,17 @@ def create_integration():
     next_run = scheduler.compute_next_run(interval) if sched_enabled else None
 
     now = datetime.utcnow().isoformat()
-    with get_db_connection() as conn:
-        cursor = conn.execute(
-            "INSERT INTO integrations "
-            "(name, enabled, config_json, last_status, created_at, updated_at, "
-            " schedule_enabled, schedule_interval_minutes, next_run_at) "
-            "VALUES (?, ?, ?, 'never', ?, ?, ?, ?, ?)",
-            (name, 1 if data.get('enabled', True) else 0, json.dumps(config), now, now,
-             sched_enabled, interval, next_run)
-        )
-        conn.commit()
-        new_id = cursor.lastrowid
+    new_id = integrations_store.create(
+        name, 1 if data.get('enabled', True) else 0, json.dumps(config), now,
+        sched_enabled, interval, next_run
+    )
     return jsonify({"id": new_id}), 201
 
 
 @api_bp.route('/integrations/<int:integration_id>', methods=['GET'])
 @api_admin_required
 def get_integration(integration_id):
-    with get_db_connection() as conn:
-        row = conn.execute('SELECT * FROM integrations WHERE id = ?', (integration_id,)).fetchone()
+    row = integrations_store.get(integration_id)
     if not row:
         return jsonify({"error": "Não encontrada"}), 404
     return jsonify(_integration_row_to_dict(row))
@@ -950,67 +942,59 @@ def get_integration(integration_id):
 @api_admin_required
 def update_integration(integration_id):
     data = request.get_json(silent=True) or {}
-    with get_db_connection() as conn:
-        row = conn.execute(
-            'SELECT config_json, schedule_interval_minutes FROM integrations WHERE id = ?',
-            (integration_id,)
-        ).fetchone()
-        if not row:
-            return jsonify({"error": "Não encontrada"}), 404
-        try:
-            old_cfg = json.loads(row['config_json'])
-        except (ValueError, TypeError):
-            old_cfg = {}
+    row = integrations_store.get_config_and_interval(integration_id)
+    if not row:
+        return jsonify({"error": "Não encontrada"}), 404
+    try:
+        old_cfg = json.loads(row['config_json'])
+    except (ValueError, TypeError):
+        old_cfg = {}
 
-        fields, params = [], []
-        if 'name' in data:
-            name = str(data.get('name') or '').strip()
-            if not name:
-                return jsonify({"error": "Nome é obrigatório"}), 400
-            fields.append('name = ?')
-            params.append(name)
-        if 'enabled' in data:
-            fields.append('enabled = ?')
-            params.append(1 if data.get('enabled') else 0)
-        if 'schedule' in data:
-            sched = data.get('schedule') or {}
-            sched_enabled = 1 if sched.get('enabled') else 0
-            interval = scheduler.clamp_interval(sched.get('interval_minutes'))
-            if sched_enabled and not interval:
-                return jsonify({"error": f"Intervalo mínimo é {scheduler.MIN_INTERVAL_MINUTES} minutos"}), 400
-            fields.append('schedule_enabled = ?')
-            params.append(sched_enabled)
-            fields.append('schedule_interval_minutes = ?')
-            params.append(interval)
-            fields.append('next_run_at = ?')
-            # Reagenda a partir de agora ao ligar/alterar; ao desligar, limpa.
-            params.append(scheduler.compute_next_run(interval) if sched_enabled else None)
-        if 'config' in data:
-            new_cfg = data.get('config') or {}
-            if not isinstance(new_cfg, dict):
-                return jsonify({"error": "Config inválida"}), 400
-            merged = integrations.merge_secrets(new_cfg, old_cfg)
-            fields.append('config_json = ?')
-            params.append(json.dumps(merged))
+    fields, params = [], []
+    if 'name' in data:
+        name = str(data.get('name') or '').strip()
+        if not name:
+            return jsonify({"error": "Nome é obrigatório"}), 400
+        fields.append('name = ?')
+        params.append(name)
+    if 'enabled' in data:
+        fields.append('enabled = ?')
+        params.append(1 if data.get('enabled') else 0)
+    if 'schedule' in data:
+        sched = data.get('schedule') or {}
+        sched_enabled = 1 if sched.get('enabled') else 0
+        interval = scheduler.clamp_interval(sched.get('interval_minutes'))
+        if sched_enabled and not interval:
+            return jsonify({"error": f"Intervalo mínimo é {scheduler.MIN_INTERVAL_MINUTES} minutos"}), 400
+        fields.append('schedule_enabled = ?')
+        params.append(sched_enabled)
+        fields.append('schedule_interval_minutes = ?')
+        params.append(interval)
+        fields.append('next_run_at = ?')
+        # Reagenda a partir de agora ao ligar/alterar; ao desligar, limpa.
+        params.append(scheduler.compute_next_run(interval) if sched_enabled else None)
+    if 'config' in data:
+        new_cfg = data.get('config') or {}
+        if not isinstance(new_cfg, dict):
+            return jsonify({"error": "Config inválida"}), 400
+        merged = integrations.merge_secrets(new_cfg, old_cfg)
+        fields.append('config_json = ?')
+        params.append(json.dumps(merged))
 
-        if not fields:
-            return jsonify({"success": True})
+    if not fields:
+        return jsonify({"success": True})
 
-        fields.append('updated_at = ?')
-        params.append(datetime.utcnow().isoformat())
-        params.append(integration_id)
-        conn.execute(f"UPDATE integrations SET {', '.join(fields)} WHERE id = ?", params)
-        conn.commit()
+    fields.append('updated_at = ?')
+    params.append(datetime.utcnow().isoformat())
+    params.append(integration_id)
+    integrations_store.update_dynamic(integration_id, fields, params)
     return jsonify({"success": True})
 
 
 @api_bp.route('/integrations/<int:integration_id>', methods=['DELETE'])
 @api_admin_required
 def delete_integration(integration_id):
-    with get_db_connection() as conn:
-        conn.execute('DELETE FROM integration_items WHERE integration_id = ?', (integration_id,))
-        conn.execute('DELETE FROM integrations WHERE id = ?', (integration_id,))
-        conn.commit()
+    integrations_store.delete(integration_id)
     return jsonify({"success": True})
 
 
@@ -1024,11 +1008,10 @@ def test_integration():
     # Ao editar (id presente), restaura segredos mascarados a partir do salvo,
     # para que o teste use a credencial real (mesma lógica do /preview).
     if data.get('id'):
-        with get_db_connection() as conn:
-            row = conn.execute('SELECT config_json FROM integrations WHERE id = ?', (int(data['id']),)).fetchone()
-        if row:
+        cfg_json = integrations_store.get_config_json(int(data['id']))
+        if cfg_json is not None:
             try:
-                old = json.loads(row['config_json'])
+                old = json.loads(cfg_json)
             except (ValueError, TypeError):
                 old = {}
             merged = integrations.merge_secrets({'connection': connection}, old)
@@ -1061,11 +1044,10 @@ def preview_integration():
 
     # Se veio um id, mescla os segredos mascarados com os já salvos.
     if data.get('id'):
-        with get_db_connection() as conn:
-            row = conn.execute('SELECT config_json FROM integrations WHERE id = ?', (int(data['id']),)).fetchone()
-        if row:
+        cfg_json = integrations_store.get_config_json(int(data['id']))
+        if cfg_json is not None:
             try:
-                old = json.loads(row['config_json'])
+                old = json.loads(cfg_json)
             except (ValueError, TypeError):
                 old = {}
             config = integrations.merge_secrets(config, old)
@@ -1091,9 +1073,7 @@ def run_integration_endpoint(integration_id):
 @api_admin_required
 def integration_runs(integration_id):
     """Histórico de execuções da integração (mais recentes primeiro)."""
-    with get_db_connection() as conn:
-        row = conn.execute('SELECT id FROM integrations WHERE id = ?', (integration_id,)).fetchone()
-    if not row:
+    if not integrations_store.exists(integration_id):
         return jsonify({"error": "Não encontrada"}), 404
     try:
         limit = int(request.args.get('limit', 50))
