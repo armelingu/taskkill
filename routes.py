@@ -562,26 +562,29 @@ def get_avatar():
 
 @api_bp.route('/projects', methods=['GET'])
 def get_projects():
-    return jsonify(projects_repo.list_names())
+    uid = _current_user()['id']
+    return jsonify(projects_repo.list_names(uid))
 
 
 @api_bp.route('/projects', methods=['POST'])
 def create_project():
+    uid = _current_user()['id']
     data = request.json or {}
     name = str(data.get('name') or '').strip()
     if not name:
         return jsonify({"error": "Nome do projeto é obrigatório"}), 400
     if len(name) > MAX_PROJECT_LEN:
         return jsonify({"error": f"Nome muito longo (máx {MAX_PROJECT_LEN} chars)"}), 400
-    if not projects_repo.create(name):
+    if not projects_repo.create(uid, name):
         return jsonify({"error": "Projeto já existe"}), 409
     return jsonify({"name": name}), 201
 
 
 @api_bp.route('/projects/<path:project_name>', methods=['DELETE'])
 def delete_project(project_name):
+    uid = _current_user()['id']
     name = project_name.strip()
-    projects_repo.delete(name)
+    projects_repo.delete(uid, name)
     return jsonify({"deleted": name})
 
 
@@ -592,7 +595,8 @@ def delete_project(project_name):
 def get_tasks():
     # O frontend trabalha por "projeto": o repositório já entrega agrupado por
     # projeto/posição, sem arquivadas e com depends_on por tarefa.
-    return jsonify(tasks_repo.fetch_tasks_grouped())
+    uid = _current_user()['id']
+    return jsonify(tasks_repo.fetch_tasks_grouped(uid))
 
 # 2. CREATE: Adicionar uma nova tarefa em um projeto
 @api_bp.route('/tasks', methods=['POST'])
@@ -631,7 +635,8 @@ def create_task():
     # Salva apenas a data formata sem hora no padrão brasileiro para minimalismo.
     today_str = tasks_repo.today_br()
 
-    created = tasks_repo.create(project, text, today_str, due_date, recurrence)
+    uid = _current_user()['id']
+    created = tasks_repo.create(uid, project, text, today_str, due_date, recurrence)
     return jsonify(created), 201
 
 # 3. UPDATE: Atualizar nome por texto ou marca de check concluído
@@ -686,7 +691,9 @@ def update_task(task_id):
 
     due_date_arg = due_date if 'due_date' in data else tasks_repo._UNSET
 
+    uid = _current_user()['id']
     recurred_to = tasks_repo.update(
+        uid,
         task_id,
         next_occurrence_fn=next_occurrence,
         text=text,
@@ -735,7 +742,8 @@ def reorder_tasks():
         updates.append((pos, tid))
 
     # Garantia forte (único projeto + todas as ativas) e persistência no repo.
-    ok, error = tasks_repo.reorder(updates)
+    uid = _current_user()['id']
+    ok, error = tasks_repo.reorder(uid, updates)
     if not ok:
         return jsonify({"error": error}), 400
 
@@ -745,7 +753,8 @@ def reorder_tasks():
 @api_bp.route('/tasks/<int:task_id>', methods=['DELETE'])
 def delete_task(task_id):
     # Consistência com o modelo (flag deleted): arquiva em vez de remover.
-    tasks_repo.soft_delete(task_id)
+    uid = _current_user()['id']
+    tasks_repo.soft_delete(uid, task_id)
     return jsonify({"success": True})
 
 
@@ -763,9 +772,10 @@ def add_dependency(task_id):
     if task_id == depends_on_id:
         return jsonify({"error": "Uma tarefa não pode depender de si mesma."}), 400
 
-    if not tasks_repo.is_active(task_id) or not tasks_repo.is_active(depends_on_id):
+    uid = _current_user()['id']
+    if not tasks_repo.is_active(uid, task_id) or not tasks_repo.is_active(uid, depends_on_id):
         return jsonify({"error": "Tarefa inexistente ou arquivada."}), 404
-    if tasks_repo.would_create_cycle(task_id, depends_on_id):
+    if tasks_repo.would_create_cycle(uid, task_id, depends_on_id):
         return jsonify({"error": "Isso criaria um ciclo de dependências."}), 409
 
     deps = tasks_repo.add_dependency(task_id, depends_on_id)
@@ -775,7 +785,8 @@ def add_dependency(task_id):
 @api_bp.route('/tasks/<int:task_id>/dependencies/<int:depends_on_id>', methods=['DELETE'])
 def remove_dependency(task_id, depends_on_id):
     """Remove o vínculo (task_id depende de depends_on_id), se existir."""
-    tasks_repo.remove_dependency(task_id, depends_on_id)
+    uid = _current_user()['id']
+    tasks_repo.remove_dependency(uid, task_id, depends_on_id)
     return jsonify({"success": True})
 
 
@@ -922,9 +933,11 @@ def create_integration():
     next_run = scheduler.compute_next_run(interval) if sched_enabled else None
 
     now = datetime.utcnow().isoformat()
+    # Dono das tasks que esta integração criar (integrações são globais/admin).
+    owner_user_id = _current_user()['id']
     new_id = integrations_store.create(
         name, 1 if data.get('enabled', True) else 0, json.dumps(config), now,
-        sched_enabled, interval, next_run
+        sched_enabled, interval, next_run, owner_user_id
     )
     return jsonify({"id": new_id}), 201
 

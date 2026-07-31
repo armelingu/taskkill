@@ -14,9 +14,14 @@ from storage import tasks as tasks_repo
 _counter = itertools.count()
 
 
+UID = None
+
+
 @pytest.fixture(scope='module', autouse=True)
 def _schema():
+    global UID
     database.init_db()
+    UID = int(users_repo.get_auth_by_username('admin')['id'])
 
 
 def _proj():
@@ -27,26 +32,26 @@ def _proj():
 
 def test_projects_create_list_e_duplicado():
     name = _proj()
-    assert projects_repo.create(name) is True
-    assert name in projects_repo.list_names()
+    assert projects_repo.create(UID, name) is True
+    assert name in projects_repo.list_names(UID)
     # Duplicado retorna False (endpoint mapeia para 409)
-    assert projects_repo.create(name) is False
+    assert projects_repo.create(UID, name) is False
 
 
 def test_projects_list_ordenada():
-    names = projects_repo.list_names()
+    names = projects_repo.list_names(UID)
     assert names == sorted(names)
 
 
 def test_project_delete_arquiva_tarefas():
     name = _proj()
-    projects_repo.create(name)
-    t = tasks_repo.create(name, 'órfã', tasks_repo.today_br(), None, 'none')
+    projects_repo.create(UID, name)
+    t = tasks_repo.create(UID, name, 'órfã', tasks_repo.today_br(), None, 'none')
 
-    projects_repo.delete(name)
-    assert name not in projects_repo.list_names()
+    projects_repo.delete(UID, name)
+    assert name not in projects_repo.list_names(UID)
     # Tarefa foi arquivada (some da visão agrupada de ativas)
-    grouped = tasks_repo.fetch_tasks_grouped()
+    grouped = tasks_repo.fetch_tasks_grouped(UID)
     assert all(x['id'] != t['id'] for x in grouped.get(name, []))
 
 

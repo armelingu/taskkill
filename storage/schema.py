@@ -31,8 +31,10 @@ def init_db():
         else:
             _init_sqlite(cursor)
 
-        # Passos comuns (SQL portável): admin inicial e backfill de projetos.
-        _bootstrap_admin(cursor, hash_password)
+        # Passos comuns (SQL portável): admin inicial, posse (multi-tenant) e
+        # backfill de projetos por dono.
+        admin_id = _bootstrap_admin(cursor, hash_password)
+        _migrate_ownership(cursor, admin_id)
         _backfill_projects(cursor)
 
         conn.commit()
@@ -41,7 +43,11 @@ def init_db():
 # ── Passos comuns (portáveis) ───────────────────────────────────────
 
 def _bootstrap_admin(cursor, hash_password):
-    """Cria o admin inicial no primeiro boot (obrigatório para ambiente web)."""
+    """
+    Cria o admin inicial no primeiro boot (obrigatório para ambiente web) e
+    devolve o id do admin (existente ou recém-criado) — usado para atribuir a
+    posse dos dados legados na migração multi-tenant.
+    """
     cursor.execute('SELECT COUNT(*) AS cnt FROM users')
     cnt = int(cursor.fetchone()['cnt'])
     if cnt == 0:
@@ -60,15 +66,57 @@ def _bootstrap_admin(cursor, hash_password):
             (admin_user, pw_hash, datetime.utcnow().isoformat())
         )
 
+    row = cursor.execute(
+        'SELECT id FROM users WHERE is_admin = 1 ORDER BY id LIMIT 1'
+    ).fetchone()
+    if row is None:
+        row = cursor.execute('SELECT id FROM users ORDER BY id LIMIT 1').fetchone()
+    return int(row['id']) if row else None
+
+
+def _migrate_ownership(cursor, admin_id):
+    """
+    Atribui os dados legados (globais) ao admin: tasks, integrações e projetos.
+    Idempotente — só toca linhas ainda sem dono. Bancos SQLite antigos tinham
+    projects com (name UNIQUE) global; aqui são reconstruídos para (user_id, name).
+    """
+    if admin_id is None:
+        return
+
+    cursor.execute('UPDATE tasks SET user_id = ? WHERE user_id IS NULL', (admin_id,))
+    cursor.execute('UPDATE integrations SET owner_user_id = ? WHERE owner_user_id IS NULL', (admin_id,))
+
+    if is_postgres():
+        cursor.execute('UPDATE projects SET user_id = ? WHERE user_id IS NULL', (admin_id,))
+        return
+
+    # SQLite: reconstruir projects antigos (name UNIQUE global) -> (user_id, name).
+    have = {r['name'] for r in cursor.execute('PRAGMA table_info(projects)').fetchall()}
+    if 'user_id' not in have:
+        cursor.execute('ALTER TABLE projects RENAME TO projects_old')
+        cursor.execute(
+            'CREATE TABLE projects ('
+            ' id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, '
+            ' name TEXT NOT NULL, UNIQUE (user_id, name))'
+        )
+        cursor.execute(
+            'INSERT INTO projects (user_id, name) SELECT ?, name FROM projects_old', (admin_id,)
+        )
+        cursor.execute('DROP TABLE projects_old')
+    else:
+        cursor.execute('UPDATE projects SET user_id = ? WHERE user_id IS NULL', (admin_id,))
+
 
 def _backfill_projects(cursor):
-    """Garante que projetos já usados em tasks apareçam na tabela projects."""
+    """Garante que projetos já usados em tasks apareçam em projects (por dono)."""
     cursor.execute(
-        "SELECT DISTINCT project FROM tasks WHERE deleted = 0 AND project IS NOT NULL AND project != ''"
+        "SELECT DISTINCT user_id, project FROM tasks "
+        "WHERE deleted = 0 AND project IS NOT NULL AND project != ''"
     )
     for _row in cursor.fetchall():
         cursor.execute(
-            "INSERT INTO projects (name) VALUES (?) ON CONFLICT DO NOTHING", (_row['project'],)
+            "INSERT INTO projects (user_id, name) VALUES (?, ?) ON CONFLICT DO NOTHING",
+            (_row['user_id'], _row['project'])
         )
 
 
@@ -78,6 +126,7 @@ def _init_postgres(cursor):
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS tasks (
             id SERIAL PRIMARY KEY,
+            user_id INTEGER,
             project TEXT NOT NULL,
             text TEXT NOT NULL,
             completed INTEGER NOT NULL DEFAULT 0,
@@ -101,6 +150,7 @@ def _init_postgres(cursor):
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_task_deps_depends_on ON task_dependencies(depends_on_id)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_tasks_project_position ON tasks(project, position, id)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_tasks_deleted ON tasks(deleted)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_tasks_user ON tasks(user_id)')
 
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
@@ -122,8 +172,10 @@ def _init_postgres(cursor):
 
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS projects (
-            id   SERIAL PRIMARY KEY,
-            name TEXT NOT NULL UNIQUE
+            id      SERIAL PRIMARY KEY,
+            user_id INTEGER,
+            name    TEXT NOT NULL,
+            UNIQUE (user_id, name)
         )
     ''')
 
@@ -141,7 +193,8 @@ def _init_postgres(cursor):
             updated_at TEXT,
             schedule_enabled INTEGER NOT NULL DEFAULT 0,
             schedule_interval_minutes INTEGER NOT NULL DEFAULT 0,
-            next_run_at TEXT
+            next_run_at TEXT,
+            owner_user_id INTEGER
         )
     ''')
     cursor.execute('''
@@ -194,6 +247,7 @@ def _init_sqlite(cursor):
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS tasks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
             project TEXT NOT NULL,
             text TEXT NOT NULL,
             completed BOOLEAN NOT NULL DEFAULT 0,
@@ -210,6 +264,12 @@ def _init_sqlite(cursor):
         cursor.execute('ALTER TABLE tasks ADD COLUMN created_date TEXT')
     except sqlite3.OperationalError:
         pass # Se a coluna já existir, ele segue ignorando silenciosamente
+
+    # Multi-tenant: dono da tarefa (backfill para o admin em _migrate_ownership).
+    try:
+        cursor.execute('ALTER TABLE tasks ADD COLUMN user_id INTEGER')
+    except sqlite3.OperationalError:
+        pass
 
     try:
         cursor.execute('ALTER TABLE tasks ADD COLUMN due_date TEXT')
@@ -277,6 +337,10 @@ def _init_sqlite(cursor):
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_tasks_deleted ON tasks(deleted)')
     except sqlite3.OperationalError:
         pass
+    try:
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_tasks_user ON tasks(user_id)')
+    except sqlite3.OperationalError:
+        pass
 
     # Usuários (web)
     cursor.execute('''
@@ -311,11 +375,15 @@ def _init_sqlite(cursor):
     # Remove o resquício em bancos antigos; no-op em bancos novos.
     cursor.execute('DROP TABLE IF EXISTS chamados_sync')
 
-    # Projetos gerenciáveis pelo usuário
+    # Projetos gerenciáveis pelo usuário (por dono: UNIQUE(user_id, name)).
+    # Bancos antigos com o formato global (name UNIQUE) são reconstruídos em
+    # _migrate_ownership, que já conhece o id do admin.
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS projects (
-            id   INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL UNIQUE
+            id      INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            name    TEXT NOT NULL,
+            UNIQUE (user_id, name)
         )
     ''')
 
@@ -385,11 +453,13 @@ def _init_sqlite(cursor):
         'ON integration_runs(integration_id, id DESC)'
     )
 
-    # Agendamento automático: colunas na tabela integrations (migração idempotente)
+    # Agendamento automático + dono (para atribuir a posse das tasks importadas):
+    # colunas na tabela integrations (migração idempotente).
     for _col, _ddl in (
         ('schedule_enabled', 'ALTER TABLE integrations ADD COLUMN schedule_enabled INTEGER NOT NULL DEFAULT 0'),
         ('schedule_interval_minutes', 'ALTER TABLE integrations ADD COLUMN schedule_interval_minutes INTEGER NOT NULL DEFAULT 0'),
         ('next_run_at', 'ALTER TABLE integrations ADD COLUMN next_run_at TEXT'),
+        ('owner_user_id', 'ALTER TABLE integrations ADD COLUMN owner_user_id INTEGER'),
     ):
         try:
             cursor.execute(_ddl)

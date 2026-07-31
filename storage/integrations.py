@@ -56,17 +56,33 @@ def get_config_and_interval(integration_id: int):
         ).fetchone()
 
 
-def create(name, enabled, config_json, now, sched_enabled, interval, next_run) -> int:
-    """Insere uma integração e devolve o novo id."""
+def create(name, enabled, config_json, now, sched_enabled, interval, next_run, owner_user_id=None) -> int:
+    """Insere uma integração e devolve o novo id. owner_user_id é o dono das
+    tarefas que a integração vier a criar (integrações são globais/admin)."""
     with transaction() as conn:
         return insert_returning_id(
             conn,
             "INSERT INTO integrations "
             "(name, enabled, config_json, last_status, created_at, updated_at, "
-            " schedule_enabled, schedule_interval_minutes, next_run_at) "
-            "VALUES (?, ?, ?, 'never', ?, ?, ?, ?, ?)",
-            (name, enabled, config_json, now, now, sched_enabled, interval, next_run)
+            " schedule_enabled, schedule_interval_minutes, next_run_at, owner_user_id) "
+            "VALUES (?, ?, ?, 'never', ?, ?, ?, ?, ?, ?)",
+            (name, enabled, config_json, now, now, sched_enabled, interval, next_run, owner_user_id)
         )
+
+
+def first_admin_id():
+    """
+    Dono padrão para tarefas de integrações sem owner definido (integrações
+    antigas ou criadas por caminhos que não informam o dono). Retorna o menor id
+    de admin, ou o menor id de usuário como fallback.
+    """
+    with connection() as conn:
+        row = conn.execute(
+            'SELECT id FROM users WHERE is_admin = 1 ORDER BY id LIMIT 1'
+        ).fetchone()
+        if row is None:
+            row = conn.execute('SELECT id FROM users ORDER BY id LIMIT 1').fetchone()
+    return int(row['id']) if row else None
 
 
 def update_dynamic(integration_id: int, fields, params) -> None:
@@ -111,26 +127,29 @@ def get_full(conn, integration_id: int):
     ).fetchone()
 
 
-def max_task_position(conn, project: str) -> int:
+def max_task_position(conn, user_id, project: str) -> int:
     row = conn.execute(
         'SELECT COALESCE(MAX(position), -1) AS max_pos FROM tasks '
-        'WHERE project = ? AND deleted = 0',
-        (project,)
+        'WHERE user_id = ? AND project = ? AND deleted = 0',
+        (user_id, project)
     ).fetchone()
     return int(row['max_pos'])
 
 
-def insert_task(conn, project, text, today_str, due, position) -> int:
+def insert_task(conn, user_id, project, text, today_str, due, position) -> int:
     return insert_returning_id(
         conn,
-        'INSERT INTO tasks (project, text, completed, created_date, due_date, position, deleted) '
-        'VALUES (?, ?, 0, ?, ?, ?, 0)',
-        (project, text, today_str, due, position)
+        'INSERT INTO tasks (user_id, project, text, completed, created_date, due_date, position, deleted) '
+        'VALUES (?, ?, ?, 0, ?, ?, ?, 0)',
+        (user_id, project, text, today_str, due, position)
     )
 
 
-def ensure_project(conn, project: str) -> None:
-    conn.execute('INSERT INTO projects (name) VALUES (?) ON CONFLICT DO NOTHING', (project,))
+def ensure_project(conn, user_id, project: str) -> None:
+    conn.execute(
+        'INSERT INTO projects (user_id, name) VALUES (?, ?) ON CONFLICT DO NOTHING',
+        (user_id, project)
+    )
 
 
 def get_item(conn, integration_id, ext):

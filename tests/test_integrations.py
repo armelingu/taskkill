@@ -7,6 +7,11 @@ import pytest
 import database
 import integrations as I
 from integrations import IntegrationError
+from storage import users as users_repo
+
+
+def _owner_id():
+    return int(users_repo.get_auth_by_username('admin')['id'])
 
 
 # ── Templates / acesso a campos ────────────────────────────────────
@@ -178,26 +183,28 @@ def test_migration_converts_legacy_weekday_to_iso(db_conn):
 
 def test_upsert_creates_then_skips(db_conn):
     iid = _new_integration(db_conn)
+    owner = _owner_id()
     today = date.today().strftime('%d/%m/%Y')
     now = datetime.utcnow().isoformat()
 
-    c, u, s = I._upsert_task(db_conn, iid, 'EXT-1', 'Proj', 'Texto', '2026-08-03',
+    c, u, s = I._upsert_task(db_conn, iid, owner, 'EXT-1', 'Proj', 'Texto', '2026-08-03',
                              'skip', today, now)
     assert (c, u, s) == (1, 0, 0)
 
     # Reimportar o mesmo external_id com on_update=skip -> ignora.
-    c, u, s = I._upsert_task(db_conn, iid, 'EXT-1', 'Proj', 'Texto', '2026-08-03',
+    c, u, s = I._upsert_task(db_conn, iid, owner, 'EXT-1', 'Proj', 'Texto', '2026-08-03',
                              'skip', today, now)
     assert (c, u, s) == (0, 0, 1)
 
 
 def test_upsert_update_all_changes_task(db_conn):
     iid = _new_integration(db_conn)
+    owner = _owner_id()
     today = date.today().strftime('%d/%m/%Y')
     now = datetime.utcnow().isoformat()
 
-    I._upsert_task(db_conn, iid, 'EXT-9', 'Proj', 'Antigo', '', 'skip', today, now)
-    c, u, s = I._upsert_task(db_conn, iid, 'EXT-9', 'Proj', 'Novo texto', '2026-08-04',
+    I._upsert_task(db_conn, iid, owner, 'EXT-9', 'Proj', 'Antigo', '', 'skip', today, now)
+    c, u, s = I._upsert_task(db_conn, iid, owner, 'EXT-9', 'Proj', 'Novo texto', '2026-08-04',
                              'update_all', today, now)
     assert (c, u, s) == (0, 1, 0)
 

@@ -512,11 +512,12 @@ def _resolve_due_date(due_cfg, item):
 
 
 # ── Execução (preview e importação real) ───────────────────────────
-def run_config(config, dry_run=True, integration_id=None, conn=None):
+def run_config(config, dry_run=True, integration_id=None, conn=None, owner_user_id=None):
     """
     Executa a partir de um dict de config.
     - dry_run=True: não persiste; retorna preview.
     - dry_run=False: cria/atualiza tasks e registra em integration_items (usa conn).
+      As tasks criadas pertencem a owner_user_id (dono da integração/admin).
     """
     config = config or {}
     connection = config.get('connection') or {}
@@ -548,6 +549,8 @@ def run_config(config, dry_run=True, integration_id=None, conn=None):
 
     if conn is None:
         raise IntegrationError('Conexão de banco ausente para importação.')
+    if owner_user_id is None:
+        owner_user_id = store.first_admin_id()
 
     created = updated = skipped = 0
     today_str = date.today().strftime('%d/%m/%Y')
@@ -560,7 +563,7 @@ def run_config(config, dry_run=True, integration_id=None, conn=None):
             skipped += 1
             continue
         created_i, updated_i, skipped_i = _upsert_task(
-            conn, integration_id, ext, project, text, due, on_update, today_str, now_iso,
+            conn, integration_id, owner_user_id, ext, project, text, due, on_update, today_str, now_iso,
             reimport_deleted=reimport_deleted
         )
         created += created_i
@@ -570,16 +573,25 @@ def run_config(config, dry_run=True, integration_id=None, conn=None):
     return {'total_items': len(items), 'created': created, 'updated': updated, 'skipped': skipped}
 
 
+def _owner_of(row):
+    """
+    Dono das tasks criadas pela integração. Usa owner_user_id salvo; se ausente
+    (integrações antigas), cai para o primeiro admin.
+    """
+    owner = row['owner_user_id'] if 'owner_user_id' in row.keys() else None
+    return owner if owner is not None else store.first_admin_id()
+
+
 def _content_hash(project, text, due):
     """Hash estável do conteúdo relevante da task (para detectar mudanças)."""
     raw = f'{project}\x1f{text}\x1f{due}'
     return hashlib.sha1(raw.encode('utf-8')).hexdigest()
 
 
-def _create_task_and_link(conn, integration_id, ext, project, text, due, today_str, now_iso, link_id=None):
-    """Cria a task e cria (ou re-vincula) a linha em integration_items."""
-    new_pos = store.max_task_position(conn, project) + 1
-    task_id = store.insert_task(conn, project, text, today_str, due, new_pos)
+def _create_task_and_link(conn, integration_id, owner_user_id, ext, project, text, due, today_str, now_iso, link_id=None):
+    """Cria a task (dona = owner_user_id) e cria (ou re-vincula) a linha em integration_items."""
+    new_pos = store.max_task_position(conn, owner_user_id, project) + 1
+    task_id = store.insert_task(conn, owner_user_id, project, text, today_str, due, new_pos)
     chash = _content_hash(project, text, due)
     if link_id is not None:
         store.link_item_update(conn, link_id, task_id, chash, now_iso)
@@ -588,11 +600,11 @@ def _create_task_and_link(conn, integration_id, ext, project, text, due, today_s
     return task_id
 
 
-def _upsert_task(conn, integration_id, ext, project, text, due, on_update, today_str, now_iso,
+def _upsert_task(conn, integration_id, owner_user_id, ext, project, text, due, on_update, today_str, now_iso,
                  reimport_deleted=False):
     """
-    Cria ou atualiza uma task a partir de um item já resolvido.
-    Retorna (created, updated, skipped).
+    Cria ou atualiza uma task (dona = owner_user_id) a partir de um item já
+    resolvido. Retorna (created, updated, skipped).
 
     on_update:
       - 'skip'        : itens já importados são ignorados.
@@ -604,12 +616,12 @@ def _upsert_task(conn, integration_id, ext, project, text, due, on_update, today
         due = ''
 
     # Garante o projeto na tabela (para aparecer no sidebar).
-    store.ensure_project(conn, project)
+    store.ensure_project(conn, owner_user_id, project)
 
     existing = store.get_item(conn, integration_id, ext)
 
     if not existing:
-        _create_task_and_link(conn, integration_id, ext, project, text, due, today_str, now_iso)
+        _create_task_and_link(conn, integration_id, owner_user_id, ext, project, text, due, today_str, now_iso)
         return (1, 0, 0)
 
     # Estado da task vinculada (pode ter sido excluída ou apagada de vez).
@@ -620,7 +632,7 @@ def _upsert_task(conn, integration_id, ext, project, text, due, on_update, today
 
     if task_gone:
         if reimport_deleted:
-            _create_task_and_link(conn, integration_id, ext, project, text, due,
+            _create_task_and_link(conn, integration_id, owner_user_id, ext, project, text, due,
                                   today_str, now_iso, link_id=existing['id'])
             return (1, 0, 0)
         return (0, 0, 1)
@@ -668,9 +680,11 @@ def run_integration(integration_id, dry_run=False, trigger='manual'):
         if dry_run:
             return run_config(config, dry_run=True, integration_id=int(integration_id))
 
+        owner_user_id = _owner_of(row)
         started_at = datetime.utcnow().isoformat()
         try:
-            result = run_config(config, dry_run=False, integration_id=int(integration_id), conn=conn)
+            result = run_config(config, dry_run=False, integration_id=int(integration_id),
+                                conn=conn, owner_user_id=owner_user_id)
         except IntegrationError as exc:
             store.mark_error(conn, integration_id, datetime.utcnow().isoformat(), str(exc))
             _record_run(conn, integration_id, started_at, trigger, 'error', error=str(exc))
@@ -703,6 +717,7 @@ def commit_items(integration_id, items, on_update='skip', reimport_deleted=False
         if not row:
             raise IntegrationError('Integração não encontrada.')
 
+        owner_user_id = _owner_of(row)
         created = updated = skipped = 0
         today_str = date.today().strftime('%d/%m/%Y')
         started_at = now_iso = datetime.utcnow().isoformat()
@@ -717,7 +732,7 @@ def commit_items(integration_id, items, on_update='skip', reimport_deleted=False
                 skipped += 1
                 continue
             created_i, updated_i, skipped_i = _upsert_task(
-                conn, integration_id, ext, project, text, due, on_update, today_str, now_iso,
+                conn, integration_id, owner_user_id, ext, project, text, due, on_update, today_str, now_iso,
                 reimport_deleted=reimport_deleted
             )
             created += created_i
