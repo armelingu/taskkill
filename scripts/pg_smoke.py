@@ -31,7 +31,6 @@ with transaction() as conn:
     row = conn.execute('SELECT id FROM users WHERE username = ?', ('bob',)).fetchone()
     if row is None:
         from database import hash_password
-        bob = intg  # placeholder p/ não confundir nomes
         from storage.db import insert_returning_id
         bob_id = insert_returning_id(
             conn,
