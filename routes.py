@@ -24,6 +24,8 @@ import scheduler
 from integrations import IntegrationError
 from recurrence import valid_recurrence, next_occurrence
 from storage import tasks as tasks_repo
+from storage import users as users_repo
+from storage import projects as projects_repo
 
 # Hash "dummy" usado para igualar o tempo de resposta do login quando o usuário
 # não existe (ou a senha excede o limite). Sem isso, o "caminho de usuário
@@ -223,12 +225,7 @@ def _current_user():
     uid = session.get('user_id')
     if not uid:
         return None
-    with get_db_connection() as conn:
-        row = conn.execute(
-            'SELECT id, username, is_admin, created_at, last_login_at, '
-            '       session_version, avatar_mime, theme_pref '
-            'FROM users WHERE id = ?', (int(uid),)
-        ).fetchone()
+    row = users_repo.get_profile(uid)
     if not row:
         return None
     # Valida a versão de sessão: se o usuário clicou em "sair de todos os
@@ -345,8 +342,7 @@ def login():
             error = f'Muitas tentativas para esta conta. Tente novamente em {mins} minuto(s).'
             return render_template('login.html', error=error, csrf_token=csrf), 429, {'Retry-After': str(max(1, u_remaining))}
 
-        with get_db_connection() as conn:
-            row = conn.execute('SELECT id, username, password_hash, is_admin FROM users WHERE username = ?', (username,)).fetchone()
+        row = users_repo.get_auth_by_username(username)
 
         # Verificação em tempo (quase) constante: sempre executa um hash, exista
         # o usuário ou não. Senhas acima do limite não são hasheadas (anti-DoS),
@@ -383,22 +379,16 @@ def login():
         # o método atual (ex.: migração pbkdf2 -> scrypt) de forma transparente.
         if password_needs_rehash(row['password_hash']):
             try:
-                with get_db_connection() as conn:
-                    conn.execute('UPDATE users SET password_hash = ? WHERE id = ?',
-                                 (hash_password(password), int(row['id'])))
-                    conn.commit()
+                users_repo.set_password_hash(int(row['id']), hash_password(password))
                 _log_auth('password_rehash', username=username, ip=ip)
             except Exception:
                 pass  # falha no rehash não deve impedir o login
 
         now_iso = datetime.utcnow().isoformat()
-        with get_db_connection() as conn:
-            prev = conn.execute('SELECT last_login_at, session_version FROM users WHERE id = ?',
-                                (int(row['id']),)).fetchone()
-            prev_login = prev['last_login_at'] if prev else None
-            session_version = int(prev['session_version']) if prev else 0
-            conn.execute('UPDATE users SET last_login_at = ? WHERE id = ?', (now_iso, int(row['id'])))
-            conn.commit()
+        prev = users_repo.get_login_meta(int(row['id']))
+        prev_login = prev['last_login_at'] if prev else None
+        session_version = int(prev['session_version']) if prev else 0
+        users_repo.set_last_login(int(row['id']), now_iso)
 
         session.clear()                       # descarta sessão anterior (novo ID gerado pelo Flask)
         session.permanent = True              # ativa expiração por PERMANENT_SESSION_LIFETIME
@@ -475,9 +465,7 @@ def update_theme():
     mode = str(data.get('mode') or '').strip()
     if mode not in VALID_THEMES:
         return jsonify({"error": "Bad Request: tema inválido"}), 400
-    with get_db_connection() as conn:
-        conn.execute('UPDATE users SET theme_pref = ? WHERE id = ?', (mode, int(user['id'])))
-        conn.commit()
+    users_repo.set_theme(int(user['id']), mode)
     return jsonify({"success": True, "theme_pref": mode})
 
 
@@ -491,16 +479,12 @@ def update_username():
         return jsonify({"error": "O nome de usuário não pode ser vazio."}), 400
     if len(new_username) > 60:
         return jsonify({"error": "Nome de usuário muito longo (máx. 60 caracteres)."}), 400
-    with get_db_connection() as conn:
-        row = conn.execute('SELECT password_hash FROM users WHERE id = ?', (int(user['id']),)).fetchone()
-        if not row or not check_password_hash(row['password_hash'], password[:MAX_PASSWORD_LEN]):
-            return jsonify({"error": "Senha incorreta."}), 400
-        exists = conn.execute('SELECT id FROM users WHERE username = ? AND id != ?',
-                              (new_username, int(user['id']))).fetchone()
-        if exists:
-            return jsonify({"error": "Esse nome de usuário já está em uso."}), 400
-        conn.execute('UPDATE users SET username = ? WHERE id = ?', (new_username, int(user['id'])))
-        conn.commit()
+    pw_hash = users_repo.get_password_hash(int(user['id']))
+    if not pw_hash or not check_password_hash(pw_hash, password[:MAX_PASSWORD_LEN]):
+        return jsonify({"error": "Senha incorreta."}), 400
+    if users_repo.username_taken(new_username, int(user['id'])):
+        return jsonify({"error": "Esse nome de usuário já está em uso."}), 400
+    users_repo.set_username(int(user['id']), new_username)
     return jsonify({"message": f'Usuário atualizado para "{new_username}".', "username": new_username})
 
 
@@ -517,13 +501,10 @@ def update_password():
         return jsonify({"error": f"A senha é muito longa (máx. {MAX_PASSWORD_LEN} caracteres)."}), 400
     if new_pw != confirm_pw:
         return jsonify({"error": "A confirmação da senha não confere."}), 400
-    with get_db_connection() as conn:
-        row = conn.execute('SELECT password_hash FROM users WHERE id = ?', (int(user['id']),)).fetchone()
-        if not row or not check_password_hash(row['password_hash'], current_pw[:MAX_PASSWORD_LEN]):
-            return jsonify({"error": "Senha atual incorreta."}), 400
-        conn.execute('UPDATE users SET password_hash = ? WHERE id = ?',
-                     (hash_password(new_pw.strip()), int(user['id'])))
-        conn.commit()
+    pw_hash = users_repo.get_password_hash(int(user['id']))
+    if not pw_hash or not check_password_hash(pw_hash, current_pw[:MAX_PASSWORD_LEN]):
+        return jsonify({"error": "Senha atual incorreta."}), 400
+    users_repo.set_password_hash(int(user['id']), hash_password(new_pw.strip()))
     return jsonify({"message": "Senha atualizada com sucesso."})
 
 
@@ -539,32 +520,21 @@ def upload_avatar():
     mime = _sniff_image_mime(data)
     if mime not in ALLOWED_AVATAR_MIMES:
         return jsonify({"error": "Formato inválido. Use PNG, JPEG, GIF ou WEBP."}), 400
-    with get_db_connection() as conn:
-        conn.execute('UPDATE users SET avatar_mime = ?, avatar_data = ? WHERE id = ?',
-                     (mime, sqlite3.Binary(data), int(user['id'])))
-        conn.commit()
+    users_repo.set_avatar(int(user['id']), mime, data)
     return jsonify({"message": "Foto atualizada.", "has_avatar": True})
 
 
 @api_bp.route('/profile/avatar', methods=['DELETE'])
 def delete_avatar():
     user = _current_user()
-    with get_db_connection() as conn:
-        conn.execute('UPDATE users SET avatar_mime = NULL, avatar_data = NULL WHERE id = ?',
-                     (int(user['id']),))
-        conn.commit()
+    users_repo.clear_avatar(int(user['id']))
     return jsonify({"message": "Foto removida.", "has_avatar": False})
 
 
 @api_bp.route('/profile/logout-all', methods=['POST'])
 def logout_all_devices():
     user = _current_user()
-    with get_db_connection() as conn:
-        conn.execute('UPDATE users SET session_version = session_version + 1 WHERE id = ?',
-                     (int(user['id']),))
-        new_sv = conn.execute('SELECT session_version FROM users WHERE id = ?',
-                              (int(user['id']),)).fetchone()['session_version']
-        conn.commit()
+    new_sv = users_repo.bump_session_version(int(user['id']))
     # Mantém a sessão atual válida atualizando a versão no cookie.
     session['sv'] = int(new_sv)
     _log_auth('logout_all', username=user.get('username', ''), ip=_get_client_ip())
@@ -574,12 +544,11 @@ def logout_all_devices():
 @api_bp.route('/avatar', methods=['GET'])
 def get_avatar():
     user = _current_user()
-    with get_db_connection() as conn:
-        row = conn.execute('SELECT avatar_mime, avatar_data FROM users WHERE id = ?',
-                           (int(user['id']),)).fetchone()
-    if not row or not row['avatar_mime'] or row['avatar_data'] is None:
+    avatar = users_repo.get_avatar(int(user['id']))
+    if not avatar:
         return jsonify({"error": "Sem avatar"}), 404
-    resp = Response(bytes(row['avatar_data']), mimetype=row['avatar_mime'])
+    mime, data = avatar
+    resp = Response(data, mimetype=mime)
     resp.headers['Cache-Control'] = 'private, no-cache'
     return resp
 
@@ -592,9 +561,7 @@ def get_avatar():
 
 @api_bp.route('/projects', methods=['GET'])
 def get_projects():
-    with get_db_connection() as conn:
-        rows = conn.execute("SELECT name FROM projects ORDER BY name ASC").fetchall()
-    return jsonify([r['name'] for r in rows])
+    return jsonify(projects_repo.list_names())
 
 
 @api_bp.route('/projects', methods=['POST'])
@@ -605,22 +572,15 @@ def create_project():
         return jsonify({"error": "Nome do projeto é obrigatório"}), 400
     if len(name) > MAX_PROJECT_LEN:
         return jsonify({"error": f"Nome muito longo (máx {MAX_PROJECT_LEN} chars)"}), 400
-    with get_db_connection() as conn:
-        try:
-            conn.execute("INSERT INTO projects (name) VALUES (?)", (name,))
-            conn.commit()
-        except Exception:
-            return jsonify({"error": "Projeto já existe"}), 409
+    if not projects_repo.create(name):
+        return jsonify({"error": "Projeto já existe"}), 409
     return jsonify({"name": name}), 201
 
 
 @api_bp.route('/projects/<path:project_name>', methods=['DELETE'])
 def delete_project(project_name):
     name = project_name.strip()
-    with get_db_connection() as conn:
-        conn.execute("DELETE FROM projects WHERE name = ?", (name,))
-        conn.execute("UPDATE tasks SET deleted = 1 WHERE project = ?", (name,))
-        conn.commit()
+    projects_repo.delete(name)
     return jsonify({"deleted": name})
 
 
