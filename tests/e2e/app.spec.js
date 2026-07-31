@@ -460,4 +460,44 @@ test.describe('Touch (dispositivo móvel)', () => {
 
         expect(errors, `erros de runtime: ${errors.join(' | ')}`).toEqual([]);
     });
+
+    test('grafo aceita gestos de toque (pan e pinça) sem erros', async ({ page }) => {
+        const errors = attachErrorGuard(page);
+        await login(page);
+
+        // Abre o grafo pelo drawer.
+        await page.locator('#sidebar-toggle').click();
+        await page.locator('#nav-graph').click();
+        const canvas = page.locator('#graph-canvas');
+        await expect(canvas).toBeVisible();
+        await page.waitForTimeout(300);
+
+        // Simula 1 dedo (pan) e depois 2 dedos (pinça) via Pointer Events touch.
+        await page.evaluate(() => {
+            const c = document.getElementById('graph-canvas');
+            const r = c.getBoundingClientRect();
+            const cx = r.left + r.width / 2;
+            const cy = r.top + r.height / 2;
+            const ev = (type, id, x, y) => c.dispatchEvent(new PointerEvent(type, {
+                pointerId: id, pointerType: 'touch', clientX: x, clientY: y,
+                bubbles: true, cancelable: true,
+            }));
+            // Pan com 1 dedo.
+            ev('pointerdown', 1, cx, cy);
+            ev('pointermove', 1, cx + 40, cy + 30);
+            ev('pointermove', 1, cx + 80, cy + 50);
+            ev('pointerup', 1, cx + 80, cy + 50);
+            // Pinça (afasta 2 dedos) para dar zoom.
+            ev('pointerdown', 1, cx - 20, cy);
+            ev('pointerdown', 2, cx + 20, cy);
+            ev('pointermove', 1, cx - 70, cy);
+            ev('pointermove', 2, cx + 70, cy);
+            ev('pointerup', 1, cx - 70, cy);
+            ev('pointerup', 2, cx + 70, cy);
+        });
+
+        await page.waitForTimeout(100);
+        await expect(canvas).toBeVisible();
+        expect(errors, `erros de runtime: ${errors.join(' | ')}`).toEqual([]);
+    });
 });

@@ -29,6 +29,12 @@ const graph = {
     last: { x: 0, y: 0 },
     dimProgress: 0,   // 0 = sem dim; 1 = dim total — animado suavemente
     dimRaf: 0,        // RAF exclusivo para animação de fade
+    // Toque (Pointer Events): ponteiros ativos + estado de pinça. Enquanto um
+    // gesto de toque acontece, ignoramos os eventos de mouse "sintéticos".
+    pointers: new Map(),
+    pinch: null,
+    ignoreMouse: false,
+    ignoreTimer: 0,
 };
 
 function graphResize() {
@@ -65,6 +71,31 @@ function graphHit(mx, my) {
         }
     }
     return best;
+}
+
+// Navegação ao "clicar"/tocar num nó (compartilhada por mouse e toque).
+function navigateFromNode(id) {
+    if (!graph.model) return;
+    const node = graph.model.nodes.find(n => n.id === id);
+    if (!node) return;
+    if (node.type === 'day') {
+        // node.key é o dia da semana (Seg…Dom); abre o chip correspondente na
+        // semana visível da faixa lateral.
+        const chip = Array.from(document.querySelectorAll('.week-day'))
+            .find(el => weekdayShort(el.getAttribute('data-date')) === node.key);
+        if (chip) chip.click();
+    } else if (node.type === 'project') {
+        const items = Array.from(document.querySelectorAll('.project-nav'));
+        const target = items.find(it => normText(it.textContent) === node.key);
+        if (target) target.click();
+    } else if (node.type === 'task') {
+        // Abre o projeto da tarefa (a lista mostra a tarefa e seus vínculos).
+        const items = Array.from(document.querySelectorAll('.project-nav'));
+        const target = items.find(it => normText(it.textContent) === node.projectKey);
+        if (target) target.click();
+    } else if (node.type === 'tag') {
+        openTagView(node.key);
+    }
 }
 
 // Lerp linear entre dois valores
@@ -398,6 +429,7 @@ function attachGraphEvents() {
     }
 
     graphCanvas.addEventListener('mousemove', (e) => {
+        if (graph.ignoreMouse) return;
         const rect = graphCanvas.getBoundingClientRect();
         const mx = e.clientX - rect.left;
         const my = e.clientY - rect.top;
@@ -424,6 +456,7 @@ function attachGraphEvents() {
     });
 
     graphCanvas.addEventListener('mousedown', (e) => {
+        if (graph.ignoreMouse) return;
         const rect = graphCanvas.getBoundingClientRect();
         const mx = e.clientX - rect.left;
         const my = e.clientY - rect.top;
@@ -441,7 +474,7 @@ function attachGraphEvents() {
     });
 
     window.addEventListener('mousemove', (e) => {
-        if (!graphCanvas) return;
+        if (!graphCanvas || graph.ignoreMouse) return;
         if (!graph.dragId && !graph.isPanning) return;
         const rect = graphCanvas.getBoundingClientRect();
         const mx = e.clientX - rect.left;
@@ -469,32 +502,10 @@ function attachGraphEvents() {
     });
 
     window.addEventListener('mouseup', () => {
-        if (!graphCanvas) return;
+        if (!graphCanvas || graph.ignoreMouse) return;
         if (!graph.dragId && !graph.isPanning) return;
 
-        if (graph.dragId && !graph.moved && graph.model) {
-            const node = graph.model.nodes.find(n => n.id === graph.dragId);
-            if (node) {
-                if (node.type === 'day') {
-                    // node.key é o dia da semana (Seg…Dom); abre o chip
-                    // correspondente na semana visível da faixa lateral.
-                    const chip = Array.from(document.querySelectorAll('.week-day'))
-                        .find(el => weekdayShort(el.getAttribute('data-date')) === node.key);
-                    if (chip) chip.click();
-                } else if (node.type === 'project') {
-                    const items = Array.from(document.querySelectorAll('.project-nav'));
-                    const target = items.find(it => normText(it.textContent) === node.key);
-                    if (target) target.click();
-                } else if (node.type === 'task') {
-                    // Abre o projeto da tarefa (a lista mostra a tarefa e seus vínculos).
-                    const items = Array.from(document.querySelectorAll('.project-nav'));
-                    const target = items.find(it => normText(it.textContent) === node.projectKey);
-                    if (target) target.click();
-                } else if (node.type === 'tag') {
-                    openTagView(node.key);
-                }
-            }
-        }
+        if (graph.dragId && !graph.moved) navigateFromNode(graph.dragId);
 
         graph.dragId = null;
         graph.isPanning = false;
@@ -515,6 +526,112 @@ function attachGraphEvents() {
         graph.pan.y += (my - after.y);
         if (!graph.running) graphDraw();
     }, { passive: false });
+
+    // ---- Toque (Pointer Events): 1 dedo = pan/arrastar nó · 2 dedos = pinça --
+    // Só tratamos pointerType 'touch' aqui (mouse/caneta seguem nos handlers de
+    // mouse). Enquanto houver toque, graph.ignoreMouse suprime eventos de mouse
+    // sintéticos que o navegador dispara depois do gesto.
+    function touchXY(e) {
+        const rect = graphCanvas.getBoundingClientRect();
+        return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    }
+
+    graphCanvas.addEventListener('pointerdown', (e) => {
+        if (e.pointerType !== 'touch') return;
+        e.preventDefault();
+        if (graphCanvas.setPointerCapture) {
+            try { graphCanvas.setPointerCapture(e.pointerId); } catch (_) { /* noop */ }
+        }
+        graph.ignoreMouse = true;
+        clearTimeout(graph.ignoreTimer);
+        const p = touchXY(e);
+        graph.pointers.set(e.pointerId, p);
+
+        if (graph.pointers.size === 1) {
+            graph.last.x = p.x;
+            graph.last.y = p.y;
+            graph.moved = false;
+            const hit = graphHit(p.x, p.y);
+            if (hit) graph.dragId = hit.id; else graph.isPanning = true;
+        } else if (graph.pointers.size === 2) {
+            // Entra em pinça: cancela drag/pan de 1 dedo.
+            graph.dragId = null;
+            graph.isPanning = false;
+            const pts = Array.from(graph.pointers.values());
+            graph.pinch = {
+                dist: Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1,
+            };
+        }
+    });
+
+    graphCanvas.addEventListener('pointermove', (e) => {
+        if (e.pointerType !== 'touch' || !graph.pointers.has(e.pointerId)) return;
+        e.preventDefault();
+        const p = touchXY(e);
+        graph.pointers.set(e.pointerId, p);
+
+        if (graph.pointers.size >= 2 && graph.pinch) {
+            const pts = Array.from(graph.pointers.values());
+            const mid = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+            const newDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1;
+            const before = screenToWorld(mid.x, mid.y);
+            const factor = newDist / graph.pinch.dist;
+            graph.scale = Math.max(0.55, Math.min(1.9, graph.scale * factor));
+            const after = worldToScreen(before.x, before.y);
+            graph.pan.x += (mid.x - after.x);
+            graph.pan.y += (mid.y - after.y);
+            graph.pinch.dist = newDist;
+            if (!graph.running) graphDraw();
+            return;
+        }
+
+        // 1 dedo: pan (fundo) ou arrastar o nó pego.
+        const dx = p.x - graph.last.x;
+        const dy = p.y - graph.last.y;
+        graph.last.x = p.x;
+        graph.last.y = p.y;
+        if (Math.abs(dx) + Math.abs(dy) > 1) graph.moved = true;
+        if (graph.isPanning) {
+            graph.pan.x += dx;
+            graph.pan.y += dy;
+        } else if (graph.dragId && graph.model) {
+            const node = graph.model.nodes.find(n => n.id === graph.dragId);
+            if (node) {
+                const w = screenToWorld(p.x, p.y);
+                node.x = w.x;
+                node.y = w.y;
+                node.vx = 0;
+                node.vy = 0;
+            }
+        }
+        if (!graph.running) graphDraw();
+    });
+
+    function endTouch(e) {
+        if (e.pointerType !== 'touch' || !graph.pointers.has(e.pointerId)) return;
+        graph.pointers.delete(e.pointerId);
+        if (graph.pointers.size < 2) graph.pinch = null;
+
+        if (graph.pointers.size === 0) {
+            // Toque sem arrasto = "tap": navega como o clique do mouse.
+            if (graph.dragId && !graph.moved) navigateFromNode(graph.dragId);
+            graph.dragId = null;
+            graph.isPanning = false;
+            // Libera o mouse depois de um tempo (ignora os eventos sintéticos).
+            clearTimeout(graph.ignoreTimer);
+            graph.ignoreTimer = setTimeout(() => { graph.ignoreMouse = false; }, 400);
+        } else if (graph.pointers.size === 1) {
+            // Sobrou 1 dedo após a pinça: retoma o pan a partir dele.
+            const [pt] = Array.from(graph.pointers.values());
+            graph.last.x = pt.x;
+            graph.last.y = pt.y;
+            graph.isPanning = true;
+            graph.dragId = null;
+            graph.moved = true;
+        }
+    }
+    graphCanvas.addEventListener('pointerup', endTouch);
+    graphCanvas.addEventListener('pointercancel', endTouch);
 
     window.addEventListener('resize', () => {
         if (graphView && !graphView.classList.contains('hidden')) {

@@ -1893,6 +1893,9 @@ body.graph-mode .main-content {
     height: 100%;
     display: block;
     background: transparent; /* usa o background padrão do sistema */
+    /* O grafo trata pan/pinça via Pointer Events; impede o navegador de
+       sequestrar o gesto (scroll/zoom) e de disparar mouse sintético. */
+    touch-action: none;
 }
 
 /* Tooltip do grafo */
@@ -3787,4 +3790,15 @@ kbd {
 @media (hover: none) and (pointer: coarse) {
     .task-actions { opacity: 1; }
     .task-input-container { opacity: 1; }
+}
+
+/* Grafo no mobile: cabeçalho empilha e a dica vira instrução de toque. */
+@media (max-width: 860px) {
+    .graph-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+    }
+    .graph-hint { white-space: normal; font-size: 0.78rem; }
+    .graph-subtitle { margin-top: 4px; font-size: 0.85rem; }
 }
