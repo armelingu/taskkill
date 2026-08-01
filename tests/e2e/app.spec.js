@@ -329,13 +329,39 @@ test.describe('Fluxos principais do app', () => {
             .toHaveCount(0);
     });
 
-    test('integrações: abre lista e o wizard', async ({ page }) => {
+    test('integrações: nova integração abre o seletor de modelos', async ({ page }) => {
         await page.click('#nav-integrations');
         await expect(page.locator('#integrations-view')).toBeVisible();
         await expect(page.locator('#int-list-panel')).toBeVisible();
         await page.click('#int-new-btn');
         await expect(page.locator('#int-editor')).toBeVisible();
+        // Modo seleção: catálogo visível, stepper escondido.
+        await expect(page.locator('#int-template-picker')).toBeVisible();
+        await expect(page.locator('#int-stepper')).toBeHidden();
+        // 3 provedores (GitHub/Jira/GitLab) + "Começar do zero".
+        await expect(page.locator('#int-template-grid .int-template-card')).toHaveCount(4);
+    });
+
+    test('integrações: modelo GitHub pré-preenche URL, auth e dica', async ({ page }) => {
+        await page.click('#nav-integrations');
+        await page.click('#int-new-btn');
+        await page.locator('#int-template-grid .int-template-card', { hasText: 'GitHub' }).click();
+        // Sai do seletor e entra no wizard já preenchido.
         await expect(page.locator('#int-stepper')).toBeVisible();
+        await expect(page.locator('#int-name')).toHaveValue('GitHub Issues');
+        await expect(page.locator('#int-url')).toHaveValue(/api\.github\.com\/repos\/OWNER\/REPO\/issues/);
+        await expect(page.locator('#int-auth-type')).toHaveValue('bearer');
+        await expect(page.locator('#int-setup-hint')).toBeVisible();
+        await expect(page.locator('#int-setup-hint-list li').first()).toBeVisible();
+    });
+
+    test('integrações: começar do zero abre o wizard vazio', async ({ page }) => {
+        await page.click('#nav-integrations');
+        await page.click('#int-new-btn');
+        await page.locator('#int-template-grid .int-template-card--scratch').click();
+        await expect(page.locator('#int-stepper')).toBeVisible();
+        await expect(page.locator('#int-url')).toHaveValue('');
+        await expect(page.locator('#int-setup-hint')).toBeHidden();
     });
 
     test('perfil: abre e alterna abas', async ({ page }) => {

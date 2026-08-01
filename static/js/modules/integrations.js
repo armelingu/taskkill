@@ -28,6 +28,9 @@ const intListEl      = document.getElementById('int-list');
 const intEmptyEl     = document.getElementById('int-empty');
 const intEditor      = document.getElementById('int-editor');
 const intEditorTitle = document.getElementById('int-editor-title');
+const intTemplateGrid   = document.getElementById('int-template-grid');
+const intSetupHint      = document.getElementById('int-setup-hint');
+const intSetupHintList  = document.getElementById('int-setup-hint-list');
 const intAlert       = document.getElementById('int-alert');
 const intStepper     = document.getElementById('int-stepper');
 const intJson        = document.getElementById('int-json');
@@ -714,25 +717,109 @@ async function openEditorById(id) {
         const integ = await res.json();
         intAlertShow('', false, true);
         fillForm(integ);
+        showSetupHint(null);
         intEditorTitle.textContent = integ.name;
         intRunBtn.textContent = 'Importar agora';
         intDeleteBtn.classList.remove('hidden');
         intShowEditor();
+        setPickingMode(false);
         goToStep(1);
     } catch (e) {
         showToast('Erro ao carregar integração');
     }
 }
 
+// ── Modelos prontos (presets) ──────────────────────────────────
+let intPresetsCache = null;
+
+function setPickingMode(on) {
+    if (intEditor) intEditor.classList.toggle('int-editor--picking', !!on);
+}
+
+function showSetupHint(setup) {
+    if (!intSetupHint || !intSetupHintList) return;
+    if (!setup || !setup.length) {
+        intSetupHint.classList.add('hidden');
+        intSetupHintList.innerHTML = '';
+        return;
+    }
+    intSetupHintList.innerHTML = setup.map(s => `<li>${escapeHTML(s)}</li>`).join('');
+    intSetupHint.classList.remove('hidden');
+}
+
+async function loadPresets() {
+    if (intPresetsCache) return intPresetsCache;
+    try {
+        const res = await apiFetch('/api/integrations/presets');
+        intPresetsCache = res.ok ? await res.json() : [];
+    } catch (e) {
+        console.error('Erro ao carregar modelos:', e);
+        intPresetsCache = [];
+    }
+    return intPresetsCache;
+}
+
+function makeTemplateCard(name, desc, extraClass, onClick) {
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'int-template-card' + (extraClass ? ' ' + extraClass : '');
+    card.innerHTML =
+        `<span class="int-template-name">${escapeHTML(name)}</span>` +
+        `<span class="int-template-desc">${escapeHTML(desc)}</span>`;
+    card.addEventListener('click', onClick);
+    return card;
+}
+
+async function renderTemplatePicker() {
+    if (!intTemplateGrid) return;
+    intTemplateGrid.innerHTML = '<div class="int-muted">Carregando modelos…</div>';
+    const presets = await loadPresets();
+    intTemplateGrid.innerHTML = '';
+    presets.forEach(p => {
+        intTemplateGrid.appendChild(
+            makeTemplateCard(p.label || p.name || '', p.description || '', '', () => choosePreset(p))
+        );
+    });
+    intTemplateGrid.appendChild(
+        makeTemplateCard('Começar do zero', 'Qualquer API REST/JSON, configurada manualmente.',
+            'int-template-card--scratch', startFromScratch)
+    );
+}
+
+function choosePreset(preset) {
+    intAlertShow('', false, true);
+    fillForm({ id: '', name: preset.name, config: preset.config });
+    showSetupHint(preset.setup);
+    intEditorTitle.textContent = preset.label || 'Nova integração';
+    intRunBtn.textContent = 'Salvar e importar agora';
+    intDeleteBtn.classList.add('hidden');
+    setPickingMode(false);
+    goToStep(1);
+}
+
+function startFromScratch() {
+    intAlertShow('', false, true);
+    fillForm(null);
+    renderAuthFields('none', {});
+    showSetupHint(null);
+    intEditorTitle.textContent = 'Nova integração';
+    intRunBtn.textContent = 'Salvar e importar agora';
+    intDeleteBtn.classList.add('hidden');
+    setPickingMode(false);
+    goToStep(1);
+}
+
 function openNewIntegration() {
     intAlertShow('', false, true);
     fillForm(null);
     renderAuthFields('none', {});
+    showSetupHint(null);
     intEditorTitle.textContent = 'Nova integração';
     intRunBtn.textContent = 'Salvar e importar agora';
     intDeleteBtn.classList.add('hidden');
     intShowEditor();
-    goToStep(1);
+    setPickingMode(true);
+    renderTemplatePicker();
 }
 
 // ── Passo 1 -> 2: buscar dados e detectar ──────────────────────

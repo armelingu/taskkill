@@ -315,6 +315,13 @@
 
                     <div id="int-alert" class="auth-alert hidden" role="alert"></div>
 
+                    <!-- Seletor de modelos prontos (aparece ao criar nova integração) -->
+                    <section id="int-template-picker" class="int-template-picker">
+                        <h2 class="int-step-title">Comece por um modelo</h2>
+                        <p class="int-step-help">Escolha um serviço para pré-preencher a conexão e o mapeamento. Você só troca os detalhes e cola seu token — ou comece do zero para uma API qualquer.</p>
+                        <div id="int-template-grid" class="int-template-grid"></div>
+                    </section>
+
                     <!-- Indicador de passos -->
                     <ol class="int-stepper" id="int-stepper">
                         <li class="int-step is-active" data-step="1"><span class="int-step-num">1</span><span class="int-step-label">Conexão</span></li>
@@ -329,6 +336,11 @@
                     <section class="int-step-panel" data-panel="1">
                         <h2 class="int-step-title">De onde buscar os dados?</h2>
                         <p class="int-step-help">Informe o endereço da API que devolve seus itens em JSON. Ela precisa estar acessível pela internet.</p>
+
+                        <div id="int-setup-hint" class="int-setup-hint hidden">
+                            <div class="int-setup-hint-title">Antes de buscar, ajuste:</div>
+                            <ul id="int-setup-hint-list" class="int-setup-hint-list"></ul>
+                        </div>
 
                         <label class="auth-label" for="int-name">Nome da integração</label>
                         <input class="auth-input" id="int-name" type="text" maxlength="80" placeholder="Ex: Chamados do Suporte">

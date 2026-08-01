@@ -3238,6 +3238,90 @@ body.graph-mode .main-content {
 }
 
 /* Painéis de passo */
+/* ── Seletor de modelos prontos (presets) ─────────────────────── */
+#int-template-picker { display: none; }
+.int-editor--picking #int-template-picker { display: block; }
+.int-editor--picking .int-stepper,
+.int-editor--picking .int-step-panel,
+.int-editor--picking .int-json-advanced { display: none !important; }
+
+.int-template-picker {
+    animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.int-template-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 12px;
+    margin-top: 14px;
+}
+
+.int-template-card {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    text-align: left;
+    padding: 16px 18px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+}
+.int-template-card:hover {
+    border-color: var(--accent);
+    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.12);
+    transform: translateY(-1px);
+}
+.int-template-card:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+.int-template-card--scratch {
+    border-style: dashed;
+    background: var(--surface-2);
+}
+.int-template-name {
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: var(--text-title);
+}
+.int-template-desc {
+    font-size: 0.8rem;
+    font-weight: 500;
+    line-height: 1.4;
+    color: var(--text-muted);
+}
+
+/* Caixa de dica pós-seleção (o que ajustar antes de buscar) */
+.int-setup-hint {
+    background: var(--accent-blue-soft);
+    border: 1px solid var(--accent-blue-border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin: 4px 0 10px;
+}
+.int-setup-hint-title {
+    font-weight: 700;
+    font-size: 0.82rem;
+    color: var(--accent-blue-deep);
+    margin-bottom: 6px;
+}
+.int-setup-hint-list {
+    margin: 0;
+    padding-left: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.int-setup-hint-list li {
+    font-size: 0.82rem;
+    font-weight: 500;
+    line-height: 1.45;
+    color: var(--text-secondary);
+}
+
 .int-step-panel {
     background: var(--surface);
     border: 1px solid rgba(15, 23, 42, 0.06);
