@@ -236,3 +236,61 @@ def test_gather_items_paginates_and_stops(monkeypatch):
     monkeypatch.setattr(I, 'fetch_payload', fake_fetch)
     items = I._gather_items(connection, '', pagination)
     assert [it['id'] for it in items] == [1, 2, 3]
+
+
+# ── Paginação por cursor no corpo (GraphQL) ────────────────────────
+def test_set_nested_creates_intermediate_dicts():
+    d = {}
+    I._set_nested(d, 'variables.after', 'x')
+    assert d == {'variables': {'after': 'x'}}
+    d2 = {'variables': {'first': 50}}
+    I._set_nested(d2, 'variables.after', 'y')
+    assert d2 == {'variables': {'first': 50, 'after': 'y'}}
+
+
+def test_gather_body_cursor_injects_cursor_and_stops(monkeypatch):
+    connection = {
+        'base_url': 'https://api.linear.app', 'path': '/graphql', 'method': 'POST',
+        'body': {'query': 'q', 'variables': {'after': None}},
+    }
+    pagination = {
+        'mode': 'body_cursor',
+        'next_path': 'data.issues.pageInfo.endCursor',
+        'has_next_path': 'data.issues.pageInfo.hasNextPage',
+        'var_path': 'variables.after',
+        'max_pages': 10,
+    }
+    seen = []
+
+    def fake_fetch(conn, allow_private=None, extra_query=None, override_url=None):
+        after = ((conn.get('body') or {}).get('variables') or {}).get('after')
+        seen.append(after)
+        if after is None:
+            return {'data': {'issues': {'nodes': [{'id': 1}, {'id': 2}],
+                                        'pageInfo': {'hasNextPage': True, 'endCursor': 'c1'}}}}
+        if after == 'c1':
+            return {'data': {'issues': {'nodes': [{'id': 3}],
+                                        'pageInfo': {'hasNextPage': False, 'endCursor': 'c2'}}}}
+        return {'data': {'issues': {'nodes': [], 'pageInfo': {'hasNextPage': False}}}}
+
+    monkeypatch.setattr(I, 'fetch_payload', fake_fetch)
+    items = I._gather_items(connection, 'data.issues.nodes', pagination)
+    assert [it['id'] for it in items] == [1, 2, 3]
+    # Injeta o cursor da 1ª resposta e para no hasNextPage=False (sem 3ª página).
+    assert seen == [None, 'c1']
+    # Não muta a connection original.
+    assert connection['body']['variables']['after'] is None
+
+
+def test_gather_body_cursor_stops_without_cursor(monkeypatch):
+    connection = {'base_url': 'https://api.linear.app', 'path': '/graphql',
+                  'method': 'POST', 'body': {'variables': {}}}
+    pagination = {'mode': 'body_cursor', 'next_path': 'pageInfo.endCursor',
+                  'var_path': 'variables.after', 'max_pages': 5}
+
+    def fake_fetch(conn, allow_private=None, extra_query=None, override_url=None):
+        return {'nodes': [{'id': 1}], 'pageInfo': {'endCursor': None}}
+
+    monkeypatch.setattr(I, 'fetch_payload', fake_fetch)
+    items = I._gather_items(connection, 'nodes', pagination)
+    assert [it['id'] for it in items] == [1]

@@ -347,15 +347,69 @@ def extract_items(payload, items_path):
 MAX_PAGES_CAP = 50
 
 
+def _set_nested(obj, path, value):
+    """Define obj[a][b]... = value (dot-notation), criando dicts intermediários."""
+    keys = [k for k in str(path or '').split('.') if k]
+    if not keys or not isinstance(obj, dict):
+        return
+    cur = obj
+    for k in keys[:-1]:
+        nxt = cur.get(k)
+        if not isinstance(nxt, dict):
+            nxt = {}
+            cur[k] = nxt
+        cur = nxt
+    cur[keys[-1]] = value
+
+
+def _gather_body_cursor(connection, items_path, pagination, max_pages):
+    """
+    Paginação por cursor injetado no CORPO da requisição (POST). Feita para
+    GraphQL (ex.: Linear): o cursor lido da resposta (next_path) volta como uma
+    variável no body (var_path, ex.: 'variables.after') na próxima página.
+
+    Campos: next_path (cursor na resposta), has_next_path (flag booleana
+    opcional para parar), var_path (onde injetar o cursor no body).
+    """
+    next_path = (pagination.get('next_path') or '').strip()
+    has_next_path = (pagination.get('has_next_path') or '').strip()
+    var_path = (pagination.get('var_path') or 'variables.after').strip()
+
+    collected = []
+    cursor = None
+    for i in range(max_pages):
+        conn = copy.deepcopy(connection)
+        if i > 0:
+            body = conn.get('body')
+            if not isinstance(body, dict):
+                break
+            _set_nested(body, var_path, cursor)
+            conn['body'] = body
+        payload = fetch_payload(conn)
+        page_items = extract_items(payload, items_path)
+        if not page_items:
+            break
+        collected.extend(page_items)
+        if len(collected) >= MAX_ITEMS_PER_RUN:
+            return collected[:MAX_ITEMS_PER_RUN]
+        if has_next_path and not resolve_path(payload, has_next_path):
+            break
+        cursor = resolve_path(payload, next_path) if next_path else None
+        if not cursor:
+            break
+    return collected
+
+
 def _gather_items(connection, items_path, pagination):
     """
     Coleta itens de uma ou mais páginas, conforme a configuração de paginação.
 
     pagination.mode:
-      - 'none'   : uma única requisição.
-      - 'page'   : incrementa um parâmetro de página (param), começando em 'start'.
-      - 'offset' : incrementa um parâmetro de offset (param) em passos de 'size'.
-      - 'cursor' : segue um token/URL encontrado em 'next_path' na resposta.
+      - 'none'        : uma única requisição.
+      - 'page'        : incrementa um parâmetro de página (param), começando em 'start'.
+      - 'offset'      : incrementa um parâmetro de offset (param) em passos de 'size'.
+      - 'cursor'      : segue um token/URL encontrado em 'next_path' na resposta.
+      - 'body_cursor' : cursor injetado no corpo (GraphQL); ver _gather_body_cursor.
     Campos comuns: param, size_param, size, start, max_pages, next_path.
     """
     pagination = pagination or {}
@@ -381,6 +435,9 @@ def _gather_items(connection, items_path, pagination):
         max_pages = 10
     max_pages = max(1, min(max_pages, MAX_PAGES_CAP))
     next_path = (pagination.get('next_path') or '').strip()
+
+    if mode == 'body_cursor':
+        return _gather_body_cursor(connection, items_path, pagination, max_pages)
 
     collected = []
     override_url = None
