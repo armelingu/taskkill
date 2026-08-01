@@ -175,6 +175,7 @@ function humanPagination(pag) {
         page: 'Por número de página',
         offset: 'Por offset',
         cursor: 'Por cursor/next',
+        body_cursor: 'Por cursor no corpo (GraphQL)',
     }[(pag.mode || 'none')] || 'Sem paginação';
     return pag.mode && pag.mode !== 'none' && pag.max_pages
         ? `${base} (até ${pag.max_pages} páginas)`
@@ -537,9 +538,17 @@ function getFormConfig() {
         },
         on_update: intOnUpdate.value,
         reimport_deleted: !!(intReimportDeleted && intReimportDeleted.checked),
-        pagination: readPagination(),
+        // Paginação que o form não representa (ex.: body_cursor do Linear) é
+        // preservada; caso contrário, lê do formulário.
+        pagination: intCarryConfig.pagination !== undefined
+            ? intCarryConfig.pagination
+            : readPagination(),
     };
 }
+
+// Modos de paginação que o formulário sabe editar. Outros (ex.: body_cursor)
+// são preservados via intCarryConfig.
+const FORM_PAG_MODES = ['none', 'page', 'offset', 'cursor'];
 
 function applyConfig(cfg) {
     cfg = cfg || {};
@@ -582,9 +591,14 @@ function applyConfig(cfg) {
     if (intReimportDeleted) intReimportDeleted.checked = !!cfg.reimport_deleted;
 
     const pag = cfg.pagination || { mode: 'none' };
-    if (intPagMode) {
-        intPagMode.value = pag.mode || 'none';
-        renderPagFields(intPagMode.value, pag);
+    const pagMode = pag.mode || 'none';
+    if (FORM_PAG_MODES.indexOf(pagMode) === -1) {
+        // Modo avançado (ex.: body_cursor): preserva e mostra 'none' no seletor.
+        intCarryConfig.pagination = pag;
+        if (intPagMode) { intPagMode.value = 'none'; renderPagFields('none', {}); }
+    } else if (intPagMode) {
+        intPagMode.value = pagMode;
+        renderPagFields(pagMode, pag);
     }
 }
 
@@ -1299,7 +1313,11 @@ if (integrationsView) {
     intNewBtn.addEventListener('click', openNewIntegration);
     intBackBtn.addEventListener('click', () => { intShowList(); loadIntegrations(); });
     intAuthType.addEventListener('change', () => renderAuthFields(intAuthType.value, {}));
-    if (intPagMode) intPagMode.addEventListener('change', () => renderPagFields(intPagMode.value, {}));
+    if (intPagMode) intPagMode.addEventListener('change', () => {
+        // Se o usuário mexe na paginação, a escolha dele passa a valer (descarta o carry).
+        intCarryConfig.pagination = undefined;
+        renderPagFields(intPagMode.value, {});
+    });
     if (intSchedEnabled) intSchedEnabled.addEventListener('change', updateSchedUI);
     intAddHeader.addEventListener('click', () => kvAddRow(intHeaders, '', ''));
     intAddQuery.addEventListener('click', () => kvAddRow(intQuery, '', ''));

@@ -146,7 +146,60 @@ _GITLAB_ISSUES = {
 }
 
 
-_PRESETS = [_GITHUB_ISSUES, _JIRA_CLOUD, _GITLAB_ISSUES]
+# ── Linear (GraphQL) ───────────────────────────────────────────────
+# GraphQL: POST com body {query, variables}. Paginação por cursor no corpo
+# (body_cursor) — o endCursor volta como variables.after. A API key pessoal
+# vai direto no header Authorization (sem "Bearer").
+_LINEAR_QUERY = (
+    'query($after: String) { '
+    'viewer { assignedIssues(first: 50, after: $after, '
+    'filter: { state: { type: { nin: ["completed", "canceled"] } } }) { '
+    'nodes { id identifier title dueDate project { name } } '
+    'pageInfo { hasNextPage endCursor } } } }'
+)
+
+_LINEAR = {
+    'id': 'linear',
+    'label': 'Linear',
+    'description': 'Importa suas issues atribuídas no Linear (GraphQL) como tarefas.',
+    'docs_url': 'https://linear.app/settings/api',
+    'name': 'Linear',
+    'setup': [
+        'Crie uma Personal API key em Linear → Settings → API e cole no campo do Authorization.',
+        'Opcional: ajuste a query GraphQL em "Editar como JSON" para outro filtro.',
+    ],
+    'config': {
+        'connection': {
+            'base_url': 'https://api.linear.app',
+            'path': '/graphql',
+            'method': 'POST',
+            'headers': {'Content-Type': 'application/json'},
+            'query': {},
+            'body': {'query': _LINEAR_QUERY, 'variables': {'after': None}},
+            'auth': {'type': 'api_key', 'header': 'Authorization', 'value': ''},
+            'allow_private': False,
+        },
+        'items_path': 'data.viewer.assignedIssues.nodes',
+        'pagination': {
+            'mode': 'body_cursor',
+            'next_path': 'data.viewer.assignedIssues.pageInfo.endCursor',
+            'has_next_path': 'data.viewer.assignedIssues.pageInfo.hasNextPage',
+            'var_path': 'variables.after',
+            'max_pages': 10,
+        },
+        'mapping': {
+            'external_id': 'id',
+            'project': {'mode': 'fixed', 'value': 'Linear'},
+            'text_template': '{{identifier}} {{title}}',
+            'due_date': {'mode': 'field', 'field': 'dueDate'},
+        },
+        'on_update': 'update_text',
+        'reimport_deleted': False,
+    },
+}
+
+
+_PRESETS = [_GITHUB_ISSUES, _JIRA_CLOUD, _GITLAB_ISSUES, _LINEAR]
 _PRESETS_BY_ID = {p['id']: p for p in _PRESETS}
 
 

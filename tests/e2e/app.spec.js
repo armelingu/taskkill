@@ -338,8 +338,28 @@ test.describe('Fluxos principais do app', () => {
         // Modo seleção: catálogo visível, stepper escondido.
         await expect(page.locator('#int-template-picker')).toBeVisible();
         await expect(page.locator('#int-stepper')).toBeHidden();
-        // 3 provedores (GitHub/Jira/GitLab) + "Começar do zero".
-        await expect(page.locator('#int-template-grid .int-template-card')).toHaveCount(4);
+        // Provedores nomeados + "Começar do zero".
+        const grid = page.locator('#int-template-grid');
+        for (const name of ['GitHub', 'Jira', 'GitLab', 'Linear']) {
+            await expect(grid.locator('.int-template-card', { hasText: name })).toBeVisible();
+        }
+        await expect(grid.locator('.int-template-card--scratch')).toBeVisible();
+    });
+
+    test('integrações: modelo Linear (GraphQL) preenche POST e paginação por cursor no corpo', async ({ page }) => {
+        await page.click('#nav-integrations');
+        await page.click('#int-new-btn');
+        await page.locator('#int-template-grid .int-template-card', { hasText: 'Linear' }).click();
+        await expect(page.locator('#int-stepper')).toBeVisible();
+        await expect(page.locator('#int-name')).toHaveValue('Linear');
+        await expect(page.locator('#int-url')).toHaveValue(/api\.linear\.app\/graphql/);
+        // Abrir o JSON avançado sincroniza a config (evento toggle é assíncrono).
+        await page.locator('.int-json-advanced summary').click();
+        await expect(page.locator('#int-json')).toHaveValue(/assignedIssues/);
+        const cfg = JSON.parse(await page.locator('#int-json').inputValue());
+        expect(cfg.connection.method).toBe('POST');
+        expect(cfg.connection.body.query).toContain('assignedIssues');
+        expect(cfg.pagination.mode).toBe('body_cursor');
     });
 
     test('integrações: modelo GitHub pré-preenche URL, auth e dica', async ({ page }) => {

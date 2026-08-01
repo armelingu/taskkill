@@ -10,9 +10,9 @@ Cobrem duas frentes:
 import integration_presets
 import integrations
 
-EXPECTED_IDS = {'github_issues', 'jira_cloud', 'gitlab_issues'}
+EXPECTED_IDS = {'github_issues', 'jira_cloud', 'gitlab_issues', 'linear'}
 VALID_AUTH = {'none', 'bearer', 'api_key', 'basic', 'query_key', 'oauth2'}
-VALID_PAG = {'none', 'page', 'offset', 'cursor'}
+VALID_PAG = {'none', 'page', 'offset', 'cursor', 'body_cursor'}
 SECRET_FIELDS = ('token', 'value', 'password', 'client_secret')
 
 
@@ -86,6 +86,28 @@ def test_jira_preset_resolves_nested_project_and_due():
     assert built['project'] == 'ABC'
     assert built['text'] == 'ABC-12 Revisar API'
     assert built['due_date'] == '2026-08-15'
+
+
+def test_linear_preset_is_graphql_post_with_body_cursor():
+    cfg = integration_presets.get_preset('linear')['config']
+    conn = cfg['connection']
+    assert conn['method'] == 'POST'
+    assert isinstance(conn.get('body'), dict) and conn['body'].get('query')
+    assert (conn.get('auth') or {}).get('header') == 'Authorization'
+    pag = cfg['pagination']
+    assert pag['mode'] == 'body_cursor'
+    assert pag['var_path'] == 'variables.after'
+
+
+def test_linear_preset_maps_identifier_title_and_due():
+    cfg = integration_presets.get_preset('linear')['config']
+    item = {'id': 'uuid-1', 'identifier': 'ENG-42', 'title': 'Ajustar cache',
+            'dueDate': '2026-09-01', 'project': {'name': 'Core'}}
+    built = integrations.build_task_from_item(item, cfg['mapping'])
+    assert built['external_id'] == 'uuid-1'
+    assert built['project'] == 'Linear'
+    assert built['text'] == 'ENG-42 Ajustar cache'
+    assert built['due_date'] == '2026-09-01'
 
 
 def test_get_preset_unknown_returns_none():
