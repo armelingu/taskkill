@@ -86,6 +86,10 @@ let intFieldsList = [];     // campos detectados do item
 let intPreviewRows = [];    // linhas editáveis da prévia (passo 4)
 let intPreviewTotal = 0;
 let intPreviewSig = '';     // assinatura da config quando a prévia foi gerada
+// Campos da config que o formulário não edita (ex.: connection.body de um
+// modelo GraphQL, mapping.due_date por campo). Guardados aqui ao aplicar uma
+// config para sobreviverem ao round-trip do wizard (getFormConfig).
+let intCarryConfig = {};
 
 // O prazo agora é uma data real ISO YYYY-MM-DD (ou vazio = sem prazo).
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -190,15 +194,18 @@ function renderConfigRecap() {
     const map = c.mapping || {};
     const proj = map.project || {};
     const upd = humanOnUpdate(c.on_update) + (c.reimport_deleted ? ' • recria excluídas' : '');
+    const due = map.due_date || {};
     const rows = [
         ['Fonte', (conn.base_url || '—') + (conn.method && conn.method !== 'GET' ? ` (${conn.method})` : '')],
         ['Autenticação', humanAuth((conn.auth || {}).type)],
         ['Paginação', humanPagination(c.pagination)],
         ['Projeto', proj.mode === 'field' ? `do campo "${proj.field || '—'}"` : `"${proj.value || '—'}"`],
         ['Identificador', map.external_id || 'id'],
-        ['Se já importado', upd],
-        ['Agendamento', sched.enabled && sched.interval_minutes ? `a cada ${sched.interval_minutes} min` : 'manual'],
     ];
+    if (due.mode === 'field') rows.push(['Prazo', `do campo "${due.field || '—'}"`]);
+    else if (due.mode === 'fixed') rows.push(['Prazo', due.value || '—']);
+    rows.push(['Se já importado', upd]);
+    rows.push(['Agendamento', sched.enabled && sched.interval_minutes ? `a cada ${sched.interval_minutes} min` : 'manual']);
     intConfigRecap.innerHTML = rows.map(([k, v]) =>
         `<div class="int-recap-row"><span class="int-recap-key">${escapeHTML(k)}</span><span class="int-recap-val">${escapeHTML(v)}</span></div>`
     ).join('');
@@ -500,23 +507,30 @@ function getFormConfig() {
     const project = isField
         ? { mode: 'field', field: intProjectField.value.trim() }
         : { mode: 'fixed', value: intProjectValue.value };
+    const connection = {
+        base_url: intUrl.value.trim(),
+        path: '',
+        method: intMethod.value,
+        headers: collectKv(intHeaders),
+        query: collectKv(intQuery),
+        auth: readAuth(),
+        allow_private: intAllowPrivate.checked,
+    };
+    // Preserva um corpo (body) vindo de um modelo — o form não o edita.
+    if (intCarryConfig.body !== undefined) connection.body = intCarryConfig.body;
+    // Prazo: se um modelo definiu due_date por campo/fixo, preserva; senão,
+    // é definido por tarefa na revisão (passo 4).
+    const dueDate = intCarryConfig.due_date !== undefined
+        ? intCarryConfig.due_date
+        : { mode: 'none' };
     return {
-        connection: {
-            base_url: intUrl.value.trim(),
-            path: '',
-            method: intMethod.value,
-            headers: collectKv(intHeaders),
-            query: collectKv(intQuery),
-            auth: readAuth(),
-            allow_private: intAllowPrivate.checked,
-        },
+        connection,
         items_path: intItemsPathSel.value || '',
         mapping: {
             external_id: (intExternalId.value || '').trim() || 'id',
             project: project,
             text_template: intTextTemplate.value,
-            // O dia da semana é definido por tarefa na revisão (passo 4).
-            due_date: { mode: 'none' },
+            due_date: dueDate,
         },
         on_update: intOnUpdate.value,
         reimport_deleted: !!(intReimportDeleted && intReimportDeleted.checked),
@@ -528,6 +542,11 @@ function applyConfig(cfg) {
     cfg = cfg || {};
     const conn = cfg.connection || {};
     const map = cfg.mapping || {};
+    // Guarda o que o formulário não consegue editar, para não perder no save.
+    intCarryConfig = {};
+    if (conn.body !== undefined && conn.body !== null) intCarryConfig.body = conn.body;
+    const dd = map.due_date || {};
+    if (dd.mode && dd.mode !== 'none') intCarryConfig.due_date = dd;
     // Junta base_url + path numa URL única (compatível com configs antigas).
     let url = (conn.base_url || '').trim();
     const path = (conn.path || '').trim();

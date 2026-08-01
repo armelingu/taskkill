@@ -20,6 +20,7 @@ from database import (
 from werkzeug.security import check_password_hash
 
 import integrations
+import integration_presets
 import scheduler
 from integrations import IntegrationError
 from recurrence import valid_recurrence, next_occurrence
@@ -978,6 +979,13 @@ def _integration_row_to_dict(row):
         'next_run_at': row['next_run_at'] if 'next_run_at' in keys else None,
         'config': integrations.mask_config(cfg),
     }
+
+
+@api_bp.route('/integrations/presets', methods=['GET'])
+@api_admin_required
+def list_integration_presets():
+    """Catálogo de modelos prontos (Jira, GitHub, GitLab...) para pré-preencher o wizard."""
+    return jsonify(integration_presets.list_presets())
 
 
 @api_bp.route('/integrations', methods=['GET'])
