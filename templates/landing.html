@@ -153,7 +153,11 @@
               <span class="shot__url">app.taskkill.io</span>
             </div>
             <div class="shot__viewport">
-              <iframe class="shot__frame" data-screen="/static/landing/screens/tasklist.html" title="Lista de tarefas do Taskkill" scrolling="no" loading="lazy"></iframe>
+              {# Poster estatico (screenshot real da tela) = LCP leve e instantaneo.
+                 Substitui o iframe pesado que carregava o CSS inteiro do app. #}
+              <img class="shot__img" src="{{ asset('landing/posters/tasklist-light.webp') }}"
+                   data-poster="tasklist" width="1280" height="820" fetchpriority="high" decoding="async"
+                   alt="Lista de tarefas do Taskkill mostrando dependencias, prazos e tarefa bloqueada" />
             </div>
           </div>
         </div>

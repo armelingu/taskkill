@@ -15,20 +15,38 @@
     return root.getAttribute("data-theme") === "dark" ? "dark" : "light";
   }
 
-  // Reaplica ?theme=... em cada iframe de tela para casar com o tema da landing.
+  // Reaplica ?theme=... apenas nos iframes JÁ carregados (que têm src). Os que
+  // ainda não entraram na viewport permanecem sem carregar — assim o toggle de
+  // tema não força o download antecipado das telas pesadas.
   function syncShotsTheme() {
     const theme = currentTheme();
     document.querySelectorAll(".shot__frame").forEach((frame) => {
       const base = frame.getAttribute("data-screen");
-      if (base) frame.src = `${base}?theme=${theme}`;
+      if (base && frame.src) frame.src = `${base}?theme=${theme}`;
     });
   }
+
+  // Troca o poster estático (hero) entre claro/escuro conforme o tema.
+  // Guard: só reatribui o src se o arquivo desejado for diferente do atual
+  // (evita refetch da imagem de LCP no caminho claro, que já vem no HTML).
+  function syncPosters() {
+    const theme = currentTheme();
+    document.querySelectorAll("img[data-poster]").forEach((img) => {
+      const file = `${img.getAttribute("data-poster")}-${theme}.webp`;
+      if (!(img.getAttribute("src") || "").includes(file)) {
+        img.src = `/static/landing/posters/${file}`;
+      }
+    });
+  }
+  // Aplica já no carregamento (troca para o poster escuro se o tema for escuro).
+  syncPosters();
 
   toggle?.addEventListener("click", () => {
     const next = currentTheme() === "dark" ? "light" : "dark";
     root.setAttribute("data-theme", next);
     localStorage.setItem(STORAGE_KEY, next);
     syncShotsTheme();
+    syncPosters();
   });
 
   // Escala cada iframe (renderizado em 1280×820) para caber na largura do container,
@@ -49,22 +67,34 @@
   window.addEventListener("load", fitShots);
   fitShots();
 
-  // LCP: os iframes de tela NÃO recebem src no HTML — carregá-los no primeiro
-  // paint atrasaria o maior elemento (o headline do hero). Só atribuímos o src
-  // depois de 'load' e num momento ocioso. As telas abaixo da dobra continuam
-  // adiadas pelo loading="lazy" nativo até chegarem perto da viewport.
-  function loadShotsWhenIdle() {
-    if ("requestIdleCallback" in window) {
-      requestIdleCallback(() => syncShotsTheme(), { timeout: 2000 });
-    } else {
-      setTimeout(syncShotsTheme, 200);
+  // LCP/carga: o hero é uma imagem leve; os iframes de tela (galeria/carrossel)
+  // ficam TODOS abaixo da dobra. Em vez de carregá-los em massa, cada um só
+  // recebe src quando chega perto da viewport. Isso mantém o load inicial enxuto
+  // (sem puxar o CSS do app) e deixa a main-thread livre para pintar o hero.
+  (function lazyLoadShots() {
+    const frames = document.querySelectorAll(".shot__frame[data-screen]");
+    if (!frames.length) return;
+    const load = (frame) => {
+      if (frame.src) return;
+      frame.src = `${frame.getAttribute("data-screen")}?theme=${currentTheme()}`;
+    };
+    if (!("IntersectionObserver" in window)) {
+      frames.forEach(load);
+      return;
     }
-  }
-  if (document.readyState === "complete") {
-    loadShotsWhenIdle();
-  } else {
-    window.addEventListener("load", loadShotsWhenIdle, { once: true });
-  }
+    const io = new IntersectionObserver(
+      (entries, obs) => {
+        entries.forEach((e) => {
+          if (e.isIntersecting) {
+            load(e.target);
+            obs.unobserve(e.target);
+          }
+        });
+      },
+      { rootMargin: "300px 0px" }
+    );
+    frames.forEach((f) => io.observe(f));
+  })();
 
   // ---------- Carrossel "Por dentro" ----------
   const carousel = document.querySelector("[data-carousel]");
