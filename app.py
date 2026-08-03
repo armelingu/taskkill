@@ -189,11 +189,14 @@ def add_security_headers(response):
     response.headers['Cross-Origin-Resource-Policy'] = 'same-origin'
     # Content Security Policy (CSP): Uma lista branca bloqueando execução de código não autorizado
     # Permite Google Fonts, e restringe JS apenas aos seus arquivos locais.
+    # frame-ancestors 'self': o app nunca pode ser embutido por terceiros, mas a
+    # landing (/landing) precisa embutir suas próprias telas de demonstração via
+    # <iframe> do mesmo domínio (ex.: /static/landing/screens/*.html).
     csp = (
         "default-src 'self'; "
         "base-uri 'none'; "
         "form-action 'self'; "
-        "frame-ancestors 'none'; "
+        "frame-ancestors 'self'; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "font-src 'self' https://fonts.gstatic.com; "
         "script-src 'self'; "

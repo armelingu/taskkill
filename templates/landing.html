@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Taskkill — Pare de administrar listas. Termine tarefas.</title>
+  <meta name="description" content="A lista de tarefas que mostra o que está te bloqueando. Capture em linguagem natural e foque no que dá pra fazer agora." />
+  <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ asset('landing/landing.css') }}" />
+</head>
+<body>
+  <!-- NAV -->
+  <header class="nav">
+    <div class="container nav__inner">
+      <a href="#" class="brand" aria-label="Taskkill">
+        <span class="brand__mark" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="3" y="3" width="7" height="7" rx="2" fill="currentColor" />
+            <rect x="14" y="3" width="7" height="7" rx="2" fill="currentColor" opacity="0.7" />
+            <rect x="3" y="14" width="7" height="7" rx="2" fill="currentColor" opacity="0.7" />
+            <rect x="14" y="14" width="7" height="7" rx="2" fill="currentColor" opacity="0.3" />
+          </svg>
+        </span>
+        <span class="brand__name">Taskkill</span>
+      </a>
+
+      <nav class="nav__links" aria-label="Seções">
+        <a href="#problema">O problema</a>
+        <a href="#diferenciais">Diferenciais</a>
+        <a href="#como-funciona">Como funciona</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+
+      <div class="nav__actions">
+        <button class="theme-toggle" id="themeToggle" aria-label="Alternar tema" title="Alternar tema">
+          <svg class="icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="2"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          <svg class="icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+        </button>
+        {% if logged_in %}
+        <a href="{{ url_for('main.index') }}" class="btn btn--primary btn--sm">Abrir o app</a>
+        {% else %}
+        <a href="{{ url_for('main.login') }}" class="btn btn--ghost btn--sm">Entrar</a>
+        <a href="{{ url_for('main.register') }}" class="btn btn--primary btn--sm">Criar minha conta grátis</a>
+        {% endif %}
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- HERO -->
+    <section class="hero">
+      <div class="container hero__grid">
+        <div class="hero__copy" data-reveal>
+          <span class="eyebrow">Lista de tarefas com clareza de bloqueios</span>
+          <h1 class="hero__title">A lista de tarefas que mostra o que está <span class="grad">te bloqueando</span>.</h1>
+          <p class="hero__sub">
+            Veja o que depende do quê, capture tarefas em linguagem natural e foque no que dá pra fazer
+            agora — com o trabalho que você já tem no GitHub, Jira, GitLab e Linear.
+          </p>
+          <div class="hero__cta">
+            <a href="{{ url_for('main.register') }}" class="btn btn--primary btn--lg">Criar minha conta grátis</a>
+            <a href="#como-funciona" class="btn btn--ghost btn--lg">Ver como funciona ↓</a>
+          </div>
+          <p class="hero__micro">Sem cartão. Leva 30 segundos.</p>
+        </div>
+
+        <!-- TELA REAL DO SISTEMA (embutida do app, dados fictícios) -->
+        <div class="hero__visual" data-reveal style="--d:160ms">
+          <div class="shot">
+            <div class="shot__bar" aria-hidden="true">
+              <span class="dot dot--r"></span><span class="dot dot--y"></span><span class="dot dot--g"></span>
+              <span class="shot__url">app.taskkill.io</span>
+            </div>
+            <div class="shot__viewport">
+              <iframe class="shot__frame" data-screen="/static/landing/screens/tasklist.html" src="/static/landing/screens/tasklist.html?theme=light" title="Lista de tarefas do Taskkill" scrolling="no" loading="lazy"></iframe>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="container trustbar">
+        <span class="trustbar__label">Feito para quem tem mais tarefas do que tempo</span>
+        <div class="trustbar__logos">
+          <span>Times pequenos</span><i>·</i><span>Freelancers</span><i>·</i><span>Devs</span><i>·</i><span>Estudantes</span><i>·</i><span>PMs</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- PROBLEMA -->
+    <section id="problema" class="section section--problem">
+      <div class="container narrow center" data-reveal>
+        <span class="kicker">O problema</span>
+        <h2 class="section__title">Sua lista não te diz o que fazer agora.</h2>
+        <p class="section__lead">
+          Você abre o app e vê 40 itens no mesmo peso. O que trava o quê? O que dá pra tocar hoje?
+          Sem essa resposta, a lista vira um arquivo morto — e o trabalho continua espalhado por
+          e-mail, chat e três abas de "issues".
+        </p>
+      </div>
+    </section>
+
+    <!-- DIFERENCIAIS -->
+    <section id="diferenciais" class="section">
+      <div class="container">
+        <div class="section__head" data-reveal>
+          <span class="kicker">Diferenciais</span>
+          <h2 class="section__title">Três coisas que a sua lista atual não faz.</h2>
+        </div>
+        <div class="cards cards--3" data-stagger>
+          <article class="card" data-reveal>
+            <div class="card__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M9 12h6M8.5 8.5l-2 2a3.5 3.5 0 0 0 0 5l.5.5a3.5 3.5 0 0 0 5 0l1-1M15.5 15.5l2-2a3.5 3.5 0 0 0 0-5l-.5-.5a3.5 3.5 0 0 0-5 0l-1 1" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <h3 class="card__title">Mostra o que está travado</h3>
+            <p class="card__text">Marque dependências entre tarefas e a Taskkill destaca na hora o que está bloqueado e o que já pode andar. Nada de adivinhar a ordem.</p>
+          </article>
+          <article class="card" data-reveal>
+            <div class="card__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="6" width="18" height="12" rx="2" stroke="currentColor" stroke-width="1.7"/><path d="M7 10h.01M11 10h.01M15 10h.01M8 14h8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+            </div>
+            <h3 class="card__title">Captura sem fricção</h3>
+            <p class="card__text">Digite do jeito que você pensa — "revisar contrato sexta às 15h" — e a tarefa nasce pronta, com data e prazo. Teclado primeiro, mouse opcional.</p>
+          </article>
+          <article class="card" data-reveal>
+            <div class="card__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M4 7l8-4 8 4-8 4-8-4Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M4 12l8 4 8-4M4 17l8 4 8-4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <h3 class="card__title">Puxa o trabalho que já existe</h3>
+            <p class="card__text">Conecte GitHub, Jira, GitLab e Linear e traga issues como tarefas. Uma lista só, em vez de cinco lugares pra checar.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- POR DENTRO (telas reais) -->
+    <section id="por-dentro" class="section section--muted">
+      <div class="container">
+        <div class="section__head section__head--carousel" data-reveal>
+          <div>
+            <span class="kicker">Por dentro</span>
+            <h2 class="section__title">É isso que você vê ao abrir.</h2>
+            <p class="section__lead">Telas reais do Taskkill. Arraste para o lado para ver mais.</p>
+          </div>
+          <div class="carousel__controls">
+            <span class="carousel__counter" data-carousel-counter aria-live="polite">01 / 04</span>
+            <div class="carousel__arrows">
+              <button type="button" class="carousel__arrow" data-carousel-prev aria-label="Tela anterior">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <button type="button" class="carousel__arrow" data-carousel-next aria-label="Próxima tela">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="carousel" data-carousel data-reveal style="--d:120ms" aria-roledescription="carrossel" aria-label="Telas do Taskkill">
+          <div class="carousel__viewport">
+          <div class="carousel__track" data-carousel-track>
+            <figure class="shot shot--gallery carousel__item">
+              <div class="shot__bar" aria-hidden="true">
+                <span class="dot dot--r"></span><span class="dot dot--y"></span><span class="dot dot--g"></span>
+                <span class="shot__url">Lista · projeto Produto</span>
+              </div>
+              <div class="shot__viewport">
+                <iframe class="shot__frame" data-screen="/static/landing/screens/tasklist.html" src="/static/landing/screens/tasklist.html?theme=light" title="Lista de tarefas" scrolling="no" loading="lazy"></iframe>
+              </div>
+              <figcaption class="shot__cap">Lista de tarefas — prazos, recorrência e “bloqueada por N” num olhar.</figcaption>
+            </figure>
+
+            <figure class="shot shot--gallery carousel__item">
+              <div class="shot__bar" aria-hidden="true">
+                <span class="dot dot--r"></span><span class="dot dot--y"></span><span class="dot dot--g"></span>
+                <span class="shot__url">Gráfico · relações</span>
+              </div>
+              <div class="shot__viewport">
+                <iframe class="shot__frame" data-screen="/static/landing/screens/graph.html" src="/static/landing/screens/graph.html?theme=light" title="Gráfico de relações" scrolling="no" loading="lazy"></iframe>
+              </div>
+              <figcaption class="shot__cap">Gráfico estilo mapa — veja como dias, projetos e tags se conectam.</figcaption>
+            </figure>
+
+            <figure class="shot shot--gallery carousel__item">
+              <div class="shot__bar" aria-hidden="true">
+                <span class="dot dot--r"></span><span class="dot dot--y"></span><span class="dot dot--g"></span>
+                <span class="shot__url">Dashboard · por projeto</span>
+              </div>
+              <div class="shot__viewport">
+                <iframe class="shot__frame" data-screen="/static/landing/screens/dashboard.html" src="/static/landing/screens/dashboard.html?theme=light" title="Dashboard por projeto" scrolling="no" loading="lazy"></iframe>
+              </div>
+              <figcaption class="shot__cap">Dashboard — status de cada projeto (em aberto, feitas e total) num relance.</figcaption>
+            </figure>
+
+            <figure class="shot shot--gallery carousel__item">
+              <div class="shot__bar" aria-hidden="true">
+                <span class="dot dot--r"></span><span class="dot dot--y"></span><span class="dot dot--g"></span>
+                <span class="shot__url">Integrações · fontes externas</span>
+              </div>
+              <div class="shot__viewport">
+                <iframe class="shot__frame" data-screen="/static/landing/screens/integrations.html" src="/static/landing/screens/integrations.html?theme=light" title="Integrações externas" scrolling="no" loading="lazy"></iframe>
+              </div>
+              <figcaption class="shot__cap">Integrações — GitHub, Jira e Linear virando tarefas na mesma lista.</figcaption>
+            </figure>
+          </div>
+          </div><!-- .carousel__viewport -->
+
+          <div class="carousel__dots" data-carousel-dots></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- MAIS DO QUE IMPORTA -->
+    <section class="section section--muted">
+      <div class="container">
+        <div class="section__head" data-reveal>
+          <span class="kicker">Mais do que importa</span>
+          <h2 class="section__title">Feita pra desaparecer no seu fluxo.</h2>
+        </div>
+        <div class="cards cards--3" data-stagger>
+          <article class="feature" data-reveal>
+            <h3 class="feature__title">Rápida de verdade</h3>
+            <p class="feature__text">Atalhos pra tudo. Você adiciona, conclui e reorganiza sem tirar a mão do teclado.</p>
+          </article>
+          <article class="feature" data-reveal>
+            <h3 class="feature__title">Recorrência que entende</h3>
+            <p class="feature__text">"Toda segunda", "a cada 15 dias" — tarefas que voltam sozinhas, do jeito que a vida repete.</p>
+          </article>
+          <article class="feature" data-reveal>
+            <h3 class="feature__title">Claro no claro e no escuro</h3>
+            <p class="feature__text">Tema claro e escuro nativos, com contraste pensado pra leitura confortável o dia todo.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- COMO FUNCIONA -->
+    <section id="como-funciona" class="section">
+      <div class="container">
+        <div class="section__head" data-reveal>
+          <span class="kicker">Como funciona</span>
+          <h2 class="section__title">Do caos à clareza em três passos.</h2>
+        </div>
+        <ol class="steps" data-steps>
+          <span class="steps__line" aria-hidden="true"><span class="steps__line-fill"></span></span>
+          <li class="step">
+            <span class="step__node">
+              <span class="step__num">1</span>
+              <svg class="step__check" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </span>
+            <h3 class="step__title">Jogue tudo pra dentro</h3>
+            <p class="step__text">Digite em linguagem natural ou importe issues das suas ferramentas. Tirar da cabeça é o primeiro passo.</p>
+          </li>
+          <li class="step">
+            <span class="step__node">
+              <span class="step__num">2</span>
+              <svg class="step__check" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </span>
+            <h3 class="step__title">Conecte o que depende do quê</h3>
+            <p class="step__text">Aponte as dependências. A Taskkill calcula a ordem e mostra o que está livre pra começar.</p>
+          </li>
+          <li class="step">
+            <span class="step__node">
+              <span class="step__num">3</span>
+              <svg class="step__check" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </span>
+            <h3 class="step__title">Mate a primeira tarefa</h3>
+            <p class="step__text">Foque no topo da lista — o que dá pra fazer agora — e veja o resto destravar em sequência.</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- FAQ -->
+    <section id="faq" class="section section--muted">
+      <div class="container narrow">
+        <div class="section__head center" data-reveal>
+          <span class="kicker">Perguntas frequentes</span>
+          <h2 class="section__title">Ainda em dúvida?</h2>
+        </div>
+        <div class="faq" data-stagger>
+          <details class="faq__item" data-reveal open>
+            <summary>Preciso ser técnico pra usar?</summary>
+            <p>Não. A captura em linguagem natural e as listas funcionam pra qualquer pessoa. As integrações com GitHub, Jira e afins são um bônus pra quem usa — dá pra ignorar completamente.</p>
+          </details>
+          <details class="faq__item" data-reveal>
+            <summary>É de graça?</summary>
+            <p>Sim, você cria sua conta e começa sem cartão. Leva cerca de 30 segundos.</p>
+          </details>
+          <details class="faq__item" data-reveal>
+            <summary>Como funcionam as dependências?</summary>
+            <p>Você marca que a tarefa A depende da tarefa B. Enquanto B não está concluída, A aparece como bloqueada — e some da sua fila de "pra fazer agora".</p>
+          </details>
+          <details class="faq__item" data-reveal>
+            <summary>Meus dados ficam onde?</summary>
+            <p>Cada conta tem seus dados isolados. Você controla o que importa das integrações e pode desconectar quando quiser.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- CTA FINAL -->
+    <section id="cta" class="section cta">
+      <div class="container center">
+        <div class="cta__card" data-reveal>
+          <h2 class="cta__title">Sua lista não vai encolher sozinha.</h2>
+          <p class="cta__sub">Crie sua conta e mate a primeira tarefa hoje.</p>
+          <a href="{{ url_for('main.register') }}" class="btn btn--primary btn--lg">Criar minha conta grátis</a>
+          <p class="hero__micro">Sem cartão. Leva 30 segundos.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="container footer__inner">
+      <div class="footer__brand">
+        <span class="brand__mark brand__mark--sm" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="3" y="3" width="7" height="7" rx="2" fill="currentColor" />
+            <rect x="14" y="3" width="7" height="7" rx="2" fill="currentColor" opacity="0.7" />
+            <rect x="3" y="14" width="7" height="7" rx="2" fill="currentColor" opacity="0.7" />
+            <rect x="14" y="14" width="7" height="7" rx="2" fill="currentColor" opacity="0.3" />
+          </svg>
+        </span>
+        <span>
+          <strong>Taskkill</strong>
+          <em>Pare de administrar listas. Termine tarefas.</em>
+        </span>
+      </div>
+      <div class="footer__links">
+        <a href="#problema">O problema</a>
+        <a href="#diferenciais">Diferenciais</a>
+        <a href="#como-funciona">Como funciona</a>
+        <a href="#faq">FAQ</a>
+      </div>
+      <span class="footer__copy">© 2026 Taskkill · Mockup</span>
+    </div>
+  </footer>
+
+  <script src="{{ asset('landing/landing.js') }}"></script>
+</body>
+</html>

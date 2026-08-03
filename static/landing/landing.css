@@ -1,0 +1,741 @@
+/* ============================================================
+   Taskkill — Landing mockup
+   Paleta herdada do app (indigo #6366f1 -> violet #8b5cf6)
+   ============================================================ */
+
+/* Tokens espelhados do sistema (static/css/style.css).
+   Nomes locais mapeados 1:1 para os valores semânticos do app. */
+:root {
+  color-scheme: light;
+
+  --bg: #f8fafc;          /* --bg-main */
+  --bg-elev: #ffffff;     /* --surface */
+  --surface: #ffffff;     /* --surface */
+  --surface-2: #fafbfc;   /* --surface-2 */
+  --muted-bg: #f1f5f9;    /* --bg-sidebar */
+
+  --text: #0f172a;            /* --text-title */
+  --text-secondary: #475569;  /* --text-secondary */
+  --text-muted: #64748b;      /* --text-muted */
+  --text-subtle: #94a3b8;     /* --text-subtle */
+  --inverse: #ffffff;         /* --text-inverse */
+
+  --border: #e2e8f0;        /* --border */
+  --border-strong: #cbd5e1; /* --border-strong */
+
+  --accent: #2962ff;       /* azul elétrico/cobalto (disruptivo, com profundidade) */
+  --accent-strong: #1d4ed8;/* hover (mais escuro) */
+  --accent-deep: #1e40af;  /* texto/ênfase forte sobre claro */
+  --accent-soft: #eaf1ff;  /* fundo azul bem claro */
+
+  --success: #10b981;  /* --success */
+  --danger: #ef4444;   /* --danger */
+  --warning: #b45309;  /* --warning */
+
+  --edge: #a5b4fc;     /* --indigo-active-border */
+
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);      /* --shadow-sm */
+  --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.06);     /* --shadow-md */
+  --shadow-lg: 0 12px 30px -8px rgba(15, 23, 42, 0.12); /* --shadow-lg */
+
+  --radius: 12px;
+  --radius-lg: 16px;
+  --maxw: 1100px;
+}
+
+/* Tema escuro — mesmos overrides do sistema (azul clareia p/ contraste AA). */
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #0f172a;          /* --bg-main */
+  --bg-elev: #0b1220;     /* --bg-sidebar */
+  --surface: #1e293b;     /* --surface */
+  --surface-2: #223047;   /* --surface-2 */
+  --muted-bg: #0b1220;    /* --bg-sidebar */
+
+  --text: #f1f5f9;            /* --text-title */
+  --text-secondary: #cbd5e1;  /* --text-secondary */
+  --text-muted: #94a3b8;      /* --text-muted */
+  --text-subtle: #8a97ac;     /* --text-subtle */
+
+  --border: #334155;        /* --border */
+  --border-strong: #475569; /* --border-strong */
+
+  --accent: #5b8cff;       /* azul elétrico clareado p/ contraste no escuro */
+  --accent-strong: #7aa0ff;/* hover (dark) */
+  --accent-deep: #a9c4ff;  /* texto/ênfase sobre escuro */
+  --accent-soft: #14224a;  /* fundo azul escuro */
+
+  --success: #34d399;  /* --success (dark) */
+  --danger: #f87171;   /* --danger (dark) */
+  --warning: #fbbf24;  /* --warning (dark) */
+
+  --edge: #4338ca;     /* --indigo-active-border (dark) */
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 12px 30px -8px rgba(0, 0, 0, 0.55);
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden; /* trava qualquer estouro horizontal do iframe escalado */
+  transition: background 0.3s ease, color 0.3s ease;
+}
+
+a { color: inherit; text-decoration: none; }
+
+.container {
+  width: 100%;
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.narrow { max-width: 760px; }
+.center { text-align: center; }
+
+/* ---------- Botões ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 15px;
+  border-radius: 12px;
+  padding: 11px 18px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+  white-space: nowrap;
+}
+.btn--sm { padding: 8px 14px; font-size: 14px; border-radius: 10px; }
+.btn--lg { padding: 14px 24px; font-size: 16px; }
+
+/* Primário: azul chapado da marca, sem gradiente */
+.btn--primary {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 8px 20px -8px rgba(41, 98, 255, 0.55);
+}
+.btn--primary:hover { background: var(--accent-strong); box-shadow: 0 10px 22px -8px rgba(41, 98, 255, 0.6); }
+
+.btn--ghost {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--border);
+}
+.btn--ghost:hover { border-color: var(--border-strong); background: var(--muted-bg); }
+
+/* ---------- Nav ---------- */
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  backdrop-filter: saturate(180%) blur(12px);
+  border-bottom: 1px solid var(--border);
+}
+.nav__inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 66px;
+  gap: 24px;
+}
+/* Logo real do app: 4 quadradinhos monocromáticos (cor do texto), sem tile */
+.brand { display: inline-flex; align-items: center; gap: 10px; }
+.brand__mark {
+  display: grid;
+  place-items: center;
+  width: 24px; height: 24px;
+  color: var(--text);
+}
+.brand__mark--sm { width: 20px; height: 20px; }
+.brand__name { font-size: 18px; font-weight: 800; letter-spacing: -0.04em; color: var(--text); }
+
+.nav__links { display: flex; gap: 26px; }
+.nav__links a { color: var(--text-secondary); font-size: 15px; font-weight: 500; transition: color 0.2s; }
+.nav__links a:hover { color: var(--text); }
+
+.nav__actions { display: flex; align-items: center; gap: 10px; }
+
+.theme-toggle {
+  display: grid; place-items: center;
+  width: 38px; height: 38px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+.theme-toggle:hover { color: var(--text); border-color: var(--border-strong); }
+.icon-moon { display: none; }
+[data-theme="dark"] .icon-sun { display: none; }
+[data-theme="dark"] .icon-moon { display: block; }
+
+/* ---------- Hero ---------- */
+.hero { position: relative; padding-top: 60px; }
+.hero__grid {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1.05fr;
+  gap: 64px;
+  align-items: center;
+  padding-bottom: 56px;
+}
+.hero__copy { max-width: 500px; }
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--text-muted);
+  margin-bottom: 20px;
+}
+.eyebrow::before {
+  content: "";
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--accent);
+}
+
+.hero__title {
+  font-size: clamp(2rem, 4vw, 3rem);
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 20px;
+}
+/* Ênfase discreta: cor sólida do acento, sem gradiente em texto */
+.grad { color: var(--accent-deep); }
+.hero__sub { font-size: 1.1rem; color: var(--text-secondary); margin: 0 0 28px; }
+.hero__cta { display: flex; gap: 12px; flex-wrap: wrap; }
+.hero__micro { font-size: 13px; color: var(--text-muted); margin: 14px 0 0; }
+
+/* ---------- Telas reais (moldura de navegador + iframe escalado) ---------- */
+/* Limita a largura da moldura do hero para não estourar em telas estreitas
+   (a altura é proporcional à largura). */
+.hero__visual { position: relative; width: 100%; max-width: 560px; margin-inline: auto; }
+
+/* Moldura estilo janela de navegador */
+.shot {
+  margin: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 30px 60px -20px rgba(15, 23, 42, 0.35), 0 12px 28px -12px rgba(15, 23, 42, 0.22);
+  overflow: hidden;
+}
+[data-theme="dark"] .shot {
+  box-shadow: 0 34px 70px -20px rgba(0, 0, 0, 0.7), 0 14px 30px -12px rgba(0, 0, 0, 0.55);
+}
+.shot__bar {
+  display: flex; align-items: center; gap: 7px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.dot { width: 11px; height: 11px; border-radius: 50%; flex: none; }
+.dot--r { background: #ff5f57; } .dot--y { background: #febc2e; } .dot--g { background: #28c840; }
+.shot__url {
+  margin-left: 10px;
+  font-size: 12.5px; font-weight: 500; color: var(--text-muted);
+  background: var(--muted-bg);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 3px 12px;
+}
+
+/* Viewport que recorta o iframe escalado. A altura é definida via JS (fitShots). */
+.shot__viewport { position: relative; width: 100%; overflow: hidden; background: var(--bg); aspect-ratio: 1280 / 820; }
+.shot__frame {
+  border: 0;
+  width: 1280px;
+  height: 820px;
+  transform: scale(var(--shot-k, 0.4));
+  transform-origin: top left;
+  pointer-events: none; /* mock: sem interação */
+}
+
+/* ---------- Carrossel de telas ---------- */
+/* Cabeçalho da seção com os controles à direita */
+.section__head--carousel {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 24px; max-width: none;
+}
+.carousel__controls { display: flex; align-items: center; gap: 16px; flex: none; }
+.carousel__counter {
+  font-size: 13px; font-weight: 600; color: var(--text-muted);
+  font-variant-numeric: tabular-nums; letter-spacing: 0.02em;
+  min-width: 52px; text-align: right;
+}
+.carousel__arrows { display: flex; gap: 8px; }
+.carousel__arrow {
+  display: grid; place-items: center;
+  width: 40px; height: 40px; border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: background 0.2s, border-color 0.2s, color 0.2s, opacity 0.2s, transform 0.1s;
+}
+.carousel__arrow:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+.carousel__arrow:active:not(:disabled) { transform: scale(0.94); }
+.carousel__arrow:disabled { opacity: 0.35; cursor: default; box-shadow: none; }
+
+.carousel { position: relative; --carousel-gap: 28px; }
+
+.carousel__viewport { position: relative; }
+
+.carousel__track {
+  display: flex;
+  gap: var(--carousel-gap);
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  scrollbar-width: none;               /* Firefox */
+  /* Respiro vertical para a sombra dos cards não ser recortada pelo overflow */
+  padding: 26px 4px 34px;
+  cursor: grab;
+}
+.carousel__track.is-dragging { cursor: grabbing; scroll-behavior: auto; scroll-snap-type: none; }
+.carousel__track::-webkit-scrollbar { display: none; } /* WebKit */
+.carousel__track:focus { outline: none; }
+.carousel__track:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 10px; }
+
+/* Dois cards por vez, lado a lado (sem peek). Avança de um em um. */
+.carousel__item {
+  flex: 0 0 auto;
+  width: calc((100% - var(--carousel-gap)) / 2);
+  scroll-snap-align: start;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s ease;
+}
+
+.shot--gallery { display: flex; flex-direction: column; }
+/* Sombra só para baixo (espalhamento lateral ~0), assim nada é cortado
+   pela borda da faixa, mesmo com os cards colados nos limites. */
+.carousel__item.shot {
+  box-shadow: 0 6px 12px -8px rgba(15, 23, 42, 0.18), 0 18px 26px -20px rgba(15, 23, 42, 0.3);
+  transition: box-shadow 0.3s ease;
+}
+.carousel__item.shot:hover {
+  box-shadow: 0 8px 14px -8px rgba(15, 23, 42, 0.2), 0 24px 34px -26px rgba(15, 23, 42, 0.34);
+}
+[data-theme="dark"] .carousel__item.shot {
+  box-shadow: 0 6px 14px -8px rgba(0, 0, 0, 0.5), 0 18px 28px -20px rgba(0, 0, 0, 0.6);
+}
+[data-theme="dark"] .carousel__item.shot:hover {
+  box-shadow: 0 8px 16px -8px rgba(0, 0, 0, 0.55), 0 24px 36px -26px rgba(0, 0, 0, 0.66);
+}
+.shot__cap {
+  padding: 15px 18px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+/* Bolinhas de posição */
+.carousel__dots {
+  display: flex; justify-content: center; gap: 8px;
+  margin-top: 6px;
+}
+.carousel__dot {
+  width: 7px; height: 7px; border-radius: 999px;
+  border: 0; padding: 0;
+  background: var(--border-strong);
+  cursor: pointer;
+  transition: background 0.25s, width 0.25s;
+}
+.carousel__dot:hover { background: var(--text-subtle); }
+.carousel__dot.is-active { background: var(--accent); width: 22px; }
+
+/* ---------- Trustbar ---------- */
+.trustbar {
+  padding: 22px 0 40px;
+  display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+  border-top: 1px solid var(--border);
+}
+.trustbar__label { font-size: 13px; color: var(--text-muted); font-weight: 500; }
+.trustbar__logos { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; color: var(--text-secondary); font-weight: 600; font-size: 14px; }
+.trustbar__logos i { color: var(--text-subtle); font-style: normal; }
+
+/* ---------- Sections ---------- */
+.section { padding: 88px 0; }
+.section--muted { background: var(--muted-bg); }
+.section--problem { padding-top: 96px; padding-bottom: 40px; }
+
+.section__head { max-width: 640px; margin: 0 0 44px; }
+.section__head.center { text-align: center; margin-left: auto; margin-right: auto; }
+.kicker {
+  display: inline-flex; align-items: center; gap: 9px;
+  font-size: 12.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+/* Cada seção é um "nó" do grafo: o ponto acende quando a seção entra na tela */
+.kicker::before {
+  content: ""; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--border-strong); flex: 0 0 auto;
+  transition: background 0.5s ease, box-shadow 0.5s ease;
+}
+.section__head.in .kicker::before,
+.container.in .kicker::before {
+  background: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+.section__title {
+  font-size: clamp(1.6rem, 2.8vw, 2.2rem);
+  line-height: 1.18; letter-spacing: -0.025em; font-weight: 700; margin: 0 0 14px;
+}
+.section__lead { font-size: 1.08rem; color: var(--text-secondary); margin: 0; }
+
+/* ---------- Cards ---------- */
+.cards { display: grid; gap: 22px; }
+.cards--3 { grid-template-columns: repeat(3, 1fr); }
+
+.card {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 28px 26px;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.28s ease, border-color 0.28s ease;
+}
+/* Aresta de destaque no topo, que se "acende" no hover (linguagem do grafo) */
+.card::before {
+  content: "";
+  position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: var(--accent);
+  transform: scaleX(0); transform-origin: left;
+  transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.card:hover {
+  transform: translateY(-5px);
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--border));
+  box-shadow: 0 20px 34px -20px rgba(41, 98, 255, 0.32), 0 8px 18px -12px rgba(15, 23, 42, 0.12);
+}
+.card:hover::before { transform: scaleX(1); }
+.card__icon {
+  width: 44px; height: 44px; border-radius: 12px;
+  display: grid; place-items: center;
+  color: var(--accent-deep);
+  background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--border));
+  margin-bottom: 18px;
+}
+.card:hover .card__icon {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.card__icon svg { width: 22px; height: 22px; }
+.card__title { font-size: 1.12rem; font-weight: 600; margin: 0 0 8px; letter-spacing: -0.01em; }
+.card:hover .card__title { color: var(--accent-deep); }
+.card__title { transition: color 0.25s ease; }
+.card__text { color: var(--text-secondary); margin: 0; font-size: 14.5px; }
+
+.feature {
+  position: relative;
+  padding: 24px 22px 24px 26px;
+  border-left: 3px solid var(--accent);
+  background: var(--surface);
+  border-radius: 0 12px 12px 0;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.28s ease, background 0.28s ease;
+}
+/* Nó-conector sobre a borda esquerda — ecoa os nós do grafo */
+.feature::before {
+  content: "";
+  position: absolute; left: -6.5px; top: 26px;
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 4px var(--surface);
+  transition: box-shadow 0.28s ease;
+}
+.feature:hover {
+  transform: translateX(4px);
+  background: color-mix(in srgb, var(--accent-soft) 45%, var(--surface));
+  box-shadow: 0 16px 28px -20px rgba(41, 98, 255, 0.3);
+}
+.feature:hover::before { box-shadow: 0 0 0 4px var(--surface), 0 0 0 8px var(--accent-soft); }
+.feature__title { font-size: 1.08rem; font-weight: 700; margin: 0 0 8px; }
+.feature__text { color: var(--text-secondary); margin: 0; font-size: 14.5px; }
+
+/* ---------- Steps (checklist-dependência) ---------- */
+.steps {
+  list-style: none; padding: 0; margin: 0;
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px;
+  position: relative;
+}
+/* Aresta do grafo que liga os três nós (desenha ao entrar na tela) */
+.steps__line {
+  position: absolute; left: 16.666%; right: 16.666%; top: 47px; height: 2px;
+  background: var(--border); border-radius: 2px; z-index: 2; overflow: hidden;
+}
+.steps__line-fill {
+  display: block; height: 100%; width: 0; background: var(--accent);
+  transition: width 1.2s cubic-bezier(0.16, 1, 0.3, 1) 0.15s;
+}
+.steps.in .steps__line-fill { width: 100%; }
+.step {
+  position: relative;
+  text-align: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 30px 26px 26px;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.28s ease, border-color 0.28s ease;
+}
+.step:hover {
+  transform: translateY(-4px);
+  border-color: color-mix(in srgb, var(--accent) 32%, var(--border));
+  box-shadow: 0 18px 32px -20px rgba(41, 98, 255, 0.3), 0 8px 16px -12px rgba(15, 23, 42, 0.12);
+}
+.step__node {
+  position: relative; z-index: 3;
+  display: grid; place-items: center;
+  width: 34px; height: 34px; border-radius: 9px;
+  background: var(--surface-2); color: var(--accent-deep);
+  border: 1px solid var(--border);
+  margin: 0 auto 16px;
+  transition: background 0.4s ease, border-color 0.4s ease, color 0.4s ease, box-shadow 0.35s ease, transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.step__num, .step__check {
+  grid-area: 1 / 1; display: grid; place-items: center;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.step__num { font-weight: 700; font-size: 15px; }
+.step__check { width: 20px; height: 20px; color: #fff; opacity: 0; transform: scale(0.5); }
+.step.is-checked .step__node {
+  background: var(--accent); border-color: var(--accent); color: #fff;
+  transform: scale(1.06);
+}
+.step.is-checked .step__num { opacity: 0; transform: scale(0.5); }
+.step.is-checked .step__check { opacity: 1; transform: scale(1); }
+/* Hover realça o nó (halo azul) — reforça a metáfora de nó do grafo */
+.step:hover .step__node {
+  transform: scale(1.1);
+  box-shadow: 0 0 0 6px var(--accent-soft);
+}
+.step__title { font-size: 1.08rem; font-weight: 600; margin: 0 0 8px; }
+.step__text { color: var(--text-secondary); margin: 0; font-size: 15px; }
+
+/* ---------- FAQ ---------- */
+.faq { display: flex; flex-direction: column; gap: 12px; }
+.faq__item {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 4px 20px 4px 22px;
+  overflow: hidden;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+/* Barra-acento à esquerda que cresce quando a pergunta abre */
+.faq__item::before {
+  content: "";
+  position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  background: var(--accent);
+  transform: scaleY(0); transform-origin: top;
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.faq__item:hover { border-color: var(--border-strong); }
+.faq__item[open] {
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+  box-shadow: 0 10px 24px -18px rgba(41, 98, 255, 0.35);
+}
+.faq__item[open]::before { transform: scaleY(1); }
+.faq__item summary {
+  cursor: pointer; list-style: none;
+  font-weight: 600; font-size: 1.05rem;
+  padding: 16px 0;
+  display: flex; align-items: center; justify-content: space-between;
+  transition: color 0.2s ease;
+}
+.faq__item[open] summary { color: var(--accent-deep); }
+.faq__item summary::-webkit-details-marker { display: none; }
+.faq__item summary::after {
+  content: "+"; font-size: 1.4rem; font-weight: 400; color: var(--accent);
+  transition: transform 0.2s;
+}
+.faq__item[open] summary::after { content: "−"; }
+.faq__item p { margin: 0 0 18px; color: var(--text-secondary); }
+
+/* ---------- CTA ---------- */
+.cta { padding: 96px 0; }
+.cta__card {
+  position: relative;
+  overflow: hidden;
+  max-width: 720px; margin: 0 auto;
+  padding: 58px 40px;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
+  box-shadow: 0 28px 56px -30px rgba(41, 98, 255, 0.4), 0 12px 26px -16px rgba(15, 23, 42, 0.12);
+}
+/* Aresta superior de destaque — sinaliza o momento da ação */
+.cta__card::before {
+  content: "";
+  position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: var(--accent);
+}
+/* Nós decorativos (quatro quadradinhos da logo) num canto, bem discretos */
+.cta__card::after {
+  content: "";
+  position: absolute; top: 26px; right: 26px;
+  width: 26px; height: 26px;
+  background:
+    radial-gradient(circle 3px at 5px 5px, var(--accent) 99%, transparent) 0 0,
+    radial-gradient(circle 3px at 21px 5px, color-mix(in srgb, var(--accent) 55%, transparent) 99%, transparent) 0 0,
+    radial-gradient(circle 3px at 5px 21px, color-mix(in srgb, var(--accent) 55%, transparent) 99%, transparent) 0 0,
+    radial-gradient(circle 3px at 21px 21px, color-mix(in srgb, var(--accent) 30%, transparent) 99%, transparent) 0 0;
+  opacity: 0.5;
+}
+.cta__title { position: relative; font-size: clamp(1.7rem, 3vw, 2.3rem); font-weight: 700; margin: 0 0 12px; letter-spacing: -0.025em; color: var(--text); }
+.cta__sub { position: relative; font-size: 1.12rem; color: var(--text-secondary); margin: 0 0 26px; }
+
+/* ---------- Footer ---------- */
+.footer { border-top: 1px solid var(--border); padding: 22px 0; background: var(--bg-elev); }
+.footer__inner { display: flex; align-items: center; gap: 16px 28px; flex-wrap: wrap; }
+.footer__brand { display: flex; align-items: center; gap: 11px; }
+.footer__brand strong { display: block; font-size: 15px; line-height: 1.2; }
+.footer__brand em { font-style: normal; font-size: 13px; color: var(--text-muted); }
+/* Links e copyright agrupados à direita (sem vão morto no meio) */
+.footer__links { display: flex; gap: 20px; margin-left: auto; }
+.footer__links a { color: var(--text-secondary); font-size: 14px; }
+.footer__links a:hover { color: var(--text); }
+.footer__copy { color: var(--text-subtle); font-size: 13px; }
+
+/* ---------- Responsivo ---------- */
+@media (max-width: 900px) {
+  .hero__grid { grid-template-columns: 1fr; gap: 40px; }
+  /* Empilhado: primeiro o texto (gancho), depois a tela do produto */
+  .cards--3, .steps { grid-template-columns: 1fr; }
+  .section__head--carousel { flex-direction: column; align-items: flex-start; gap: 16px; }
+  /* Em telas estreitas: um card por vez */
+  .carousel__item { width: 100%; }
+  .nav__links { display: none; }
+}
+@media (max-width: 560px) {
+  .section { padding: 60px 0; }
+  .cta__card { padding: 40px 24px; }
+  .nav__actions .btn--ghost { display: none; }
+  .footer__inner { flex-direction: column; align-items: flex-start; }
+}
+@media (max-width: 900px) {
+  /* Empilhado: a aresta horizontal não faz sentido */
+  .steps__line { display: none; }
+}
+
+/* ===================================================================
+   ANIMAÇÕES — a landing "conta" o produto: revelações ao rolar,
+   seções como nós de grafo e passos que viram checklist.
+   =================================================================== */
+
+/* Revelação ao entrar na viewport (fade + subida, com escalonamento) */
+[data-reveal] {
+  opacity: 0;
+  transform: translateY(20px);
+  transition:
+    opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1) var(--d, 0ms),
+    transform 0.7s cubic-bezier(0.16, 1, 0.3, 1) var(--d, 0ms);
+  will-change: opacity, transform;
+}
+[data-reveal].in { opacity: 1; transform: none; }
+
+/* Pop sutil no ícone dos diferenciais quando o card revela */
+.card__icon {
+  transform: scale(0.85);
+  opacity: 0.4;
+  transition:
+    transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) calc(var(--d, 0ms) + 140ms),
+    opacity 0.5s ease calc(var(--d, 0ms) + 140ms),
+    background 0.25s ease, color 0.25s ease, border-color 0.25s ease;
+}
+[data-reveal].in .card__icon { transform: none; opacity: 1; }
+
+/* Sublinhado que se desenha sob o destaque do hero */
+.hero__title .grad { position: relative; white-space: nowrap; }
+.hero__title .grad::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0.06em; height: 3px;
+  background: var(--accent); border-radius: 3px;
+  transform: scaleX(0); transform-origin: left;
+  transition: transform 0.9s cubic-bezier(0.16, 1, 0.3, 1) 0.55s;
+}
+.hero__copy.in .hero__title .grad::after { transform: scaleX(1); }
+
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal],
+  .card__icon,
+  .steps__line-fill,
+  .step__node,
+  .step__num,
+  .step__check,
+  .hero__title .grad::after,
+  .kicker::before {
+    transition: none !important;
+    animation: none !important;
+  }
+  [data-reveal] { opacity: 1 !important; transform: none !important; }
+  .card__icon { opacity: 1 !important; transform: none !important; }
+  .hero__title .grad::after { transform: scaleX(1) !important; }
+  .steps__line-fill { width: 100% !important; }
+}
+
+/* ===================================================================
+   FUNDO EM GRAFO — uma "rota" de nós e arestas que atravessa a página
+   inteira, ligando as seções como no grafo do produto.
+   =================================================================== */
+.bg-graph {
+  position: absolute; top: 0; left: 0; width: 100%;
+  z-index: 0; pointer-events: none; overflow: hidden;
+  opacity: 1;
+}
+.bg-graph svg { display: block; width: 100%; height: 100%; }
+
+/* Conteúdo sempre acima do fundo */
+main, .footer { position: relative; z-index: 1; }
+/* Seções "muted" ficam translúcidas para a rota vazar por trás com força */
+.section--muted {
+  background: color-mix(in srgb, var(--muted-bg) 58%, transparent);
+}
+
+/* Traçado base da rota */
+.bgg-track { stroke: var(--border-strong); stroke-width: 2.4; opacity: 0.7; }
+/* Rota que se desenha conforme a rolagem */
+.bgg-route { stroke: var(--accent); stroke-width: 3.4; opacity: 1; stroke-linecap: round; }
+/* Ramos e satélites (textura de grafo) */
+.bgg-branch { stroke: var(--border-strong); stroke-width: 1.8; opacity: 0.6; }
+.bgg-link { stroke: var(--accent); stroke-width: 1.7; opacity: 0.38; stroke-dasharray: 4 6; }
+.bgg-sat { fill: var(--border-strong); opacity: 0.9; }
+/* Nós */
+.bgg-ring { fill: none; stroke: var(--accent); stroke-width: 1.8; opacity: 0.35; transition: opacity 0.5s ease; }
+.bgg-ring.is-on { opacity: 0.85; }
+.bgg-node { fill: var(--accent-deep); opacity: 0.9; transition: fill 0.5s ease, opacity 0.5s ease, r 0.5s ease; }
+.bgg-node.is-on { fill: var(--accent); opacity: 1; }
+/* Pulso que viaja pela rota (sinal percorrendo o grafo) */
+.bgg-comet { fill: var(--accent); filter: drop-shadow(0 0 12px var(--accent)) drop-shadow(0 0 5px var(--accent)); }
+
+@media (prefers-reduced-motion: reduce) {
+  .bgg-route { opacity: 0.6; }
+}

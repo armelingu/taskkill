@@ -299,6 +299,13 @@ def api_admin_required(fn):
 # ===================================================================
 # ROTAS DO FRONTEND (Páginas Visuais Web)
 # ===================================================================
+@main_bp.route('/landing')
+def landing():
+    # Página pública de marketing (não exige login). Se o usuário já estiver
+    # logado, o template pode oferecer "Abrir app" em vez de "Entrar".
+    return render_template('landing.html', logged_in=bool(session.get('user_id')))
+
+
 @main_bp.route('/')
 @login_required
 def index():
