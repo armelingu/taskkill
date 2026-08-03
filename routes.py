@@ -374,10 +374,10 @@ def sitemap_xml():
     # Apenas páginas públicas indexáveis (o app fica atrás de login).
     base = _public_base_url()
     lastmod = date.today().isoformat()
+    # /login fica de fora de propósito: é noindex (página utilitária).
     pages = [
         (base + url_for('main.landing'), "1.0", "weekly"),
         (base + url_for('main.register'), "0.5", "monthly"),
-        (base + url_for('main.login'), "0.3", "monthly"),
     ]
     parts = ['<?xml version="1.0" encoding="UTF-8"?>',
              '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']

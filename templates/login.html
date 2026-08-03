@@ -4,11 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Taskkill — Login</title>
+  <meta name="description" content="Entre na sua conta Taskkill — a lista de tarefas que mostra o que está te bloqueando.">
+  <meta name="robots" content="noindex, follow">
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
   <link rel="shortcut icon" href="/static/favicon.svg">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ asset('css/fonts.css') }}">
   <script src="{{ asset('js/theme-boot.js') }}"></script>
   <link rel="stylesheet" href="{{ asset('css/style.css') }}">
 </head>
@@ -86,6 +86,9 @@
 
       <div class="auth-alt">
         Não tem conta? <a class="auth-link" href="/register">Criar conta</a>
+      </div>
+      <div class="auth-back">
+        <a class="auth-link" href="/landing">← Voltar ao site</a>
       </div>
     </div>
   </main>

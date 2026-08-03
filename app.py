@@ -192,8 +192,9 @@ def add_security_headers(response):
     response.headers['Cross-Origin-Opener-Policy'] = 'same-origin'
     # Impede que outros sites usem seus recursos como “subresource” de forma relaxada
     response.headers['Cross-Origin-Resource-Policy'] = 'same-origin'
-    # Content Security Policy (CSP): Uma lista branca bloqueando execução de código não autorizado
-    # Permite Google Fonts, e restringe JS apenas aos seus arquivos locais.
+    # Content Security Policy (CSP): Uma lista branca bloqueando execução de código não autorizado.
+    # Fontes agora são self-hospedadas (static/fonts/*.woff2), então não há mais origem
+    # externa: style-src e font-src ficam restritos a 'self' (CSP mais rígida).
     # frame-ancestors 'self': o app nunca pode ser embutido por terceiros, mas a
     # landing (/landing) precisa embutir suas próprias telas de demonstração via
     # <iframe> do mesmo domínio (ex.: /static/landing/screens/*.html).
@@ -202,8 +203,8 @@ def add_security_headers(response):
         "base-uri 'none'; "
         "form-action 'self'; "
         "frame-ancestors 'self'; "
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-        "font-src 'self' https://fonts.gstatic.com; "
+        "style-src 'self' 'unsafe-inline'; "
+        "font-src 'self'; "
         "script-src 'self'; "
         "connect-src 'self'; "
         "object-src 'none';"

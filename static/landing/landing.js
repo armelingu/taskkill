@@ -48,8 +48,23 @@
   window.addEventListener("resize", fitShots);
   window.addEventListener("load", fitShots);
   fitShots();
-  // No 1º carregamento aplica o tema atual (caso venha do localStorage/sistema).
-  syncShotsTheme();
+
+  // LCP: os iframes de tela NÃO recebem src no HTML — carregá-los no primeiro
+  // paint atrasaria o maior elemento (o headline do hero). Só atribuímos o src
+  // depois de 'load' e num momento ocioso. As telas abaixo da dobra continuam
+  // adiadas pelo loading="lazy" nativo até chegarem perto da viewport.
+  function loadShotsWhenIdle() {
+    if ("requestIdleCallback" in window) {
+      requestIdleCallback(() => syncShotsTheme(), { timeout: 2000 });
+    } else {
+      setTimeout(syncShotsTheme, 200);
+    }
+  }
+  if (document.readyState === "complete") {
+    loadShotsWhenIdle();
+  } else {
+    window.addEventListener("load", loadShotsWhenIdle, { once: true });
+  }
 
   // ---------- Carrossel "Por dentro" ----------
   const carousel = document.querySelector("[data-carousel]");

@@ -657,6 +657,21 @@ body {
     font-size: 0.9rem;
 }
 
+.auth-back {
+    margin-top: 10px;
+    text-align: center;
+}
+
+.auth-back .auth-link {
+    font-size: 0.82rem;
+    color: var(--text-subtle);
+    font-weight: 500;
+}
+
+.auth-back .auth-link:hover {
+    color: var(--text-title);
+}
+
 .auth-hint {
     font-size: 0.75rem;
     font-weight: 500;

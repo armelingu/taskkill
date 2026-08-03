@@ -33,9 +33,12 @@
   <meta name="twitter:image:alt" content="Taskkill — a lista de tarefas que mostra o que está te bloqueando" />
 
   <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  {# Inter self-hospedado: preload dos pesos acima da dobra (LCP) + @font-face.
+     URL sem ?v de propósito: precisa bater exatamente com o src do @font-face
+     em fonts.css, senão o navegador baixa a fonte duas vezes. #}
+  <link rel="preload" href="/static/fonts/inter-400.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="/static/fonts/inter-700.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="stylesheet" href="{{ asset('css/fonts.css') }}" />
   <link rel="stylesheet" href="{{ asset('landing/landing.css') }}" />
 
   {# ---------- Dados estruturados (JSON-LD) — habilita rich results ---------- #}
@@ -150,7 +153,7 @@
               <span class="shot__url">app.taskkill.io</span>
             </div>
             <div class="shot__viewport">
-              <iframe class="shot__frame" data-screen="/static/landing/screens/tasklist.html" src="/static/landing/screens/tasklist.html?theme=light" title="Lista de tarefas do Taskkill" scrolling="no" loading="lazy"></iframe>
+              <iframe class="shot__frame" data-screen="/static/landing/screens/tasklist.html" title="Lista de tarefas do Taskkill" scrolling="no" loading="lazy"></iframe>
             </div>
           </div>
         </div>
@@ -241,7 +244,7 @@
                 <span class="shot__url">Lista · projeto Produto</span>
               </div>
               <div class="shot__viewport">
-                <iframe class="shot__frame" data-screen="/static/landing/screens/tasklist.html" src="/static/landing/screens/tasklist.html?theme=light" title="Lista de tarefas" scrolling="no" loading="lazy"></iframe>
+                <iframe class="shot__frame" data-screen="/static/landing/screens/tasklist.html" title="Lista de tarefas" scrolling="no" loading="lazy"></iframe>
               </div>
               <figcaption class="shot__cap">Lista de tarefas — prazos, recorrência e “bloqueada por N” num olhar.</figcaption>
             </figure>
@@ -252,7 +255,7 @@
                 <span class="shot__url">Gráfico · relações</span>
               </div>
               <div class="shot__viewport">
-                <iframe class="shot__frame" data-screen="/static/landing/screens/graph.html" src="/static/landing/screens/graph.html?theme=light" title="Gráfico de relações" scrolling="no" loading="lazy"></iframe>
+                <iframe class="shot__frame" data-screen="/static/landing/screens/graph.html" title="Gráfico de relações" scrolling="no" loading="lazy"></iframe>
               </div>
               <figcaption class="shot__cap">Gráfico estilo mapa — veja como dias, projetos e tags se conectam.</figcaption>
             </figure>
@@ -263,7 +266,7 @@
                 <span class="shot__url">Dashboard · por projeto</span>
               </div>
               <div class="shot__viewport">
-                <iframe class="shot__frame" data-screen="/static/landing/screens/dashboard.html" src="/static/landing/screens/dashboard.html?theme=light" title="Dashboard por projeto" scrolling="no" loading="lazy"></iframe>
+                <iframe class="shot__frame" data-screen="/static/landing/screens/dashboard.html" title="Dashboard por projeto" scrolling="no" loading="lazy"></iframe>
               </div>
               <figcaption class="shot__cap">Dashboard — status de cada projeto (em aberto, feitas e total) num relance.</figcaption>
             </figure>
@@ -274,7 +277,7 @@
                 <span class="shot__url">Integrações · fontes externas</span>
               </div>
               <div class="shot__viewport">
-                <iframe class="shot__frame" data-screen="/static/landing/screens/integrations.html" src="/static/landing/screens/integrations.html?theme=light" title="Integrações externas" scrolling="no" loading="lazy"></iframe>
+                <iframe class="shot__frame" data-screen="/static/landing/screens/integrations.html" title="Integrações externas" scrolling="no" loading="lazy"></iframe>
               </div>
               <figcaption class="shot__cap">Integrações — GitHub, Jira e Linear virando tarefas na mesma lista.</figcaption>
             </figure>
