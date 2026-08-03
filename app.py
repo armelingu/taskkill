@@ -169,6 +169,11 @@ def add_security_headers(response):
     # cache-busting via ?v=<mtime>, então podem ser cacheados normalmente).
     if response.mimetype == 'text/html':
         response.headers['Cache-Control'] = 'no-store'
+    # Performance: assets versionados (…?v=<mtime>) são imutáveis por definição —
+    # a URL muda quando o arquivo muda. Cache longo melhora o LCP em visitas
+    # repetidas. Sub-imports de módulos ES (sem ?v) continuam revalidando.
+    elif request.args.get('v') and request.path.startswith(app.static_url_path):
+        response.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
     # Força navegadores a só usar HTTPS (somente faz sentido quando a requisição é HTTPS)
     if request.is_secure:
         response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'

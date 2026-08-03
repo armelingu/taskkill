@@ -299,11 +299,95 @@ def api_admin_required(fn):
 # ===================================================================
 # ROTAS DO FRONTEND (Páginas Visuais Web)
 # ===================================================================
+# FAQ da landing: fonte ÚNICA de verdade — alimenta tanto o HTML visível quanto
+# o JSON-LD (FAQPage) para rich results no Google. Manter aqui evita divergência.
+LANDING_FAQ = [
+    {
+        "q": "Preciso ser técnico pra usar?",
+        "a": ("Não. A captura em linguagem natural e as listas funcionam pra qualquer "
+              "pessoa. As integrações com GitHub, Jira e afins são um bônus pra quem usa "
+              "— dá pra ignorar completamente."),
+    },
+    {
+        "q": "É de graça?",
+        "a": "Sim, você cria sua conta e começa sem cartão. Leva cerca de 30 segundos.",
+    },
+    {
+        "q": "Como funcionam as dependências?",
+        "a": ("Você marca que a tarefa A depende da tarefa B. Enquanto B não está "
+              "concluída, A aparece como bloqueada — e some da sua fila de \u201cpra fazer "
+              "agora\u201d."),
+    },
+    {
+        "q": "Meus dados ficam onde?",
+        "a": ("Cada conta tem seus dados isolados. Você controla o que importa das "
+              "integrações e pode desconectar quando quiser."),
+    },
+]
+
+
+def _public_base_url() -> str:
+    """
+    URL base pública absoluta (sem barra final), usada em canonical/og:url/sitemap.
+    - Se TASKKILL_PUBLIC_BASE_URL estiver definida, usa ela (domínio fixo de produção).
+    - Senão, deriva do request (atrás de proxy, o ProxyFix garante https/host corretos).
+    """
+    base = (os.environ.get('TASKKILL_PUBLIC_BASE_URL') or '').strip()
+    if base:
+        return base.rstrip('/')
+    return request.url_root.rstrip('/')
+
+
 @main_bp.route('/landing')
 def landing():
     # Página pública de marketing (não exige login). Se o usuário já estiver
     # logado, o template pode oferecer "Abrir app" em vez de "Entrar".
-    return render_template('landing.html', logged_in=bool(session.get('user_id')))
+    base = _public_base_url()
+    return render_template(
+        'landing.html',
+        logged_in=bool(session.get('user_id')),
+        site_url=base,
+        canonical_url=base + url_for('main.landing'),
+        faq_items=LANDING_FAQ,
+    )
+
+
+@main_bp.route('/robots.txt')
+def robots_txt():
+    # Guia os crawlers: libera o público, bloqueia área logada/API e aponta o sitemap.
+    lines = [
+        "User-agent: *",
+        "Allow: /",
+        "Disallow: /api/",
+        "Disallow: /perfil",
+        "Disallow: /admin",
+        "Disallow: /logout",
+        "",
+        f"Sitemap: {_public_base_url()}/sitemap.xml",
+        "",
+    ]
+    return Response("\n".join(lines), mimetype="text/plain")
+
+
+@main_bp.route('/sitemap.xml')
+def sitemap_xml():
+    # Apenas páginas públicas indexáveis (o app fica atrás de login).
+    base = _public_base_url()
+    lastmod = date.today().isoformat()
+    pages = [
+        (base + url_for('main.landing'), "1.0", "weekly"),
+        (base + url_for('main.register'), "0.5", "monthly"),
+        (base + url_for('main.login'), "0.3", "monthly"),
+    ]
+    parts = ['<?xml version="1.0" encoding="UTF-8"?>',
+             '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
+    for loc, priority, freq in pages:
+        parts.append(
+            f"  <url><loc>{loc}</loc><lastmod>{lastmod}</lastmod>"
+            f"<changefreq>{freq}</changefreq><priority>{priority}</priority></url>"
+        )
+    parts.append("</urlset>")
+    return Response("\n".join(parts), mimetype="application/xml")
 
 
 @main_bp.route('/')

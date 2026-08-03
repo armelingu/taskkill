@@ -3,13 +3,88 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Taskkill — Pare de administrar listas. Termine tarefas.</title>
-  <meta name="description" content="A lista de tarefas que mostra o que está te bloqueando. Capture em linguagem natural e foque no que dá pra fazer agora." />
+
+  {# ---------- SEO base ---------- #}
+  <title>Taskkill — Lista de tarefas que mostra o que te bloqueia</title>
+  <meta name="description" content="A lista de tarefas que mostra o que está te bloqueando. Capture em linguagem natural, veja dependências e foque no que dá pra fazer agora — com GitHub, Jira, GitLab e Linear." />
+  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+  <link rel="canonical" href="{{ canonical_url }}" />
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)" />
+  <meta name="author" content="Taskkill" />
+
+  {# ---------- Open Graph (Facebook, LinkedIn, WhatsApp) ---------- #}
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Taskkill" />
+  <meta property="og:locale" content="pt_BR" />
+  <meta property="og:url" content="{{ canonical_url }}" />
+  <meta property="og:title" content="Taskkill — Lista de tarefas que mostra o que te bloqueia" />
+  <meta property="og:description" content="Veja o que depende do quê, capture tarefas em linguagem natural e foque no que dá pra fazer agora. Uma lista só, integrada ao GitHub, Jira, GitLab e Linear." />
+  <meta property="og:image" content="{{ site_url }}{{ asset('landing/og-image.png') }}" />
+  <meta property="og:image:width" content="1536" />
+  <meta property="og:image:height" content="1024" />
+  <meta property="og:image:alt" content="Taskkill — a lista de tarefas que mostra o que está te bloqueando" />
+
+  {# ---------- Twitter Card ---------- #}
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Taskkill — Lista de tarefas que mostra o que te bloqueia" />
+  <meta name="twitter:description" content="Veja o que depende do quê, capture em linguagem natural e foque no que dá pra fazer agora. Integrada ao GitHub, Jira, GitLab e Linear." />
+  <meta name="twitter:image" content="{{ site_url }}{{ asset('landing/og-image.png') }}" />
+  <meta name="twitter:image:alt" content="Taskkill — a lista de tarefas que mostra o que está te bloqueando" />
+
   <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="{{ asset('landing/landing.css') }}" />
+
+  {# ---------- Dados estruturados (JSON-LD) — habilita rich results ---------- #}
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Taskkill",
+    "applicationCategory": "ProductivityApplication",
+    "operatingSystem": "Web",
+    "url": {{ site_url | tojson }},
+    "description": "A lista de tarefas que mostra o que está te bloqueando. Capture em linguagem natural, veja dependências e foque no que dá pra fazer agora — integrada ao GitHub, Jira, GitLab e Linear.",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "BRL" },
+    "inLanguage": "pt-BR"
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "Taskkill",
+    "url": {{ site_url | tojson }},
+    "logo": {{ (site_url ~ asset('favicon.svg')) | tojson }}
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "Taskkill",
+    "url": {{ site_url | tojson }},
+    "inLanguage": "pt-BR"
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {% for item in faq_items %}
+      {
+        "@type": "Question",
+        "name": {{ item.q | tojson }},
+        "acceptedAnswer": { "@type": "Answer", "text": {{ item.a | tojson }} }
+      }{{ "," if not loop.last else "" }}
+      {% endfor %}
+    ]
+  }
+  </script>
 </head>
 <body>
   <!-- NAV -->
@@ -280,22 +355,12 @@
           <h2 class="section__title">Ainda em dúvida?</h2>
         </div>
         <div class="faq" data-stagger>
-          <details class="faq__item" data-reveal open>
-            <summary>Preciso ser técnico pra usar?</summary>
-            <p>Não. A captura em linguagem natural e as listas funcionam pra qualquer pessoa. As integrações com GitHub, Jira e afins são um bônus pra quem usa — dá pra ignorar completamente.</p>
+          {% for item in faq_items %}
+          <details class="faq__item" data-reveal{{ ' open' if loop.first else '' }}>
+            <summary>{{ item.q }}</summary>
+            <p>{{ item.a }}</p>
           </details>
-          <details class="faq__item" data-reveal>
-            <summary>É de graça?</summary>
-            <p>Sim, você cria sua conta e começa sem cartão. Leva cerca de 30 segundos.</p>
-          </details>
-          <details class="faq__item" data-reveal>
-            <summary>Como funcionam as dependências?</summary>
-            <p>Você marca que a tarefa A depende da tarefa B. Enquanto B não está concluída, A aparece como bloqueada — e some da sua fila de "pra fazer agora".</p>
-          </details>
-          <details class="faq__item" data-reveal>
-            <summary>Meus dados ficam onde?</summary>
-            <p>Cada conta tem seus dados isolados. Você controla o que importa das integrações e pode desconectar quando quiser.</p>
-          </details>
+          {% endfor %}
         </div>
       </div>
     </section>
