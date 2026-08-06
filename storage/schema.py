@@ -195,6 +195,23 @@ def _init_postgres(cursor):
         )
     ''')
 
+    # Compartilhamento leve de projetos (overlay): o dono (owner_id) libera um
+    # projeto (pelo nome) para outro usuário (member_id) como viewer/editor. As
+    # tarefas continuam sendo do dono; só o escopo de leitura/escrita é ampliado.
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS project_shares (
+            id SERIAL PRIMARY KEY,
+            owner_id INTEGER NOT NULL,
+            project TEXT NOT NULL,
+            member_id INTEGER NOT NULL,
+            role TEXT NOT NULL DEFAULT 'editor',
+            created_at TEXT,
+            UNIQUE (owner_id, project, member_id)
+        )
+    ''')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_project_shares_member ON project_shares(member_id)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_project_shares_owner ON project_shares(owner_id, project)')
+
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS integrations (
             id SERIAL PRIMARY KEY,
@@ -422,6 +439,29 @@ def _init_sqlite(cursor):
             UNIQUE (user_id, name)
         )
     ''')
+
+    # Compartilhamento leve de projetos (overlay): o dono (owner_id) libera um
+    # projeto (pelo nome) para outro usuário (member_id) como viewer/editor. As
+    # tarefas continuam sendo do dono; só o escopo de leitura/escrita é ampliado.
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS project_shares (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            owner_id INTEGER NOT NULL,
+            project TEXT NOT NULL,
+            member_id INTEGER NOT NULL,
+            role TEXT NOT NULL DEFAULT 'editor',
+            created_at TEXT,
+            UNIQUE (owner_id, project, member_id)
+        )
+    ''')
+    try:
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_project_shares_member ON project_shares(member_id)')
+    except sqlite3.OperationalError:
+        pass
+    try:
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_project_shares_owner ON project_shares(owner_id, project)')
+    except sqlite3.OperationalError:
+        pass
 
     # Integrações externas (genérico: API REST/JSON -> tasks)
     cursor.execute('''

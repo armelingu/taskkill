@@ -13,6 +13,7 @@ import { renderInsights } from './modules/insights.js';
 import { graphStart, graphStop } from './modules/graph.js';
 import { renderTasks } from './modules/tasks.js';
 import { renderSidebarProjects } from './modules/projects.js';
+import { loadSharedWithMe } from './modules/shares.js';
 import { openIntegrations, hideIntegrationsView } from './modules/integrations.js';
 import { showRemindersSummary } from './modules/reminders.js';
 import { initDrawer } from './modules/drawer.js';
@@ -141,6 +142,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 const projectNames = await projRes.json();
                 renderSidebarProjects(projectNames);
             }
+
+            // Projetos compartilhados comigo (seção própria na sidebar).
+            loadSharedWithMe();
 
             if (tasksRes.ok) {
                 state.tasksData = await tasksRes.json();

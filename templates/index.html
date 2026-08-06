@@ -95,6 +95,16 @@
                 </div>
             </section>
 
+            <!-- Projetos que outros usuários compartilharam comigo (colaboração leve) -->
+            <section class="sidebar-section" id="shared-section" hidden>
+                <div class="section-header">
+                    <h2 class="section-title">Compartilhados comigo</h2>
+                </div>
+                <div class="placeholder-container" id="shared-list">
+                    <!-- populado por modules/shares.js -->
+                </div>
+            </section>
+
             <!-- Rodapé do sidebar: user card -->
             <div class="sidebar-footer">
                 <button type="button" id="nav-perfil" class="sidebar-user-card" title="Meu perfil" aria-label="Meu perfil">
@@ -547,8 +557,21 @@
 
             <!-- Visualização do Projeto (que vai mudar dinamicamente) -->
             <div id="project-view" class="project-view hidden">
-                <header class="project-header">
-                    <h1 id="project-title" class="project-title">Protheus</h1>
+                <header class="project-header project-header--row">
+                    <div class="project-header-main">
+                        <h1 id="project-title" class="project-title">Protheus</h1>
+                        <span id="project-share-owner" class="project-share-owner hidden"></span>
+                    </div>
+                    <button type="button" id="btn-share-project" class="btn-share-project hidden"
+                            title="Compartilhar projeto" aria-label="Compartilhar projeto">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                            <circle cx="18" cy="5" r="3" stroke="currentColor" stroke-width="2"/>
+                            <circle cx="6" cy="12" r="3" stroke="currentColor" stroke-width="2"/>
+                            <circle cx="18" cy="19" r="3" stroke="currentColor" stroke-width="2"/>
+                            <path d="M8.6 10.5l6.8-4M8.6 13.5l6.8 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                        Compartilhar
+                    </button>
                 </header>
                 <!-- Input para nova demanda (com Quick Add em linguagem natural) -->
                 <div class="task-input-container">
@@ -639,6 +662,32 @@
             <div class="project-confirm-actions">
                 <button id="logout-confirm-cancel" class="project-confirm-btn project-confirm-btn--cancel">Cancelar</button>
                 <button id="logout-confirm-ok" class="project-confirm-btn project-confirm-btn--danger">Sair</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de compartilhamento de projeto (colaboração leve) -->
+    <div id="share-overlay" class="project-confirm-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="share-title">
+        <div class="share-modal">
+            <header class="share-modal-head">
+                <h3 id="share-title" class="project-confirm-title">Compartilhar projeto</h3>
+                <button id="share-close" class="int-text-btn" type="button" aria-label="Fechar">Fechar</button>
+            </header>
+            <p class="share-modal-sub" id="share-modal-sub">Convide alguém desta instância pelo usuário.</p>
+
+            <form id="share-add-form" class="share-add-form" autocomplete="off">
+                <input type="text" id="share-username" class="share-input" placeholder="usuário" maxlength="40" aria-label="Nome de usuário">
+                <select id="share-role" class="share-role-select" aria-label="Papel">
+                    <option value="editor">Editor</option>
+                    <option value="viewer">Leitor</option>
+                </select>
+                <button type="submit" id="share-add-btn" class="share-add-btn">Adicionar</button>
+            </form>
+            <p id="share-error" class="share-error hidden" role="alert"></p>
+
+            <div class="share-members-wrap">
+                <h4 class="share-members-title">Com acesso</h4>
+                <ul id="share-members" class="share-members"></ul>
             </div>
         </div>
     </div>

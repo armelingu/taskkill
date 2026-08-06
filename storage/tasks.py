@@ -63,6 +63,48 @@ def fetch_tasks_grouped(user_id: int) -> dict:
         return tasks_data
 
 
+def fetch_project(owner_id: int, project: str) -> list:
+    """
+    Tarefas ativas (deleted=0) de UM projeto de um dono, no mesmo formato dos
+    grupos de fetch_tasks_grouped (com `depends_on`). Usado para exibir um
+    projeto compartilhado sem vazar os demais projetos do dono.
+    """
+    with connection() as conn:
+        cursor = conn.cursor()
+        rows = cursor.execute(
+            "SELECT * FROM tasks WHERE user_id = ? AND project = ? AND deleted = 0 "
+            "ORDER BY position ASC, id ASC",
+            (owner_id, project),
+        ).fetchall()
+        if not rows:
+            return []
+
+        ids = [row['id'] for row in rows]
+        qmarks = ",".join(["?"] * len(ids))
+        deps_by_task = {}
+        for dep in cursor.execute(
+            f"SELECT task_id, depends_on_id FROM task_dependencies WHERE task_id IN ({qmarks})",
+            ids,
+        ).fetchall():
+            deps_by_task.setdefault(dep['task_id'], []).append(dep['depends_on_id'])
+
+        out = []
+        for row in rows:
+            out.append({
+                'id': row['id'],
+                'project': row['project'],
+                'text': row['text'],
+                'completed': bool(row['completed']),
+                'created_date': row['created_date'] if 'created_date' in row.keys() else None,
+                'due_date': row['due_date'] if 'due_date' in row.keys() else None,
+                'position': row['position'] if 'position' in row.keys() else 0,
+                'deleted': False,
+                'recurrence': (row['recurrence'] if 'recurrence' in row.keys() else 'none') or 'none',
+                'depends_on': deps_by_task.get(row['id'], []),
+            })
+        return out
+
+
 def _max_position(conn, user_id: int, project: str) -> int:
     """Maior posição ativa do projeto do usuário (ou -1 se vazio)."""
     row = conn.execute(

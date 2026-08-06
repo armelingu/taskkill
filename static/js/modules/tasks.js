@@ -26,9 +26,25 @@ const RECUR_LABELS = {
     monthly: 'Todo mês',
 };
 
-// Índice global id -> tarefa (varre todos os projetos). Usado por dependências.
+// Contexto de compartilhamento da visão atual (ou null se for projeto próprio).
+function currentShare() {
+    return (state.shares && state.shares[state.currentCategory]) || null;
+}
+
+// Array de tarefas da visão de projeto atual (própria OU compartilhada).
+function activeList() {
+    if (currentShare()) return state.sharedTasks[state.currentCategory] || [];
+    return state.tasksData[state.currentCategory] || [];
+}
+
+// Índice id -> tarefa para dependências. Em projeto compartilhado, restringe ao
+// próprio projeto do dono (não se depende de tarefa de outro projeto/dono).
 function allTasksById() {
     const map = new Map();
+    if (currentShare()) {
+        for (const t of (state.sharedTasks[state.currentCategory] || [])) map.set(t.id, t);
+        return map;
+    }
     for (const list of Object.values(state.tasksData || {})) {
         for (const t of list) map.set(t.id, t);
     }
@@ -107,7 +123,11 @@ if (taskInput) {
             // Quick Add: extrai data + recorrência em linguagem natural e limpa o texto.
             const { text, due_date, recurrence } = parseQuickAdd(taskInput.value);
             if (text && state.currentCategory !== null) {
-                const payload = { project: state.currentCategory, text };
+                const share = currentShare();
+                // Em projeto compartilhado, cria na fila do dono (owner_id) com o
+                // nome REAL do projeto (currentCategory é uma chave interna).
+                const payload = { project: share ? share.project : state.currentCategory, text };
+                if (share) payload.owner_id = share.ownerId;
                 if (due_date) payload.due_date = due_date;
                 if (recurrence && recurrence !== 'none') payload.recurrence = recurrence;
 
@@ -121,7 +141,8 @@ if (taskInput) {
                     
                     if (response.ok) {
                         const newTask = await response.json(); // Vem com o ID do banco
-                        state.tasksData[state.currentCategory].push(newTask);
+                        if (share) (state.sharedTasks[state.currentCategory] ||= []).push(newTask);
+                        else state.tasksData[state.currentCategory].push(newTask);
                         taskInput.value = '';
                         updateQuickAddHint();
                         renderTasks();
@@ -167,7 +188,7 @@ if (taskList) {
          
          // Atualiza memória RAM (arrays) para se alinhar com a tela se estiver num projeto
          // Ordena o array atual baseado na nova ordem de IDs visualizadas
-         state.tasksData[state.currentCategory].sort((a, b) => {
+         activeList().sort((a, b) => {
              return sortedLiIds.indexOf(a.id.toString()) - sortedLiIds.indexOf(b.id.toString());
          });
 
@@ -195,6 +216,32 @@ function getDragAfterElement(container, y) {
     }, { offset: Number.NEGATIVE_INFINITY }).element;
 }
 
+// Ajusta o "chrome" do header do projeto conforme o modo (próprio/compartilhado):
+// botão Compartilhar só em projeto próprio; selo do dono e input só-leitura no
+// compartilhado. Rodado a cada render (troca de visão).
+function _applyShareChrome(share) {
+    const shareBtn = document.getElementById('btn-share-project');
+    const ownerBadge = document.getElementById('project-share-owner');
+    const inputWrap = document.querySelector('.task-input-container');
+    const isProject = !!state.currentCategory && !state.currentWeekDate && !state.currentTag;
+
+    if (isProject && share) {
+        if (shareBtn) shareBtn.classList.add('hidden');
+        if (ownerBadge) {
+            ownerBadge.textContent = `de @${share.ownerName} · ${share.role === 'viewer' ? 'somente leitura' : 'editor'}`;
+            ownerBadge.classList.remove('hidden');
+        }
+        if (inputWrap) inputWrap.style.display = share.role === 'viewer' ? 'none' : 'flex';
+    } else if (isProject) {
+        if (shareBtn) shareBtn.classList.remove('hidden');
+        if (ownerBadge) ownerBadge.classList.add('hidden');
+        if (inputWrap) inputWrap.style.display = 'flex';
+    } else {
+        if (shareBtn) shareBtn.classList.add('hidden');
+        if (ownerBadge) ownerBadge.classList.add('hidden');
+    }
+}
+
 // ── Render principal da lista ─────────────────────────────────────
 export function renderTasks() {
     if (!taskList) return;
@@ -209,6 +256,13 @@ export function renderTasks() {
         _navEngaged = false;
         _lastViewKey = viewKey;
     }
+
+    // Chrome de compartilhamento: botão "Compartilhar" (só em projeto próprio),
+    // selo do dono e input (oculto para leitor). Centralizado aqui pois roda a
+    // cada troca de visão.
+    const share = currentShare();
+    const readOnly = !!share && share.role === 'viewer';
+    _applyShareChrome(share);
 
     taskList.innerHTML = ''; // Limpa a lista
     let tasks = [];
@@ -249,7 +303,7 @@ export function renderTasks() {
             });
         });
     } else if (state.currentCategory) {
-        tasks = (state.tasksData[state.currentCategory] || []).filter(t => !t.deleted);
+        tasks = activeList().filter(t => !t.deleted);
     } else {
         return;
     }
@@ -266,7 +320,7 @@ export function renderTasks() {
     tasks.forEach((task, index) => {
         const li = document.createElement('li');
         li.className = `task-item ${task.completed ? 'completed' : ''}`;
-        li.setAttribute('draggable', 'true'); // Ativa a API nativa de Drag
+        li.setAttribute('draggable', readOnly ? 'false' : 'true'); // Leitor não reordena
         li.setAttribute('data-id', task.id); // Guardamos a chave pra reordenação
 
         // Dispara ao Começar a Arrastar (CSS e Dados)
@@ -316,13 +370,14 @@ export function renderTasks() {
         
         formattedText = formattedText.replace(/(^|\s)#([\w\u00C0-\u00FF]+)/g, '$1<span class="task-tag">#$2</span>');
         
-        let actionButtonsHTML = `
+        let actionButtonsHTML = readOnly ? '' : `
             <button class="action-btn edit-btn">Editar</button>
             <button class="action-btn delete-btn">Apagar</button>
         `;
+        const checkboxHTML = readOnly ? '' : `<button class="task-checkbox" aria-label="Marcar como concluído"></button>`;
 
         li.innerHTML = `
-            <button class="task-checkbox" aria-label="Marcar como concluído"></button>
+            ${checkboxHTML}
             ${projectBadge}
             <span class="task-text">${formattedText}</span>
             ${blockedBadge}
@@ -342,7 +397,7 @@ export function renderTasks() {
 
         // Marcar / Desmarcar (atualização cirúrgica — sem re-renderizar toda a lista).
         // Tarefas recorrentes: o back reagenda a mesma tarefa e responde `recurred`.
-        checkbox.addEventListener('click', async () => {
+        if (checkbox) checkbox.addEventListener('click', async () => {
             const novoStatus = !task.completed;
             task.completed = novoStatus;
 
@@ -399,9 +454,12 @@ export function renderTasks() {
         });
 
         // Apagar (soft-delete no back) — oferece "Desfazer" no toast.
-        deleteBtn.addEventListener('click', () => {
-            const proj = task.originalProject || state.currentCategory;
-            const projTasks = state.tasksData[proj] || [];
+        if (deleteBtn) deleteBtn.addEventListener('click', () => {
+            // Em projeto compartilhado, a lista vive em sharedTasks[chave].
+            const shareCtx = currentShare();
+            const store = shareCtx ? state.sharedTasks : state.tasksData;
+            const proj = shareCtx ? state.currentCategory : (task.originalProject || state.currentCategory);
+            const projTasks = store[proj] || [];
             const realIndex = projTasks.findIndex(t => t.id === task.id);
             const removed = realIndex > -1 ? projTasks.splice(realIndex, 1)[0] : task;
 
@@ -412,7 +470,7 @@ export function renderTasks() {
                 action: {
                     label: 'Desfazer',
                     onClick: () => {
-                        const arr = state.tasksData[proj] || (state.tasksData[proj] = []);
+                        const arr = store[proj] || (store[proj] = []);
                         const at = Math.min(realIndex < 0 ? arr.length : realIndex, arr.length);
                         arr.splice(at, 0, removed);
                         removed.deleted = false;

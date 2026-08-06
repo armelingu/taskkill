@@ -4075,3 +4075,150 @@ kbd {
 @media (max-width: 900px) {
     .ins-grid { grid-template-columns: 1fr; }
 }
+
+/* ===========================================================================
+   Compartilhamento de projetos (colaboração leve)
+   ======================================================================== */
+
+.project-header--row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+}
+.project-header-main { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; min-width: 0; }
+.project-share-owner {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: var(--surface-inset);
+    border: 1px solid var(--border);
+    padding: 4px 10px;
+    border-radius: 999px;
+    white-space: nowrap;
+}
+
+.btn-share-project {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font: inherit;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--accent-blue-strong);
+    background: var(--accent-blue-soft);
+    border: 1px solid var(--accent-blue-border);
+    padding: 8px 14px;
+    border-radius: 9px;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.15s ease;
+    margin-top: 6px;
+}
+.btn-share-project:hover { background: color-mix(in srgb, var(--accent-blue-soft) 70%, var(--accent-blue) 12%); }
+.btn-share-project svg { color: var(--accent-blue-strong); }
+
+/* Item da sidebar "Compartilhados comigo" */
+.shared-nav {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+    cursor: pointer;
+}
+.shared-nav-name { font-weight: 600; }
+.shared-nav-meta { font-size: 0.72rem; color: var(--text-muted); }
+
+/* Modal de compartilhamento */
+.share-modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 22px;
+    width: min(460px, 92vw);
+    box-shadow: var(--shadow-lg);
+}
+.share-modal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.share-modal-sub { margin: 6px 0 16px; font-size: 0.85rem; color: var(--text-muted); }
+
+.share-add-form { display: flex; gap: 8px; }
+.share-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    font: inherit;
+    font-size: 0.9rem;
+    padding: 9px 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: 9px;
+    background: var(--surface);
+    color: var(--text-title);
+}
+.share-input:focus { outline: none; border-color: var(--accent-blue); }
+.share-role-select {
+    font: inherit;
+    font-size: 0.9rem;
+    padding: 9px 10px;
+    border: 1px solid var(--border-strong);
+    border-radius: 9px;
+    background: var(--surface);
+    color: var(--text-title);
+    cursor: pointer;
+}
+.share-add-btn {
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 600;
+    padding: 9px 16px;
+    border: 0;
+    border-radius: 9px;
+    background: var(--accent-blue);
+    color: #fff;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+.share-add-btn:hover { background: var(--accent-blue-strong); }
+
+.share-error { margin: 10px 0 0; font-size: 0.82rem; color: var(--danger-text); }
+
+.share-members-wrap { margin-top: 20px; }
+.share-members-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+}
+.share-members { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.share-member {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 4px;
+    border-top: 1px solid var(--border);
+}
+.share-member:first-child { border-top: 0; }
+.share-member--empty { color: var(--text-muted); font-size: 0.85rem; justify-content: flex-start; }
+.share-member-name { font-weight: 500; color: var(--text-title); }
+.share-member-role {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: var(--surface-inset);
+    padding: 2px 9px;
+    border-radius: 999px;
+}
+.share-member-remove {
+    margin-left: auto;
+    width: 24px;
+    height: 24px;
+    line-height: 1;
+    font-size: 1.1rem;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+.share-member-remove:hover { background: var(--danger-soft); color: var(--danger-text); }

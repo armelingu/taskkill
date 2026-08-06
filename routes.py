@@ -26,6 +26,7 @@ from integrations import IntegrationError
 from recurrence import valid_recurrence, next_occurrence
 from storage import tasks as tasks_repo
 from storage import insights as insights_repo
+from storage import shares as shares_repo
 from storage import users as users_repo
 from storage import projects as projects_repo
 from storage import integrations as integrations_store
@@ -751,10 +752,102 @@ def delete_project(project_name):
     uid = _current_user()['id']
     name = project_name.strip()
     projects_repo.delete(uid, name)
+    # Remove também os compartilhamentos desse projeto (não deixa membros órfãos).
+    shares_repo.unshare_all(uid, name)
     return jsonify({"deleted": name})
 
 
+# ── Compartilhamento de projetos (colaboração leve) ─────────────────
+
+@api_bp.route('/projects/<path:project_name>/shares', methods=['GET'])
+def list_project_shares(project_name):
+    """Membros com acesso ao projeto (somente o dono consulta)."""
+    uid = _current_user()['id']
+    name = project_name.strip()
+    if name not in projects_repo.list_names(uid):
+        return jsonify({"error": "Projeto inexistente."}), 404
+    return jsonify({"project": name, "members": shares_repo.list_members(uid, name)})
+
+
+@api_bp.route('/projects/<path:project_name>/shares', methods=['POST'])
+def add_project_share(project_name):
+    """Compartilha o projeto do dono com um usuário (por username) como viewer/editor."""
+    uid = _current_user()['id']
+    name = project_name.strip()
+    if name not in projects_repo.list_names(uid):
+        return jsonify({"error": "Projeto inexistente."}), 404
+
+    data = request.get_json(silent=True) or {}
+    username = str(data.get('username') or '').strip()
+    role = str(data.get('role') or 'editor').strip().lower()
+    if not username:
+        return jsonify({"error": "Bad Request: username é obrigatório"}), 400
+    if role not in shares_repo.VALID_ROLES:
+        return jsonify({"error": "Bad Request: role inválido (viewer|editor)"}), 400
+
+    member = users_repo.get_auth_by_username(username)
+    if not member:
+        return jsonify({"error": "Usuário não encontrado."}), 404
+    if int(member['id']) == uid:
+        return jsonify({"error": "Você já é o dono deste projeto."}), 400
+
+    shares_repo.share(uid, name, int(member['id']), role)
+    return jsonify({
+        "project": name,
+        "member": {"member_id": int(member['id']), "username": member['username'], "role": role},
+    }), 201
+
+
+@api_bp.route('/projects/<path:project_name>/shares/<int:member_id>', methods=['DELETE'])
+def remove_project_share(project_name, member_id):
+    """Revoga o acesso de um membro (somente o dono)."""
+    uid = _current_user()['id']
+    name = project_name.strip()
+    if name not in projects_repo.list_names(uid):
+        return jsonify({"error": "Projeto inexistente."}), 404
+    shares_repo.unshare(uid, name, int(member_id))
+    return jsonify({"success": True})
+
+
+@api_bp.route('/shared', methods=['GET'])
+def list_shared_with_me():
+    """Projetos que outros donos compartilharam comigo (para a sidebar)."""
+    uid = _current_user()['id']
+    return jsonify({"shared": shares_repo.list_shared_with_me(uid)})
+
+
+@api_bp.route('/shared/<int:owner_id>/<path:project_name>/tasks', methods=['GET'])
+def get_shared_project_tasks(owner_id, project_name):
+    """Tarefas de um projeto compartilhado comigo (se eu tiver acesso)."""
+    uid = _current_user()['id']
+    name = project_name.strip()
+    role = shares_repo.get_project_access(uid, owner_id, name)
+    if role is None:
+        return jsonify({"error": "Sem acesso a este projeto."}), 404
+    return jsonify({
+        "owner_id": int(owner_id),
+        "project": name,
+        "role": role,
+        "tasks": tasks_repo.fetch_project(int(owner_id), name),
+    })
+
+
 # ── Tarefas ─────────────────────────────────────────────────────────
+
+def _writable_owner(actor_id, task_id):
+    """
+    Resolve o dono da tarefa e a permissão de ESCRITA do ator (dono do projeto
+    ou editor via compartilhamento). Devolve (owner_id, None) se pode escrever;
+    (None, resposta_de_erro) caso contrário. As operações no repo passam a ser
+    escopadas pelo owner_id — reaproveitando o SQL já filtrado por user_id.
+    """
+    owner_id, role = shares_repo.get_task_access(actor_id, task_id)
+    if role is None:
+        return None, (jsonify({"error": "Tarefa inexistente ou sem acesso."}), 404)
+    if role == 'viewer':
+        return None, (jsonify({"error": "Acesso somente leitura neste projeto compartilhado."}), 403)
+    return owner_id, None
+
 
 # 1. READ: Buscar todas as tarefas agrupadas por projeto
 @api_bp.route('/tasks', methods=['GET'])
@@ -802,7 +895,24 @@ def create_task():
     today_str = tasks_repo.today_br()
 
     uid = _current_user()['id']
-    created = tasks_repo.create(uid, project, text, today_str, due_date, recurrence)
+
+    # Projeto compartilhado: o front envia owner_id do dono. Um editor pode criar
+    # na fila do dono; a tarefa nasce como do dono (user_id = owner_id).
+    owner_id = uid
+    raw_owner = data.get('owner_id')
+    if raw_owner is not None:
+        try:
+            owner_id = int(raw_owner)
+        except (TypeError, ValueError):
+            return jsonify({"error": "Bad Request: owner_id invalid"}), 400
+        if owner_id != uid:
+            role = shares_repo.get_project_access(uid, owner_id, project)
+            if role not in ('owner', 'editor'):
+                return jsonify({"error": "Sem permissão para criar neste projeto."}), 403
+
+    created = tasks_repo.create(owner_id, project, text, today_str, due_date, recurrence)
+    if owner_id != uid:
+        created['owner_id'] = owner_id
     return jsonify(created), 201
 
 # 3. UPDATE: Atualizar nome por texto ou marca de check concluído
@@ -858,8 +968,11 @@ def update_task(task_id):
     due_date_arg = due_date if 'due_date' in data else tasks_repo._UNSET
 
     uid = _current_user()['id']
+    owner_id, err = _writable_owner(uid, task_id)
+    if err:
+        return err
     recurred_to = tasks_repo.update(
-        uid,
+        owner_id,
         task_id,
         next_occurrence_fn=next_occurrence,
         text=text,
@@ -915,7 +1028,14 @@ def reorder_tasks():
 
     # Garantia forte (único projeto + todas as ativas) e persistência no repo.
     uid = _current_user()['id']
-    ok, error = tasks_repo.reorder(uid, updates)
+    if not updates:
+        return jsonify({"success": True})
+    # Todas as posições são de um único projeto; resolve o dono pela primeira
+    # tarefa e exige escrita. Ids de outro dono não casam no repo (escopo owner).
+    owner_id, err = _writable_owner(uid, updates[0][1])
+    if err:
+        return err
+    ok, error = tasks_repo.reorder(owner_id, updates)
     if not ok:
         return jsonify({"error": error}), 400
 
@@ -926,7 +1046,10 @@ def reorder_tasks():
 def delete_task(task_id):
     # Consistência com o modelo (flag deleted): arquiva em vez de remover.
     uid = _current_user()['id']
-    tasks_repo.soft_delete(uid, task_id)
+    owner_id, err = _writable_owner(uid, task_id)
+    if err:
+        return err
+    tasks_repo.soft_delete(owner_id, task_id)
     return jsonify({"success": True})
 
 
@@ -945,9 +1068,14 @@ def add_dependency(task_id):
         return jsonify({"error": "Uma tarefa não pode depender de si mesma."}), 400
 
     uid = _current_user()['id']
-    if not tasks_repo.is_active(uid, task_id) or not tasks_repo.is_active(uid, depends_on_id):
+    owner_id, err = _writable_owner(uid, task_id)
+    if err:
+        return err
+    # Ambas as tarefas precisam ser do MESMO dono (não se depende de tarefa de
+    # outro projeto/dono); is_active escopado por owner_id garante isso.
+    if not tasks_repo.is_active(owner_id, task_id) or not tasks_repo.is_active(owner_id, depends_on_id):
         return jsonify({"error": "Tarefa inexistente ou arquivada."}), 404
-    if tasks_repo.would_create_cycle(uid, task_id, depends_on_id):
+    if tasks_repo.would_create_cycle(owner_id, task_id, depends_on_id):
         return jsonify({"error": "Isso criaria um ciclo de dependências."}), 409
 
     deps = tasks_repo.add_dependency(task_id, depends_on_id)
@@ -958,7 +1086,10 @@ def add_dependency(task_id):
 def remove_dependency(task_id, depends_on_id):
     """Remove o vínculo (task_id depende de depends_on_id), se existir."""
     uid = _current_user()['id']
-    tasks_repo.remove_dependency(uid, task_id, depends_on_id)
+    owner_id, err = _writable_owner(uid, task_id)
+    if err:
+        return err
+    tasks_repo.remove_dependency(owner_id, task_id, depends_on_id)
     return jsonify({"success": True})
 
 
