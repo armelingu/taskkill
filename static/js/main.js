@@ -9,6 +9,7 @@ import { showToast } from './modules/ui.js';
 import { openModal } from './modules/focus.js';
 import { state } from './modules/state.js';
 import { renderDashboard } from './modules/dashboard.js';
+import { renderInsights } from './modules/insights.js';
 import { graphStart, graphStop } from './modules/graph.js';
 import { renderTasks } from './modules/tasks.js';
 import { renderSidebarProjects } from './modules/projects.js';
@@ -147,7 +148,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (state.currentCategory || state.currentWeekDate || state.currentTag) {
                     renderTasks();
                 } else if (dashboardView && !dashboardView.classList.contains('hidden')) {
-                    renderDashboard();
+                    renderActiveDashboardTab();
                 } else if (graphView && !graphView.classList.contains('hidden')) {
                     graphStart();
                 }
@@ -166,6 +167,39 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const navDashboard = document.getElementById('nav-dashboard');
     const navGraph = document.getElementById('nav-graph');
+
+    // Abas do Dashboard (Projetos | Insights). A aba ativa é lembrada e
+    // re-renderizada sempre que o Dashboard é aberto.
+    const dashTabProjects = document.getElementById('dash-tab-projects');
+    const dashTabInsights = document.getElementById('dash-tab-insights');
+    const dashPanelProjects = document.getElementById('dashboard-projects-panel');
+    const dashPanelInsights = document.getElementById('dashboard-insights-panel');
+
+    function renderActiveDashboardTab() {
+        if (dashTabInsights && dashTabInsights.classList.contains('active')) {
+            renderInsights();
+        } else {
+            renderDashboard();
+        }
+    }
+
+    function selectDashboardTab(which) {
+        const insights = which === 'insights';
+        if (dashTabProjects) {
+            dashTabProjects.classList.toggle('active', !insights);
+            dashTabProjects.setAttribute('aria-selected', String(!insights));
+        }
+        if (dashTabInsights) {
+            dashTabInsights.classList.toggle('active', insights);
+            dashTabInsights.setAttribute('aria-selected', String(insights));
+        }
+        if (dashPanelProjects) dashPanelProjects.classList.toggle('hidden', insights);
+        if (dashPanelInsights) dashPanelInsights.classList.toggle('hidden', !insights);
+        renderActiveDashboardTab();
+    }
+
+    if (dashTabProjects) dashTabProjects.addEventListener('click', () => selectDashboardTab('projects'));
+    if (dashTabInsights) dashTabInsights.addEventListener('click', () => selectDashboardTab('insights'));
 
     // 2. Animação estilo "Load In" (Cascata Premium)
     skeletonItems.forEach((item, index) => {
@@ -211,7 +245,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     dashboardView.style.animation = null;
                 }
                 
-                renderDashboard();
+                renderActiveDashboardTab();
                 return; // Para a execução base de projeto
             }
 

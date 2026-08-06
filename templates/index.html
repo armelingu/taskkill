@@ -133,11 +133,24 @@
             <div id="dashboard-view" class="dashboard-view hidden">
                 <header class="project-header">
                     <h1 class="project-title">Dashboard</h1>
+                    <div class="dash-tabs" role="tablist" aria-label="Seções do dashboard">
+                        <button type="button" class="dash-tab active" id="dash-tab-projects"
+                                role="tab" aria-selected="true" aria-controls="dashboard-projects-panel">Projetos</button>
+                        <button type="button" class="dash-tab" id="dash-tab-insights"
+                                role="tab" aria-selected="false" aria-controls="dashboard-insights-panel">Insights</button>
+                    </div>
                 </header>
 
-                <!-- Grid de status específico por projeto -->
-                <div id="project-cards-grid" class="project-cards-grid">
-                    <!-- Populado via JS com todas as categorias -->
+                <!-- Aba Projetos: grid de status por projeto -->
+                <div id="dashboard-projects-panel" role="tabpanel" aria-labelledby="dash-tab-projects">
+                    <div id="project-cards-grid" class="project-cards-grid">
+                        <!-- Populado via JS com todas as categorias -->
+                    </div>
+                </div>
+
+                <!-- Aba Insights: métricas pessoais (throughput, streak, aging) -->
+                <div id="dashboard-insights-panel" role="tabpanel" aria-labelledby="dash-tab-insights" class="hidden">
+                    <!-- Populado via modules/insights.js -->
                 </div>
             </div>
 

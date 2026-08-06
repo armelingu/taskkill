@@ -73,6 +73,27 @@ def _max_position(conn, user_id: int, project: str) -> int:
     return int(row['max_pos']) if row and row['max_pos'] is not None else -1
 
 
+# ── Log de conclusões (fonte dos Insights) ──────────────────────────
+
+def _record_completion(conn, user_id: int, task_id: int, project, when: str) -> None:
+    """Registra um evento de conclusão (append-only)."""
+    conn.execute(
+        "INSERT INTO task_completions (user_id, task_id, project, completed_at) "
+        "VALUES (?, ?, ?, ?)",
+        (user_id, task_id, project, when),
+    )
+
+
+def _remove_last_completion(conn, user_id: int, task_id: int) -> None:
+    """Remove o evento de conclusão mais recente da tarefa (desmarcar)."""
+    conn.execute(
+        "DELETE FROM task_completions WHERE id = ("
+        " SELECT id FROM task_completions WHERE user_id = ? AND task_id = ? "
+        " ORDER BY id DESC LIMIT 1)",
+        (user_id, task_id),
+    )
+
+
 # ── Escrita ─────────────────────────────────────────────────────────
 
 def create(user_id: int, project: str, text: str, created_date: str, due_date, recurrence: str) -> dict:
@@ -118,23 +139,41 @@ def update(user_id: int, task_id: int, *, next_occurrence_fn=None,
     with transaction() as conn:
         cursor = conn.cursor()
 
-        if completed == 1 and next_occurrence_fn is not None:
-            row = cursor.execute(
-                "SELECT recurrence, due_date FROM tasks WHERE id = ? AND user_id = ?",
+        # Estado atual (antes do update): usado para instrumentar as conclusões
+        # (só registramos na transição 0→1) e para decidir o reagendamento.
+        prior_completed = None
+        prior_project = None
+        prior_rule = 'none'
+        prior_due = None
+        if completed is not None:
+            prow = cursor.execute(
+                "SELECT completed, project, recurrence, due_date FROM tasks WHERE id = ? AND user_id = ?",
                 (task_id, user_id),
             ).fetchone()
-            if row is not None:
-                rule = (row['recurrence'] if 'recurrence' in row.keys() else 'none') or 'none'
-                cur_due = row['due_date'] if 'due_date' in row.keys() else None
-                if rule != 'none' and cur_due:
-                    nxt = next_occurrence_fn(cur_due, rule)
-                    if nxt:
-                        cursor.execute(
-                            "UPDATE tasks SET due_date = ?, completed = 0 WHERE id = ? AND user_id = ?",
-                            (nxt, task_id, user_id),
-                        )
-                        recurred_to = nxt
-                        completed = None  # já tratado
+            if prow is not None:
+                prior_completed = int(prow['completed'])
+                prior_project = prow['project']
+                prior_rule = (prow['recurrence'] if 'recurrence' in prow.keys() else 'none') or 'none'
+                prior_due = prow['due_date'] if 'due_date' in prow.keys() else None
+
+        # Horário LOCAL de propósito: os Insights agrupam conclusões por dia/semana
+        # comparando com date.today() (local). Gravar em UTC deslocaria a conclusão
+        # para o dia seguinte perto da meia-noite e quebraria streak/throughput.
+        now_iso = datetime.now().isoformat()
+
+        # Tarefa recorrente: concluir reagenda (não fica completed=1), mas é uma
+        # conclusão real — registra no log e não segue o caminho normal.
+        if (completed == 1 and next_occurrence_fn is not None
+                and prior_rule != 'none' and prior_due):
+            nxt = next_occurrence_fn(prior_due, prior_rule)
+            if nxt:
+                cursor.execute(
+                    "UPDATE tasks SET due_date = ?, completed = 0 WHERE id = ? AND user_id = ?",
+                    (nxt, task_id, user_id),
+                )
+                recurred_to = nxt
+                _record_completion(conn, user_id, task_id, prior_project, now_iso)
+                completed = None  # já tratado
 
         if text is not None and completed is not None:
             cursor.execute("UPDATE tasks SET text = ?, completed = ? WHERE id = ? AND user_id = ?", (text, completed, task_id, user_id))
@@ -142,6 +181,12 @@ def update(user_id: int, task_id: int, *, next_occurrence_fn=None,
             cursor.execute("UPDATE tasks SET text = ? WHERE id = ? AND user_id = ?", (text, task_id, user_id))
         elif completed is not None:
             cursor.execute("UPDATE tasks SET completed = ? WHERE id = ? AND user_id = ?", (completed, task_id, user_id))
+
+        # Instrumenta conclusão/desmarque de tarefa não-recorrente.
+        if completed == 1 and prior_completed == 0:
+            _record_completion(conn, user_id, task_id, prior_project, now_iso)
+        elif completed == 0 and prior_completed == 1:
+            _remove_last_completion(conn, user_id, task_id)
 
         if due_date is not _UNSET:
             cursor.execute("UPDATE tasks SET due_date = ? WHERE id = ? AND user_id = ?", (due_date, task_id, user_id))

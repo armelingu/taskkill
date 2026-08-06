@@ -25,6 +25,7 @@ import scheduler
 from integrations import IntegrationError
 from recurrence import valid_recurrence, next_occurrence
 from storage import tasks as tasks_repo
+from storage import insights as insights_repo
 from storage import users as users_repo
 from storage import projects as projects_repo
 from storage import integrations as integrations_store
@@ -876,6 +877,12 @@ def update_task(task_id):
         resp["due_date"] = recurred_to
         resp["completed"] = False
     return jsonify(resp)
+
+# 3.4. INSIGHTS: métricas pessoais (throughput, streak, aging) do usuário logado.
+@api_bp.route('/insights', methods=['GET'])
+def get_insights():
+    uid = _current_user()['id']
+    return jsonify(insights_repo.compute(uid))
 
 # 3.5. BATCH UPDATE: Reordenar posições após o arrastar e soltar do usuário
 @api_bp.route('/tasks/reorder', methods=['PUT'])

@@ -148,6 +148,22 @@ def _init_postgres(cursor):
         )
     ''')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_task_deps_depends_on ON task_dependencies(depends_on_id)')
+
+    # Log de conclusões (append-only): fonte dos Insights (throughput/streak).
+    # Uma linha por conclusão — inclusive cada conclusão de tarefa recorrente,
+    # que não fica com completed=1 (reagenda). Sem timestamp de conclusão na
+    # própria task, este log é a única fonte histórica confiável.
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS task_completions (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            task_id INTEGER NOT NULL,
+            project TEXT,
+            completed_at TEXT NOT NULL
+        )
+    ''')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_task_completions_user_time ON task_completions(user_id, completed_at)')
+
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_tasks_project_position ON tasks(project, position, id)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_tasks_deleted ON tasks(deleted)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_tasks_user ON tasks(user_id)')
@@ -324,6 +340,26 @@ def _init_sqlite(cursor):
         cursor.execute(
             'CREATE INDEX IF NOT EXISTS idx_task_deps_depends_on '
             'ON task_dependencies(depends_on_id)'
+        )
+    except sqlite3.OperationalError:
+        pass
+
+    # Log de conclusões (append-only): fonte dos Insights (throughput/streak).
+    # Uma linha por conclusão — inclusive cada conclusão de tarefa recorrente,
+    # que não fica com completed=1 (reagenda o due_date).
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS task_completions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            task_id INTEGER NOT NULL,
+            project TEXT,
+            completed_at TEXT NOT NULL
+        )
+    ''')
+    try:
+        cursor.execute(
+            'CREATE INDEX IF NOT EXISTS idx_task_completions_user_time '
+            'ON task_completions(user_id, completed_at)'
         )
     except sqlite3.OperationalError:
         pass
