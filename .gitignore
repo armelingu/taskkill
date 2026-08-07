@@ -33,3 +33,7 @@ build/
 # Mockup de landing page (rascunho, não versionar)
 landing-mockup/
 
+# Runtime local (waitress via start.sh)
+taskkill.local.log
+taskkill.pid
+
